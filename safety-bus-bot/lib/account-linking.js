@@ -100,7 +100,7 @@ async function linkLineAccount(lineUserId, token) {
     // ตรวจสอบว่า LINE User ID นี้ผูกกับบัญชีอื่นอยู่หรือไม่
     const { data: existingLink } = await supabase
       .from('parent_line_links')
-      .select('id, parent_id, active')
+      .select('link_id, parent_id, active')
       .eq('line_user_id', lineUserId)
       .eq('active', true)
       .single();
@@ -186,11 +186,16 @@ async function linkLineAccount(lineUserId, token) {
  * @param {string} phoneNumber - หมายเลขโทรศัพท์ (ทางเลือก)
  * @returns {Promise<Object>} ผลลัพธ์การผูกบัญชี
  */
-async function linkByStudentId(lineUserId, studentId, parentName = null, phoneNumber = null) {
+async function linkByStudentId(lineUserId, studentId, parentName = null, phoneNumber = null, replyToken = null) {
   try {
+    console.log(`🔍 linkByStudentId called with:`, { lineUserId, studentId, parentName, phoneNumber });
+    
     // ตรวจสอบรูปแบบรหัสนักเรียน
     const studentValidation = validateStudentId(studentId);
+    console.log(`📝 Student validation result:`, studentValidation);
+    
     if (!studentValidation.isValid) {
+      console.log(`❌ Student validation failed:`, studentValidation.error);
       return {
         success: false,
         error: studentValidation.error
@@ -210,32 +215,55 @@ async function linkByStudentId(lineUserId, studentId, parentName = null, phoneNu
     }
     
     // ค้นหานักเรียน
+    console.log(`🔍 Searching for student with link_code:`, studentId);
     const { data: student, error: studentError } = await supabase
       .from('students')
-      .select(`
-        id, student_id, student_name, parent_id,
-        parents(id, parent_name, parent_phone)
-      `)
-      .eq('student_id', studentId)
+      .select('student_id, student_name, parent_id, link_code')
+      .eq('link_code', studentId)
       .single();
     
+    console.log(`📊 Student search result:`, { student, studentError });
+    
     if (studentError || !student) {
+      console.log(`❌ Student not found:`, { studentError, student });
       return {
         success: false,
         error: 'ไม่พบรหัสนักเรียนในระบบ กรุณาตรวจสอบรหัสอีกครั้ง'
       };
     }
     
+    console.log(`✅ Student found:`, student.student_name);
+    
+    // ค้นหาข้อมูลผู้ปกครอง
+    console.log(`🔍 Searching for parent with id:`, student.parent_id);
+    const { data: parent, error: parentError } = await supabase
+      .from('parents')
+      .select('parent_id, parent_name, parent_phone')
+      .eq('parent_id', student.parent_id)
+      .single();
+    
+    console.log(`📊 Parent search result:`, { parent, parentError });
+    
+    if (parentError || !parent) {
+      console.log(`❌ Parent not found:`, { parentError, parent });
+      return {
+        success: false,
+        error: 'ไม่พบข้อมูลผู้ปกครองในระบบ'
+      };
+    }
+    
+    console.log(`✅ Parent found:`, parent.parent_name);
+    
     // ตรวจสอบข้อมูลผู้ปกครอง (ถ้ามีการระบุ)
-    if (parentName && student.parents.parent_name.toLowerCase() !== parentName.toLowerCase()) {
+    if (parentName && parent.parent_name.toLowerCase() !== parentName.toLowerCase()) {
       return {
         success: false,
         error: 'ชื่อผู้ปกครองไม่ตรงกับข้อมูลในระบบ'
       };
     }
     
-    if (phoneNumber && student.parents.parent_phone && 
-        student.parents.parent_phone.replace(/[^0-9]/g, '') !== phoneNumber) {
+    if (phoneNumber && parent.parent_phone && 
+        parent.parent_phone.replace(/[^0-9]/g, '') !== phoneNumber) {
       return {
         success: false,
         error: 'หมายเลขโทรศัพท์ไม่ตรงกับข้อมูลในระบบ'
@@ -245,7 +273,7 @@ async function linkByStudentId(lineUserId, studentId, parentName = null, phoneNu
     // ตรวจสอบว่า LINE User ID นี้ผูกกับบัญชีอื่นอยู่หรือไม่
     const { data: existingLink } = await supabase
       .from('parent_line_links')
-      .select('id, parent_id, active')
+      .select('link_id, parent_id, active')
       .eq('line_user_id', lineUserId)
       .eq('active', true)
       .single();
@@ -258,15 +286,33 @@ async function linkByStudentId(lineUserId, studentId, parentName = null, phoneNu
     }
     
     // ตรวจสอบว่าผู้ปกครองคนนี้ผูกกับ LINE อื่นอยู่หรือไม่
-    const { data: parentLink } = await supabase
+    console.log(`🔍 Checking existing parent link for parent_id:`, parent.parent_id);
+    const { data: parentLink, error: parentLinkError } = await supabase
       .from('parent_line_links')
-      .select('id, line_user_id, active')
-      .eq('parent_id', student.parent_id)
+      .select('link_id, line_user_id, active')
+      .eq('parent_id', parent.parent_id)
       .eq('active', true)
       .single();
     
+    console.log(`📊 Parent link search result:`, { parentLink, parentLinkError });
+    
     if (parentLink) {
-      // ยกเลิกการผูกเก่า
+      // ตรวจสอบว่าเป็น LINE User คนเดียวกันหรือไม่
+      if (parentLink.line_user_id === lineUserId) {
+        console.log(`✅ Account already linked for this parent and LINE user`);
+        return {
+          success: true,
+          message: 'บัญชีของคุณผูกกับนักเรียนคนนี้แล้ว',
+          data: {
+            student: student,
+            parent: parent,
+            link: parentLink
+          }
+        };
+      }
+      
+      // ยกเลิกการผูกเก่า (LINE User คนอื่น)
+      console.log(`🔄 Unlinking old LINE account:`, parentLink.line_user_id);
       await supabase
         .from('parent_line_links')
         .update({ 
@@ -274,14 +320,15 @@ async function linkByStudentId(lineUserId, studentId, parentName = null, phoneNu
           unlinked_at: new Date().toISOString(),
           unlink_reason: 'replaced_by_student_id_link'
         })
-        .eq('id', parentLink.id);
+        .eq('link_id', parentLink.link_id);
     }
     
     // สร้างการผูกใหม่
+    console.log(`🔗 Creating new link for parent_id:`, parent.parent_id);
     const { data: newLink, error: linkError } = await supabase
       .from('parent_line_links')
       .insert({
-        parent_id: student.parent_id,
+        parent_id: parent.parent_id,
         line_user_id: lineUserId,
         linked_at: new Date().toISOString(),
         active: true
@@ -289,29 +336,40 @@ async function linkByStudentId(lineUserId, studentId, parentName = null, phoneNu
       .select()
       .single();
     
+    console.log(`📊 Link creation result:`, { newLink, linkError });
+    
     if (linkError) {
-      console.error('Error creating link:', linkError);
+      console.error('❌ Error creating link:', linkError);
       return {
         success: false,
         error: 'เกิดข้อผิดพลาดในการผูกบัญชี'
       };
     }
     
+    console.log(`✅ Link created successfully:`, newLink.link_id);
+    
     // ส่งข้อความยืนยัน
     const confirmMessage = {
       type: 'text',
-      text: `✅ ผูกบัญชีสำเร็จ!\n\n👨‍👩‍👧‍👦 ผู้ปกครอง: ${student.parents.parent_name}\n👦👧 นักเรียน: ${student.student_name}\n🆔 รหัส: ${student.student_id}\n\nคุณจะได้รับการแจ้งเตือนเกี่ยวกับการเดินทางของนักเรียนแล้ว\n\nพิมพ์ "เมนู" เพื่อดูตัวเลือกต่างๆ`
+      text: `✅ ผูกบัญชีสำเร็จ!\n\n👨‍👩‍👧‍👦 ผู้ปกครอง: ${parent.parent_name}\n👦👧 นักเรียน: ${student.student_name}\n🆔 รหัส: ${student.student_id}\n\nคุณจะได้รับการแจ้งเตือนเกี่ยวกับการเดินทางของนักเรียนแล้ว\n\nพิมพ์ "เมนู" เพื่อดูตัวเลือกต่างๆ`
     };
+
+    if (replyToken) {
+      await lineClient.replyMessage(replyToken, confirmMessage);
+    } else {
+      await lineClient.pushMessage(lineUserId, confirmMessage);
+    }
     
-    await lineClient.pushMessage(lineUserId, confirmMessage);
-    
-    return {
+    const result = {
       success: true,
-      link_id: newLink.id,
-      parent_name: student.parents.parent_name,
+      link_id: newLink.link_id,
+      parent_name: parent.parent_name,
       student_name: student.student_name,
       student_id: student.student_id
     };
+    
+    console.log(`✅ linkByStudentId completed successfully:`, result);
+    return result;
     
   } catch (error) {
     console.error('Error linking by student ID:', error);
@@ -472,7 +530,7 @@ async function getLinkedParents(studentId) {
     const { data: student, error: studentError } = await supabase
       .from('students')
       .select('parent_id')
-      .eq('student_id', studentId)
+      .eq('link_code', studentId)
       .single();
     
     if (studentError || !student) {
@@ -519,8 +577,8 @@ async function linkDriverByStudentId(lineUserId, studentId, driverName = null) {
     // ค้นหานักเรียน
     const { data: student, error: studentError } = await supabase
       .from('students')
-      .select('id, student_id, student_name, parent_id')
-      .eq('student_id', studentId)
+      .select('id, student_id, student_name, parent_id, link_code')
+      .eq('link_code', studentId)
       .single();
 
     if (studentError || !student) {
@@ -549,7 +607,7 @@ async function linkDriverByStudentId(lineUserId, studentId, driverName = null) {
     const { data: studentLink } = await supabase
       .from('driver_line_links')
       .select('id, line_user_id, is_active')
-      .eq('student_id', studentId)
+      .eq('student_id', student.id)
       .eq('is_active', true)
       .single();
 
@@ -568,7 +626,7 @@ async function linkDriverByStudentId(lineUserId, studentId, driverName = null) {
     const { data: newLink, error: linkError } = await supabase
       .from('driver_line_links')
       .insert({
-        student_id: studentId,
+        student_id: student.id,
         line_user_id: lineUserId,
         driver_name: driverName,
         linked_at: new Date().toISOString(),
@@ -588,7 +646,7 @@ async function linkDriverByStudentId(lineUserId, studentId, driverName = null) {
     // ส่งข้อความยืนยัน
     const confirmMessage = {
       type: 'text',
-      text: `✅ ผูกบัญชีคนขับสำเร็จ!\n\n🚌 คนขับ: ${driverName || 'ไม่ระบุชื่อ'}\n👦👧 นักเรียน: ${student.student_name}\n🆔 รหัส: ${student.student_id}\n\nคุณสามารถดูข้อมูลการเดินทางของนักเรียนได้แล้ว\n\nพิมพ์ "เมนู" เพื่อดูตัวเลือกต่างๆ`
+      text: `✅ ผูกบัญชีคนขับสำเร็จ!\n\n🚌 คนขับ: ${driverName || 'ไม่ระบุชื่อ'}\n👦👧 นักเรียน: ${student.student_name}\n🆔 รหัส: ${student.link_code}\n\nคุณสามารถดูข้อมูลการเดินทางของนักเรียนได้แล้ว\n\nพิมพ์ "เมนู" เพื่อดูตัวเลือกต่างๆ`
     };
 
     await lineClient.pushMessage(lineUserId, confirmMessage);
@@ -598,7 +656,7 @@ async function linkDriverByStudentId(lineUserId, studentId, driverName = null) {
       link_id: newLink.id,
       driver_name: driverName,
       student_name: student.student_name,
-      student_id: student.student_id
+      student_id: student.link_code
     };
 
   } catch (error) {

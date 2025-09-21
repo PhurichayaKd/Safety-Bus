@@ -23,7 +23,7 @@ const mainRichMenu = {
       action: {
         type: "postback",
         data: "action=history",
-        displayText: "📊 Travel History"
+        displayText: "📊 ประวัติข้อมูล"
       }
     },
     {
@@ -111,7 +111,7 @@ async function createRichMenuImage() {
   const margin = 30;
   const cornerRadius = 40;
   
-  // กล่องซ้ายบน - Travel History
+  // กล่องซ้ายบน - Student History
   drawRoundedRect(margin, margin, 1250 - margin * 2, 843 - margin * 2, cornerRadius, 
     'rgba(255, 255, 255, 0.9)', '#B3E5FC');
   
@@ -150,8 +150,8 @@ async function createRichMenuImage() {
   ctx.fillStyle = '#0277BD';
   ctx.font = 'bold 140px Arial';
   ctx.fillText('📊', 625, 320);
-  drawThaiText('Travel History', 625, 420, 52, '#0277BD', 'bold');
-  drawThaiText('View travel records', 625, 470, 28, '#555');
+  drawThaiText('ประวัติข้อมูล', 625, 420, 52, '#0277BD', 'bold');
+  drawThaiText('View student data', 625, 470, 28, '#555');
   
   // แจ้งลาหยุด - สีเขียว
   ctx.fillStyle = '#2E7D32';
@@ -184,9 +184,9 @@ const mainQuickReply = {
       type: "action",
       action: {
         type: "postback",
-        label: "📊 Travel History",
+        label: "📊 ประวัติข้อมูล",
         data: "action=history",
-        displayText: "📊 Travel History"
+        displayText: "📊 ประวัติข้อมูล"
       }
     },
     {
@@ -335,13 +335,23 @@ async function setDefaultRichMenu(richMenuId) {
 }
 
 // ฟังก์ชันส่งข้อความพร้อม Quick Reply
-async function sendMessageWithQuickReply(userId, message, quickReply) {
+async function sendMessageWithQuickReply(userId, message, quickReply, replyToken = null) {
   try {
-    await lineClient.pushMessage(userId, {
-      type: 'text',
-      text: message,
-      quickReply: quickReply
-    });
+    if (replyToken) {
+      // ใช้ replyMessage หากมี replyToken
+      await lineClient.replyMessage(replyToken, {
+        type: 'text',
+        text: message,
+        quickReply: quickReply
+      });
+    } else {
+      // ใช้ pushMessage หากไม่มี replyToken
+      await lineClient.pushMessage(userId, {
+        type: 'text',
+        text: message,
+        quickReply: quickReply
+      });
+    }
   } catch (error) {
     console.error('❌ Error sending message with quick reply:', error);
     throw error;
@@ -349,7 +359,7 @@ async function sendMessageWithQuickReply(userId, message, quickReply) {
 }
 
 // ฟังก์ชันส่งเมนูหลัก
-async function sendMainMenu(userId) {
+async function sendMainMenu(userId, replyToken = null) {
   try {
     // ตรวจสอบประเภทผู้ใช้
     const userData = await getStudentByLineId(userId);
@@ -370,21 +380,29 @@ async function sendMainMenu(userId) {
       message += 'กรุณาเชื่อมโยงบัญชีก่อนใช้งาน\n\n💡 ส่งรหัสนักเรียนหรือพิมพ์ "คนขับ" สำหรับคนขับรถ';
     }
     
-    await sendMessageWithQuickReply(userId, message, quickReply);
+    await sendMessageWithQuickReply(userId, message, quickReply, replyToken);
   } catch (error) {
     console.error('❌ Error sending main menu:', error);
     const fallbackMessage = '🚍 ยินดีต้อนรับสู่ระบบ Safety Bus\n\nกรุณาเชื่อมโยงบัญชีก่อนใช้งาน\n\n💡 ส่งรหัสนักเรียนหรือพิมพ์ "คนขับ" สำหรับคนขับรถ';
-    await lineClient.pushMessage(userId, {
-      type: 'text',
-      text: fallbackMessage
-    });
+    
+    if (replyToken) {
+      await lineClient.replyMessage(replyToken, {
+        type: 'text',
+        text: fallbackMessage
+      });
+    } else {
+      await lineClient.pushMessage(userId, {
+        type: 'text',
+        text: fallbackMessage
+      });
+    }
   }
 }
 
 // ฟังก์ชันส่งเมนูแจ้งลาหยุด
-async function sendLeaveMenu(userId) {
+async function sendLeaveMenu(userId, replyToken = null) {
   const message = '📝 Leave Request\n\nPlease select leave type:';
-  await sendMessageWithQuickReply(userId, message, leaveQuickReply);
+  await sendMessageWithQuickReply(userId, message, leaveQuickReply, replyToken);
 }
 
 export {

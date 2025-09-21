@@ -2,6 +2,7 @@
 import express from 'express';
 import { supabase } from '../lib/db.js';
 import { notifyParent, notifyMultipleParents, broadcastEmergency } from '../lib/notifications.js';
+import { lineClient } from '../lib/line.js';
 import {
   createValidationMiddleware,
   apiKeyMiddleware,
@@ -535,39 +536,102 @@ router.post('/student-info', async (req, res) => {
 // API สำหรับบันทึกการแจ้งลาจาก LIFF
 router.post('/submit-leave', async (req, res) => {
   try {
-    const { student_id, leave_type, leave_date, reason, parent_id } = req.body;
+    const { student_id, leave_type, leave_dates, reason, parent_id, userId } = req.body;
     
-    if (!student_id || !leave_type || !leave_date || !reason) {
+    if (!student_id || !leave_type || !leave_dates || !Array.isArray(leave_dates) || leave_dates.length === 0 || !reason) {
       return res.status(400).json({
         success: false,
         message: 'ข้อมูลไม่ครบถ้วน'
       });
     }
     
-    console.log(`📝 Submitting leave request: ${student_id} - ${leave_type}`);
+    console.log(`📝 Submitting leave request: ${student_id} - ${leave_type} for ${leave_dates.length} days`);
     
-    const leaveData = {
-      student_id,
-      leave_type,
-      leave_date,
-      reason,
-      parent_id: parent_id || student_id
-    };
+    // ดึงข้อมูลนักเรียน (ค้นหาจาก link_code แทน student_id)
+    const { data: student, error: studentError } = await supabase
+      .from('students')
+      .select('*')
+      .eq('link_code', student_id)
+      .single();
     
-    const result = await saveLeaveRequest(leaveData);
+    if (studentError || !student) {
+      return res.status(404).json({
+        success: false,
+        message: 'ไม่พบข้อมูลนักเรียน'
+      });
+    }
     
-    if (result.success) {
-      console.log(`✅ Leave request saved: ${student_id}`);
+    // ใช้ userId ที่ส่งมาจาก client
+    const lineUserId = userId;
+    
+    // บันทึกข้อมูลการลาสำหรับแต่ละวัน
+    const results = [];
+    for (const leave_date of leave_dates) {
+      const leaveData = {
+        student_id: student.student_id,
+        leave_type,
+        leave_date,
+        reason,
+        parent_id: parent_id || student.parent_id
+      };
+      
+      const result = await saveLeaveRequest(leaveData);
+      results.push({ date: leave_date, result });
+    }
+    
+    // ตรวจสอบผลลัพธ์
+    const successCount = results.filter(r => r.result.success).length;
+    const failedCount = results.length - successCount;
+    
+    if (successCount > 0) {
+      // สร้างข้อความตอบกลับ
+      const leaveTypeText = {
+        'sick': 'ลาป่วย',
+        'personal': 'ลากิจ',
+        'absent': 'ไม่มาเรียน'
+      };
+      
+      const dateList = leave_dates.map(date => {
+        const d = new Date(date + 'T00:00:00');
+        return d.toLocaleDateString('th-TH');
+      }).join(', ');
+      
+      const replyMessage = {
+        type: 'text',
+        text: `✅ แจ้งข้อมูลการลาเรียบร้อยแล้ว\n\n` +
+              `👤 ชื่อนักเรียน: ${student.student_name}\n` +
+              `🆔 รหัสนักเรียน: ${student.student_id}\n` +
+              `📅 วันที่ลา: ${dateList} (${leave_dates.length} วัน)\n\n` +
+              `นักเรียน ประสงค์ที่จะไม่ใช้บริการรถบัสรับ-ส่งในวันดังกล่าว\n\n` +
+              `✨ ระบบได้ทำการส่งข้อมูลเรียบร้อย\n\n` +
+              `❌ หากต้องการยกเลิกข้อมูลการลาหยุด พิมพ์ "ยกเลิกข้อมูล"`
+      };
+      
+      // ส่งข้อความตอบกลับไปยัง LINE ถ้ามี LINE User ID
+      if (lineUserId) {
+        try {
+          await lineClient.pushMessage(lineUserId, replyMessage);
+          console.log(`✅ Reply message sent to LINE user: ${lineUserId}`);
+        } catch (lineError) {
+          console.error('❌ Error sending LINE message:', lineError);
+        }
+      }
+      
+      console.log(`✅ Leave request saved: ${student_id} (${successCount}/${results.length} days)`);
       res.json({
         success: true,
-        message: result.message,
-        data: result.data
+        message: `บันทึกการลาสำเร็จ ${successCount} วัน` + (failedCount > 0 ? ` (ล้มเหลว ${failedCount} วัน)` : ''),
+        data: {
+          student,
+          successful_dates: results.filter(r => r.result.success).map(r => r.date),
+          failed_dates: results.filter(r => !r.result.success).map(r => r.date)
+        }
       });
     } else {
-      console.log(`❌ Failed to save leave request: ${result.message}`);
+      console.log(`❌ All leave requests failed for: ${student_id}`);
       res.status(400).json({
         success: false,
-        message: result.message
+        message: 'ไม่สามารถบันทึกการลาได้'
       });
     }
     

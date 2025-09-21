@@ -23,7 +23,7 @@ export async function getStudentByLineId(lineUserId) {
       // หาข้อมูลนักเรียนจาก students table โดยตรง
       const { data: student, error: studentError } = await supabase
         .from('students')
-        .select('student_id, student_name, grade')
+        .select('student_id, student_name, grade, link_code')
         .eq('parent_id', parentLink.parent_id)
         .single();
       
@@ -32,10 +32,12 @@ export async function getStudentByLineId(lineUserId) {
           type: 'parent',
           student: {
             student_id: student.student_id,
+            link_code: student.link_code,
+            student_name: student.student_name,
             name: student.student_name,
             class: student.grade
           },
-          parentId: parentLink.parent_id
+          parent_id: parentLink.parent_id
         };
       }
     }
@@ -49,7 +51,8 @@ export async function getStudentByLineId(lineUserId) {
         students (
           student_id,
           student_name,
-          grade
+          grade,
+          link_code
         )
       `)
       .eq('line_user_id', lineUserId)
@@ -65,7 +68,7 @@ export async function getStudentByLineId(lineUserId) {
       return {
         type: 'driver',
         student: {
-          student_id: student.student_id,
+          student_id: student.link_code,
           name: student.student_name,
           class: student.grade
         },
@@ -82,7 +85,8 @@ export async function getStudentByLineId(lineUserId) {
         students (
           student_id,
           student_name,
-          grade
+          grade,
+          link_code
         )
       `)
       .eq('line_user_id', lineUserId)
@@ -98,7 +102,7 @@ export async function getStudentByLineId(lineUserId) {
       return {
         type: 'student',
         student: {
-          student_id: student.student_id,
+          student_id: student.link_code,
           name: student.student_name,
           class: student.grade
         },
@@ -162,7 +166,8 @@ export async function getStudentsByParentLineId(lineUserId) {
             students (
               student_id,
               student_name,
-              grade
+              grade,
+              link_code
             )
           )
         )
@@ -212,7 +217,8 @@ export async function checkDriverLinkStatus(lineUserId) {
         students (
           student_id,
           student_name,
-          grade
+          grade,
+          link_code
         )
       `)
       .eq('line_user_id', lineUserId)
@@ -230,7 +236,7 @@ export async function checkDriverLinkStatus(lineUserId) {
         driverName: driverLink.driver_name,
         linkedAt: driverLink.linked_at,
         student: {
-          student_id: driverLink.students.student_id,
+          student_id: driverLink.students.link_code,
           name: driverLink.students.student_name,
           class: driverLink.students.grade
         }
@@ -271,7 +277,8 @@ export async function getStudentByDriverLineId(lineUserId) {
           grade,
           bus_route,
           pickup_location,
-          dropoff_location
+          dropoff_location,
+          link_code
         )
       `)
       .eq('line_user_id', lineUserId)
@@ -288,7 +295,7 @@ export async function getStudentByDriverLineId(lineUserId) {
         type: 'driver',
         driverName: driverLink.driver_name,
         student: {
-          student_id: student.student_id,
+          student_id: student.link_code,
           name: student.student_name,
           class: student.grade,
           bus_route: student.bus_route,

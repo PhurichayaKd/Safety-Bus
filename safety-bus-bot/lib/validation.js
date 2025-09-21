@@ -173,11 +173,11 @@ function validateStudentId(studentId) {
     return { isValid: false, error: 'Student ID is required' };
   }
   
-  // ตรวจสอบรูปแบบรหัสนักเรียน (8-20 ตัวอักษร)
-  if (studentId.length < 8 || studentId.length > 20) {
+  // ตรวจสอบรูปแบบรหัสนักเรียน (6-20 ตัวอักษร)
+  if (studentId.length < 6 || studentId.length > 20) {
     return {
       isValid: false,
-      error: 'Student ID must be between 8-20 characters'
+      error: 'Student ID must be between 6-20 characters'
     };
   }
   

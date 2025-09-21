@@ -4,7 +4,7 @@ import { supabase } from './db.js';
 import { sendMainMenu, sendLeaveMenu } from './menu.js';
 import { consumeToken, markTokenUsed } from './tokens.js';
 import { linkByStudentId, linkDriverByStudentId, linkLineAccount, checkLinkStatus, unlinkAccount } from './account-linking.js';
-import { sendTravelHistory, sendTravelStatistics } from './travel-history.js';
+import { sendTravelHistory, sendTravelStatistics } from './student-history.js';
 import { sendBusLocation } from './bus-tracking.js';
 import { sendAbsenceList, createAbsenceFromLine, createAbsenceQuickReply } from './absence-management.js';
 import { sendLeaveForm, createReasonForm, saveLeaveRequest } from './leave-form.js';
@@ -28,7 +28,7 @@ async function handleTextMessage(event) {
   
   // คำสั่งพิเศษ
   if (text === 'เมนู' || text === 'menu') {
-    await sendMainMenu(userId);
+    await sendMainMenu(userId, event.replyToken);
     return;
   }
   
@@ -63,8 +63,8 @@ async function handleTextMessage(event) {
     return;
   }
   
-  // ตรวจสอบว่าเป็นรหัสนักเรียนหรือไม่
-  if (/^[a-zA-Z0-9]{8,20}$/.test(text)) {
+  // ตรวจสอบว่าเป็นรหัสนักเรียนหรือไม่ (6 หลักขึ้นไป)
+  if (/^[a-zA-Z0-9]{6,20}$/.test(text)) {
     await handleStudentIdInput(event, text);
     return;
   }
@@ -217,7 +217,7 @@ async function handleFollow(event) {
       text: `🎉 ยินดีต้อนรับกลับมา!\n\n👤 ผู้ปกครอง: ${linkStatus.parent_name}\n👶 นักเรียน: ${linkStatus.student_name}\n🆔 รหัส: ${linkStatus.student_id}\n\n✅ บัญชีของคุณพร้อมใช้งานแล้ว\nเลือกเมนูด้านล่างเพื่อเริ่มใช้งาน`
     });
     
-    // ส่งเมนูหลักทันที
+    // ส่งเมนูหลักทันที (ใช้ push message หลังจาก reply)
     setTimeout(() => {
       sendMainMenu(userId);
     }, 1500);
@@ -248,7 +248,7 @@ async function handleMainAction(event, action) {
       await handleContactRequest(event);
       break;
     case 'main_menu':
-      await sendMainMenu(userId);
+      await sendMainMenu(userId, event.replyToken);
       break;
     case 'driver_student_info':
       await handleDriverStudentInfo(event);
@@ -269,53 +269,11 @@ async function handleHistoryRequest(event) {
   const userId = event.source.userId;
   
   try {
-    // ค้นหาข้อมูลผู้ปกครองจาก LINE user ID
-    const { data: parentLink } = await supabase
-      .from('parent_line_links')
-      .select('parent_id, parents(name), students(name, student_id)')
-      .eq('line_user_id', userId)
-      .single();
-    
-    if (!parentLink) {
-      await lineClient.replyMessage(event.replyToken, {
-        type: 'text',
-        text: '❌ ไม่พบข้อมูลบัญชีที่ผูกไว้\n\nกรุณาผูกบัญชีด้วยรหัสนักเรียนก่อน'
-      });
-      return;
-    }
-    
-    // ดึงประวัติการเดินทาง 7 วันล่าสุด
-    const { data: trips } = await supabase
-      .from('trips')
-      .select('*')
-      .eq('student_id', parentLink.students.student_id)
-      .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-      .order('created_at', { ascending: false })
-      .limit(10);
-    
-    let message = `📊 ประวัติการเดินทาง - ${parentLink.students.name}\n\n`;
-    
-    if (trips && trips.length > 0) {
-      trips.forEach(trip => {
-        const date = new Date(trip.created_at).toLocaleDateString('th-TH');
-        const time = new Date(trip.created_at).toLocaleTimeString('th-TH', { 
-          hour: '2-digit', 
-          minute: '2-digit' 
-        });
-        message += `📅 ${date} ${time}\n`;
-        message += `${trip.type === 'pickup' ? '🚌 ขึ้นรถ' : '🏠 ลงรถ'} - ${trip.location || 'ไม่ระบุ'}\n\n`;
-      });
-    } else {
-      message += 'ไม่มีข้อมูลการเดินทางในช่วง 7 วันที่ผ่านมา';
-    }
-    
-    await lineClient.replyMessage(event.replyToken, {
-      type: 'text',
-      text: message
-    });
+    // เรียกใช้ฟังก์ชันแสดงประวัติข้อมูลนักเรียน
+    await sendTravelHistory(userId, event.replyToken);
     
   } catch (error) {
-    console.error('❌ Error fetching history:', error);
+    console.error('❌ Error fetching student data:', error);
     await lineClient.replyMessage(event.replyToken, {
       type: 'text',
       text: '❌ เกิดข้อผิดพลาดในการดึงข้อมูล กรุณาลองใหม่อีกครั้ง'
@@ -345,8 +303,80 @@ async function handleLeaveRequest(event) {
     return;
   }
   
-  // ใช้ฟอร์ม interactive แทน LIFF
-  await sendLeaveForm(userId, event.replyToken);
+  // เปิดหน้า LIFF สำหรับแจ้งลา
+  const liffMessage = {
+    type: 'flex',
+    altText: 'แบบฟอร์มแจ้งลาหยุด',
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: '📝 แบบฟอร์มแจ้งลาหยุด',
+            weight: 'bold',
+            size: 'xl',
+            color: '#FFFFFF',
+            align: 'center'
+          }
+        ],
+        backgroundColor: '#1DB446',
+        paddingAll: '20px'
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: 'กดปุ่มด้านล่างเพื่อเปิดแบบฟอร์มแจ้งลาหยุด',
+            size: 'md',
+            color: '#333333',
+            align: 'center',
+            wrap: true
+          },
+          {
+            type: 'separator',
+            margin: 'lg'
+          },
+          {
+            type: 'text',
+            text: '• กรอกข้อมูลการลา\n• เลือกประเภทการลา\n• ระบุเหตุผล\n• ส่งคำขอ',
+            size: 'sm',
+            color: '#666666',
+            margin: 'lg'
+          }
+        ],
+        spacing: 'md',
+        paddingAll: '20px'
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'uri',
+              label: '📝 เปิดแบบฟอร์มแจ้งลา',
+              uri: `${process.env.BASE_URL}/link/leave-form?userId=${userId}`
+            },
+            style: 'primary',
+            color: '#1DB446'
+          }
+        ],
+        paddingAll: '20px'
+      }
+    }
+  };
+  
+  if (event.replyToken) {
+    await lineClient.replyMessage(event.replyToken, liffMessage);
+  } else {
+    await lineClient.pushMessage(userId, liffMessage);
+  }
 }
 
 // จัดการฟอร์มแจ้งลาแบบเก่า (เก็บไว้เพื่อ backward compatibility)
@@ -493,32 +523,34 @@ async function handleAccountLinking(event, token) {
 // จัดการการป้อนรหัสนักเรียน
 async function handleStudentIdInput(event, studentId) {
   const userId = event.source.userId;
+  console.log('🔍 handleStudentIdInput - START:', { studentId, userId });
+  console.log(`🔍 handleStudentIdInput called with studentId: ${studentId}, userId: ${userId}`);
   
   try {
     // ตรวจสอบว่าผู้ใช้เป็นคนขับหรือไม่
     const userState = userFormStates.get(userId);
+    console.log('🔍 handleStudentIdInput - userState:', userState);
+    
     if (userState && userState.type === 'driver_linking') {
+      console.log('🔍 handleStudentIdInput - calling handleDriverStudentIdInput');
       await handleDriverStudentIdInput(event, studentId);
       return;
     }
     
     // ตรวจสอบว่าผู้ใช้กำลังเปลี่ยนนักเรียนหรือไม่
     if (userState && userState.type === 'driver_change_student') {
+      console.log('🔍 handleStudentIdInput - calling handleDriverChangeStudentId');
       await handleDriverChangeStudentId(event, studentId);
       return;
     }
     
-    const result = await linkByStudentId(userId, studentId);
+    console.log('🔍 handleStudentIdInput - calling linkByStudentId for parent');
+    const result = await linkByStudentId(userId, studentId, null, null, event.replyToken);
     
     if (result.success) {
-      await lineClient.replyMessage(event.replyToken, {
-        type: 'text',
-        text: `🎉 ผูกบัญชีสำเร็จแล้ว!\n\n👨‍👩‍👧‍👦 ผู้ปกครอง: ${result.parent_name}\n👦👧 นักเรียน: ${result.student_name}\n🆔 รหัสนักเรียน: ${studentId}\n\n✅ ระบบพร้อมใช้งาน\n🔔 คุณจะได้รับการแจ้งเตือนเกี่ยวกับการเดินทางของนักเรียน\n\n📱 เลือกเมนูด้านล่างเพื่อเริ่มใช้งาน`
-      });
-      
       // ส่งเมนูหลักหลังจากผูกบัญชีสำเร็จ
       setTimeout(() => {
-        sendMainMenu(userId);
+        sendMainMenu(userId); // ใช้ pushMessage เพราะไม่มี replyToken แล้ว
       }, 2000);
     } else {
       await lineClient.replyMessage(event.replyToken, {
@@ -663,7 +695,7 @@ async function handleDriverStudentInfo(event) {
     // ค้นหาข้อมูลคนขับและนักเรียนที่รับผิดชอบ
     const { data: driverLink } = await supabase
       .from('driver_line_links')
-      .select('driver_name, students(student_name, student_id)')
+      .select('driver_name, students(student_name, student_id, link_code)')
       .eq('line_user_id', userId)
       .single();
     
@@ -686,7 +718,7 @@ async function handleDriverStudentInfo(event) {
     let message = `👨‍🚗 ข้อมูลนักเรียนที่รับผิดชอบ\n\n`;
     message += `🚌 คนขับ: ${driverLink.driver_name}\n`;
     message += `👦👧 นักเรียน: ${driverLink.students.student_name}\n`;
-    message += `🆔 รหัส: ${driverLink.students.student_id}\n\n`;
+    message += `🆔 รหัส: ${driverLink.students.link_code}\n\n`;
     
     if (recentTrips && recentTrips.length > 0) {
       message += `📊 การเดินทางล่าสุด:\n`;
@@ -741,8 +773,8 @@ async function handleDriverChangeStudentId(event, studentId) {
     // ค้นหาข้อมูลนักเรียนใหม่
     const { data: student } = await supabase
       .from('students')
-      .select('student_name')
-      .eq('student_id', studentId)
+      .select('student_name, student_id')
+      .eq('link_code', studentId)
       .single();
     
     if (!student) {
@@ -756,7 +788,7 @@ async function handleDriverChangeStudentId(event, studentId) {
     // อัปเดตข้อมูลคนขับ
     const { error } = await supabase
       .from('driver_line_links')
-      .update({ student_id: studentId })
+      .update({ student_id: student.student_id })
       .eq('line_user_id', userId);
     
     if (error) throw error;

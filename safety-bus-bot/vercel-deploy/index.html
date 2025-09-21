@@ -8,33 +8,107 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🚌 Safety Bus</h1>
-            <h2>📅 เลือกวันที่แจ้งลา</h2>
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="loading-screen">
+            <div class="loading-spinner"></div>
+            <p>กำลังโหลดข้อมูล...</p>
         </div>
-        
-        <div class="date-picker-container">
-            <div class="date-input-wrapper">
-                <label for="leave-date">วันที่แจ้งลา:</label>
-                <input type="date" id="leave-date" name="leave-date" required>
+
+        <!-- Student Info Section -->
+        <div id="student-info" class="student-info" style="display: none;">
+            <div class="header">
+                <h1>🚌 Safety Bus</h1>
+                <h2>📝 แบบฟอร์มแจ้งลาหยุด</h2>
             </div>
             
-            <div class="selected-date" id="selected-date" style="display: none;">
-                <p>วันที่เลือก: <span id="selected-date-text"></span></p>
+            <div class="student-card">
+                <h3>👤 ข้อมูลนักเรียน</h3>
+                <div class="student-details">
+                    <p><strong>ชื่อ:</strong> <span id="student-name">-</span></p>
+                    <p><strong>รหัสนักเรียน:</strong> <span id="student-code">-</span></p>
+                    <p><strong>ชั้น:</strong> <span id="student-class">-</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Date Selection Section -->
+        <div id="date-selection" class="date-picker-container" style="display: none;">
+            <div class="section-header">
+                <h3>📅 เลือกวันที่แจ้งลา</h3>
+                <p class="instruction">เลือกได้สูงสุด 3 วัน</p>
+            </div>
+            
+            <div class="date-input-wrapper">
+                <label for="leave-date">เพิ่มวันที่ลา:</label>
+                <input type="date" id="leave-date" name="leave-date">
+                <button id="add-date-btn" class="add-date-button">➕ เพิ่มวันที่</button>
+            </div>
+            
+            <div id="selected-dates-list" class="selected-dates-list">
+                <h4>วันที่เลือกแล้ว:</h4>
+                <div id="dates-container" class="dates-container">
+                    <p class="no-dates">ยังไม่ได้เลือกวันที่</p>
+                </div>
             </div>
             
             <div class="button-container">
                 <button id="confirm-btn" class="confirm-button" disabled>
-                    ✅ ยืนยันวันที่
+                    ✅ ยืนยันข้อมูล
                 </button>
                 <button id="cancel-btn" class="cancel-button">
                     ❌ ยกเลิก
                 </button>
             </div>
         </div>
-        
-        <div class="info">
-            <p>💡 เลือกวันที่ที่ต้องการแจ้งลาล่วงหน้า</p>
+
+        <!-- Confirmation Section -->
+        <div id="confirmation-section" class="confirmation-section" style="display: none;">
+            <div class="confirmation-header">
+                <h3>📋 ตรวจสอบข้อมูลการลา</h3>
+            </div>
+            
+            <div class="confirmation-details">
+                <div class="student-summary">
+                    <p><strong>👤 นักเรียน:</strong> <span id="confirm-student-name">-</span></p>
+                    <p><strong>🆔 รหัส:</strong> <span id="confirm-student-code">-</span></p>
+                </div>
+                
+                <div class="dates-summary">
+                    <p><strong>📅 วันที่ลา:</strong></p>
+                    <div id="confirm-dates-list" class="confirm-dates-list"></div>
+                </div>
+                
+                <div class="reason-summary">
+                    <p><strong>📝 เหตุผล:</strong> ไม่ประสงค์ขึ้นรถบัสรับ-ส่งในวันดังกล่าว</p>
+                </div>
+            </div>
+            
+            <div class="button-container">
+                <button id="final-confirm-btn" class="final-confirm-button">
+                    ✅ ยืนยันส่งข้อมูล
+                </button>
+                <button id="back-btn" class="back-button">
+                    ⬅️ กลับไปแก้ไข
+                </button>
+            </div>
+        </div>
+
+        <!-- Success Section -->
+        <div id="success-section" class="success-section" style="display: none;">
+            <div class="success-icon">✅</div>
+            <h3>ส่งข้อมูลสำเร็จ!</h3>
+            <p>ข้อมูลการลาได้ถูกบันทึกเรียบร้อยแล้ว</p>
+            <div class="auto-close-info">
+                <p>หน้าต่างจะปิดอัตโนมัติใน <span id="countdown">3</span> วินาที</p>
+            </div>
+        </div>
+
+        <!-- Error Section -->
+        <div id="error-section" class="error-section" style="display: none;">
+            <div class="error-icon">❌</div>
+            <h3>เกิดข้อผิดพลาด</h3>
+            <p id="error-message">ไม่สามารถดำเนินการได้</p>
+            <button id="retry-btn" class="retry-button">🔄 ลองใหม่</button>
         </div>
     </div>
     

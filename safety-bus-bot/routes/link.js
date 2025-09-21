@@ -62,6 +62,8 @@ router.get('/leave-form', (req, res) => {
     // แทนที่ LIFF_ID ด้วยค่าจริงจาก environment
     html = html.replace('{{LIFF_ID}}', process.env.LINE_LIFF_ID);
     
+    // เพิ่ม header เพื่อข้าม ngrok warning
+    res.setHeader('ngrok-skip-browser-warning', 'true');
     res.setHeader('Content-Type', 'text/html');
     res.send(html);
   } catch (error) {

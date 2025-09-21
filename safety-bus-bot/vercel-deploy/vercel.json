@@ -1,12 +1,6 @@
 {
   "version": 2,
-  "name": "safety-bus-liff-app",
-  "builds": [
-    {
-      "src": "**/*",
-      "use": "@vercel/static"
-    }
-  ],
+  "outputDirectory": ".",
   "headers": [
     {
       "source": "/(.*)",

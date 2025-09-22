@@ -12,8 +12,8 @@ class CancelLeaveApp {
         try {
             console.log('Initializing LIFF...');
             
-            // Get LIFF ID from environment or use default
-            const liffId = window.LIFF_ID || '2006508893-Ej5Aw6Vy';
+            // Get LIFF ID from meta tag or use default
+            const liffId = document.querySelector('meta[name="liff-id"]')?.content || '2008065330-AXGy9xda';
             
             await liff.init({ liffId: liffId });
             this.isLiffInitialized = true;

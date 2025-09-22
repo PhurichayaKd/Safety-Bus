@@ -1,6 +1,13 @@
 // Vercel Function for handling leave requests
-const { Client } = require('@line/bot-sdk');
-const { createClient } = require('@supabase/supabase-js');
+import dotenv from 'dotenv';
+
+// Load .env.local for development
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: '.env.local' });
+}
+
+import { Client } from '@line/bot-sdk';
+import { createClient } from '@supabase/supabase-js';
 
 // LINE Bot configuration
 const config = {

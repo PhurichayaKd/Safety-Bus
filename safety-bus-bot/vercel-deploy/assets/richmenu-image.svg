@@ -1,0 +1,48 @@
+<svg width="2500" height="1686" viewBox="0 0 2500 1686" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="2500" height="1686" fill="#FF6B35"/>
+  
+  <!-- Grid Lines -->
+  <line x1="1250" y1="0" x2="1250" y2="1686" stroke="#FFFFFF" stroke-width="4"/>
+  <line x1="0" y1="843" x2="2500" y2="843" stroke="#FFFFFF" stroke-width="4"/>
+  
+  <!-- Top Left: ประวัตินักเรียน -->
+  <g>
+    <rect x="0" y="0" width="1250" height="843" fill="#4A90E2" opacity="0.9"/>
+    <circle cx="625" cy="300" r="80" fill="#FFFFFF"/>
+    <text x="625" y="310" text-anchor="middle" fill="#4A90E2" font-family="Arial, sans-serif" font-size="60" font-weight="bold">📊</text>
+    <text x="625" y="500" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="48" font-weight="bold">ประวัตินักเรียน</text>
+    <text x="625" y="580" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="32">Student History</text>
+  </g>
+  
+  <!-- Top Right: ฟอร์มแจ้งลา -->
+  <g>
+    <rect x="1250" y="0" width="1250" height="843" fill="#50C878" opacity="0.9"/>
+    <circle cx="1875" cy="300" r="80" fill="#FFFFFF"/>
+    <text x="1875" y="310" text-anchor="middle" fill="#50C878" font-family="Arial, sans-serif" font-size="60" font-weight="bold">📝</text>
+    <text x="1875" y="500" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="48" font-weight="bold">ฟอร์มแจ้งลา</text>
+    <text x="1875" y="580" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="32">Leave Request</text>
+  </g>
+  
+  <!-- Bottom Left: ตำแหน่งรถ -->
+  <g>
+    <rect x="0" y="843" width="1250" height="843" fill="#FFD700" opacity="0.9"/>
+    <circle cx="625" cy="1143" r="80" fill="#FFFFFF"/>
+    <text x="625" y="1153" text-anchor="middle" fill="#FFD700" font-family="Arial, sans-serif" font-size="60" font-weight="bold">🚌</text>
+    <text x="625" y="1343" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="48" font-weight="bold">ตำแหน่งรถ</text>
+    <text x="625" y="1423" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="32">Bus Location</text>
+  </g>
+  
+  <!-- Bottom Right: ติดต่อคนขับ -->
+  <g>
+    <rect x="1250" y="843" width="1250" height="843" fill="#9B59B6" opacity="0.9"/>
+    <circle cx="1875" cy="1143" r="80" fill="#FFFFFF"/>
+    <text x="1875" y="1153" text-anchor="middle" fill="#9B59B6" font-family="Arial, sans-serif" font-size="60" font-weight="bold">📞</text>
+    <text x="1875" y="1343" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="48" font-weight="bold">ติดต่อคนขับ</text>
+    <text x="1875" y="1423" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="32">Contact Driver</text>
+  </g>
+  
+  <!-- Safety Bus Logo/Title at top -->
+  <rect x="0" y="0" width="2500" height="100" fill="#2C3E50" opacity="0.8"/>
+  <text x="1250" y="65" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="48" font-weight="bold">🚌 Safety Bus</text>
+</svg>

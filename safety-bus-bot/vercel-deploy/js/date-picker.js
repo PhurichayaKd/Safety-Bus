@@ -6,11 +6,13 @@ let currentSection = 'loading'; // loading, student-info, date-selection, confir
 
 // Initialize LIFF
 function initializeLIFF() {
-    // Get LIFF ID from environment or use default
-    const liffId = window.LIFF_ID || '2006508893-Ej5Aw6Vy';
+    // Get LIFF ID from meta tag or use environment variable
+    const liffId = document.querySelector('meta[name="liff-id"]')?.content || '2008065330-AXGy9xda';
+    
+    console.log('Initializing LIFF with ID:', liffId);
     
     liff.init({
-        liffId: liffId // Replace with your actual LIFF ID
+        liffId: liffId
     }).then(() => {
         console.log('LIFF initialized successfully');
         
@@ -46,14 +48,13 @@ function getStudentInfo() {
         console.log('User profile:', profile);
         
         // Call API to get student info
-        return fetch('/api/submit-leave', {
+        return fetch('/api/get-student', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                action: 'getStudentInfo',
-                userId: profile.userId
+                lineUserId: profile.userId
             })
         });
     }).then(response => {
@@ -77,7 +78,7 @@ function getStudentInfo() {
 // Show different sections
 function showSection(sectionName) {
     // Hide all sections
-    const sections = ['loading-screen', 'student-info-section', 'date-selection-section', 'confirmation-section', 'success-section', 'error-section'];
+    const sections = ['loading-screen', 'student-info', 'date-selection', 'confirmation-section', 'success-section', 'error-section'];
     sections.forEach(section => {
         const element = document.getElementById(section);
         if (element) {
@@ -96,15 +97,15 @@ function showSection(sectionName) {
 
 function showStudentInfoSection() {
     if (studentInfo) {
-        document.getElementById('student-name').textContent = studentInfo.student_name;
+        document.getElementById('student-name').textContent = studentInfo.name;
         document.getElementById('student-code').textContent = studentInfo.link_code;
         document.getElementById('student-class').textContent = studentInfo.class || 'ไม่ระบุ';
     }
-    showSection('student-info-section');
+    showSection('student-info');
 }
 
 function showDateSelectionSection() {
-    showSection('date-selection-section');
+    showSection('date-selection');
     setupDatePicker();
 }
 
@@ -317,11 +318,11 @@ function submitLeaveRequest(data) {
 
 // Navigation functions
 function goToDateSelection() {
-    showDateSelectionSection();
+    showSection('date-selection');
 }
 
 function goBackToDateSelection() {
-    showDateSelectionSection();
+    showSection('date-selection');
 }
 
 function retryConnection() {
@@ -340,17 +341,66 @@ function cancelLeave() {
 
 // Initialize app when page loads
 window.addEventListener('load', function() {
+    console.log('Page loaded, initializing LIFF...');
+    
     // Show loading screen initially
     showSection('loading-screen');
     
-    // Check if LIFF is available
-    if (typeof liff !== 'undefined') {
-        initializeLIFF();
-    } else {
-        console.error('LIFF SDK not loaded');
-        showErrorSection('ไม่สามารถโหลด LINE SDK ได้ กรุณาลองใหม่อีกครั้ง');
-    }
+    // Wait for LIFF SDK to load
+    waitForLIFF();
 });
+
+// Function to wait for LIFF SDK to load
+function waitForLIFF() {
+    if (typeof window.liff === 'undefined') {
+        console.log('Waiting for LIFF SDK to load...');
+        setTimeout(waitForLIFF, 100); // Check again after 100ms
+        return;
+    }
+    
+    console.log('LIFF SDK loaded successfully');
+    liff = window.liff;
+    
+    // Add event listeners
+    const proceedBtn = document.getElementById('proceed-btn');
+    if (proceedBtn) {
+        proceedBtn.addEventListener('click', goToDateSelection);
+    }
+    
+    // Add all event listeners
+    const addDateBtn = document.getElementById('add-date-btn');
+    if (addDateBtn) {
+        addDateBtn.addEventListener('click', addDate);
+    }
+    
+    const confirmBtn = document.getElementById('confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', confirmLeave);
+    }
+    
+    const finalConfirmBtn = document.getElementById('final-confirm-btn');
+    if (finalConfirmBtn) {
+        finalConfirmBtn.addEventListener('click', finalSubmitLeave);
+    }
+    
+    const backBtn = document.getElementById('back-btn');
+    if (backBtn) {
+        backBtn.addEventListener('click', goBackToDateSelection);
+    }
+    
+    const cancelBtn = document.getElementById('cancel-btn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', cancelLeave);
+    }
+    
+    const retryBtn = document.getElementById('retry-btn');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', retryConnection);
+    }
+    
+    // Initialize LIFF
+    initializeLIFF();
+}
 
 // Handle LIFF errors
 window.addEventListener('error', (event) => {

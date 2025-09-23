@@ -120,7 +120,41 @@ async function sendLineMessage(userId, message) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
-  const { studentId, studentName, leaveDates, reason, userId, source } = req.body;
+  
+  // Parse JSON body if it's a string
+  let body = req.body;
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch (error) {
+      console.error('Error parsing JSON:', error);
+      return res.status(400).json({ ok: false, error: 'Invalid JSON format' });
+    }
+  }
+  
+  const { action, studentInfo, leaveDates, userId, source } = body;
+  
+  // Handle different actions
+  if (action === 'getStudentInfo') {
+    try {
+      const result = await getStudentByLineId(userId);
+      return res.json(result);
+    } catch (error) {
+      console.error('Error getting student info:', error);
+      return res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดในการดึงข้อมูลนักเรียน' });
+    }
+  }
+  
+  if (action !== 'submitLeave') {
+    return res.status(400).json({ ok: false, error: 'Invalid action' });
+  }
+  
+  if (!studentInfo || !leaveDates || !Array.isArray(leaveDates)) {
+    return res.status(400).json({ ok: false, error: 'Missing required fields' });
+  }
+  
+  const studentId = studentInfo.id;
+  const studentName = studentInfo.name;
   
   try {
     // บันทึก leaveDates (array) ลง supabase
@@ -128,7 +162,7 @@ export default async function handler(req, res) {
       await supabase.from('leave_requests').insert({
         student_id: studentId,
         leave_date: date,
-        reason,
+        leave_type: 'personal',
         status: 'approved',
         created_at: new Date().toISOString()
       });
@@ -149,7 +183,7 @@ export default async function handler(req, res) {
         studentName,
         studentId,
         leaveDates,
-        reason
+        leave_type: 'personal'
       }
     });
   } catch (error) {

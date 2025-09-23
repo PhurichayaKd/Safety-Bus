@@ -44,6 +44,14 @@ function initializeLIFF() {
 
 // Get student information from URL parameters or LINE ID
 function getStudentInfo() {
+    // Check if mock student info is already available (for testing)
+    if (window.studentInfo) {
+        console.log('Using mock student info:', window.studentInfo);
+        studentInfo = window.studentInfo;
+        showStudentInfoSection();
+        return;
+    }
+    
     // Check if student info is provided via URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const studentId = urlParams.get('studentId');
@@ -117,8 +125,12 @@ function getStudentInfo() {
 
 // Show different sections
 function showSection(sectionName) {
+    console.log('=== showSection called ===');
+    console.log('Showing section:', sectionName);
+    
     // Hide all sections
-    const sections = ['loading-screen', 'student-info', 'date-selection', 'confirmation-section', 'success-section', 'error-section'];
+    const sections = ['loading-screen', 'main-form', 'confirmation-section', 'success-section', 'error-section'];
+    console.log('Found sections:', sections.length);
     sections.forEach(section => {
         const element = document.getElementById(section);
         if (element) {
@@ -128,8 +140,12 @@ function showSection(sectionName) {
     
     // Show target section
     const targetSection = document.getElementById(sectionName);
+    console.log('Target section found:', targetSection);
     if (targetSection) {
         targetSection.style.display = 'block';
+        console.log('Section displayed successfully:', sectionName);
+    } else {
+        console.error('Target section not found:', sectionName);
     }
     
     currentSection = sectionName.replace('-section', '').replace('-screen', '');
@@ -137,22 +153,21 @@ function showSection(sectionName) {
 
 function showStudentInfoSection() {
     if (studentInfo) {
-        document.getElementById('student-name').textContent = studentInfo.name;
-        document.getElementById('student-code').textContent = studentInfo.link_code;
-        document.getElementById('student-class').textContent = studentInfo.class || 'ไม่ระบุ';
+        document.getElementById('student-name').textContent = studentInfo.student_name || studentInfo.name || '-';
+        document.getElementById('student-code').textContent = studentInfo.link_code || studentInfo.student_id || '-';
     }
-    showSection('student-info');
+    showSection('main-form');
 }
 
 function showDateSelectionSection() {
-    showSection('date-selection');
+    showSection('main-form');
     setupDatePicker();
 }
 
 function showConfirmationSection() {
     // Update confirmation details
-    document.getElementById('confirm-student-name').textContent = studentInfo.student_name;
-    document.getElementById('confirm-student-code').textContent = studentInfo.link_code;
+    document.getElementById('confirm-student-name').textContent = studentInfo.student_name || studentInfo.name || '-';
+    document.getElementById('confirm-student-code').textContent = studentInfo.link_code || studentInfo.student_id || '-';
     
     // Update selected dates list
     const confirmDatesList = document.getElementById('confirm-dates-list');
@@ -169,13 +184,27 @@ function showConfirmationSection() {
 }
 
 function showSuccessSection() {
+    console.log('=== showSuccessSection called ===');
     showSection('success-section');
-    // Auto close after 3 seconds
-    setTimeout(() => {
-        if (liff) {
-            liff.closeWindow();
+    
+    // Start countdown
+    let countdown = 3;
+    const countdownElement = document.getElementById('countdown');
+    console.log('Countdown element found:', countdownElement);
+    
+    const countdownInterval = setInterval(() => {
+        countdown--;
+        if (countdownElement) {
+            countdownElement.textContent = countdown;
         }
-    }, 3000);
+        
+        if (countdown <= 0) {
+            clearInterval(countdownInterval);
+            if (liff) {
+                liff.closeWindow();
+            }
+        }
+    }, 1000);
 }
 
 function showErrorSection(message) {
@@ -185,7 +214,7 @@ function showErrorSection(message) {
 
 // Date picker functionality
 function setupDatePicker() {
-    const dateInput = document.getElementById('leaveDate');
+    const dateInput = document.getElementById('leave-date');
     
     // Check if dateInput exists before setting properties
     if (!dateInput) {
@@ -211,7 +240,7 @@ function setupDatePicker() {
 
 // Add selected date
 function addDate() {
-    const dateInput = document.getElementById('leaveDate');
+    const dateInput = document.getElementById('leave-date');
     const selectedDate = dateInput.value;
     
     if (!selectedDate) {
@@ -251,7 +280,12 @@ function removeDate(date) {
 
 // Update selected dates list display
 function updateSelectedDatesList() {
-    const container = document.getElementById('dates-container');
+    const container = document.getElementById('selected-dates-list');
+    
+    if (!container) {
+        console.warn('Selected dates container not found');
+        return;
+    }
     
     if (selectedDates.length === 0) {
         container.innerHTML = '<p class="no-dates">ยังไม่ได้เลือกวันที่</p>';
@@ -271,19 +305,38 @@ function updateSelectedDatesList() {
 
 // Update add button state
 function updateAddButton() {
-    const addButton = document.getElementById('add-date-button');
-    addButton.disabled = selectedDates.length >= 3;
+    const addButton = document.getElementById('add-date-btn');
+    const dateInput = document.getElementById('leave-date');
+    
+    if (!addButton) {
+        console.warn('Add button not found');
+        return;
+    }
     
     if (selectedDates.length >= 3) {
+        addButton.disabled = true;
         addButton.textContent = 'เลือกครบ 3 วันแล้ว';
+        if (dateInput) {
+            dateInput.disabled = true;
+        }
     } else {
-        addButton.textContent = `เพิ่มวันที่ (${selectedDates.length}/3)`;
+        addButton.disabled = false;
+        addButton.textContent = '+ เพิ่มวัน';
+        if (dateInput) {
+            dateInput.disabled = false;
+        }
     }
 }
 
 // Update confirm button state
 function updateConfirmButton() {
-    const confirmButton = document.getElementById('confirm-dates-button');
+    const confirmButton = document.getElementById('confirm-btn');
+    
+    if (!confirmButton) {
+        console.warn('Confirm button not found');
+        return;
+    }
+    
     confirmButton.disabled = selectedDates.length === 0;
 }
 
@@ -311,60 +364,157 @@ function confirmLeave() {
 
 // Final submit leave request
 function finalSubmitLeave() {
+    console.log('=== finalSubmitLeave called ===');
+    console.log('LIFF logged in status:', liff.isLoggedIn());
+    console.log('Selected dates:', selectedDates);
+    console.log('Student info:', studentInfo);
+    
     if (!liff.isLoggedIn()) {
+        console.error('User not logged in');
         showErrorSection('กรุณาเข้าสู่ระบบ LINE ก่อน');
         return;
     }
     
-    const finalConfirmButton = document.getElementById('final-confirm-button');
+    if (!selectedDates || selectedDates.length === 0) {
+        console.error('No dates selected');
+        showErrorSection('กรุณาเลือกวันที่แจ้งลาก่อน');
+        return;
+    }
+    
+    if (!studentInfo) {
+        console.error('No student info available');
+        showErrorSection('ไม่พบข้อมูลนักเรียน กรุณาลองใหม่อีกครั้ง');
+        return;
+    }
+    
+    const finalConfirmButton = document.getElementById('final-confirm-btn');
+    if (!finalConfirmButton) {
+        console.error('Final confirm button not found');
+        return;
+    }
+    
     finalConfirmButton.disabled = true;
     finalConfirmButton.innerHTML = '<span class="loading"></span>กำลังส่งข้อมูล...';
     
+    console.log('Getting user profile...');
+    
     // Get user profile and submit leave request
     liff.getProfile().then((profile) => {
+        console.log('User profile:', profile);
+        
         const leaveData = {
             action: 'submitLeave',
             userId: profile.userId,
             displayName: profile.displayName,
             studentInfo: studentInfo,
-            leaveDates: selectedDates,
-            reason: 'ไม่ประสงค์ขึ้นรถบัสรับ-ส่งในวันดังกล่าว'
+            leaveDates: selectedDates
         };
+        
+        console.log('Leave data prepared:', leaveData);
         
         return submitLeaveRequest(leaveData);
     }).then((response) => {
+        console.log('Submit response:', response);
+        
         if (response.success) {
+            console.log('Leave request successful');
+            console.log('Response data:', response.data);
+            
+            // Show alert for immediate feedback
+            alert('✅ ส่งข้อมูลสำเร็จ! ข้อมูลการลาได้ถูกบันทึกเรียบร้อยแล้ว');
+            
             showSuccessSection();
+            
+            // Fallback: Close LIFF window after 3 seconds
+            setTimeout(() => {
+                if (liff && liff.isInClient()) {
+                    console.log('Closing LIFF window...');
+                    liff.closeWindow();
+                }
+            }, 3000);
         } else {
+            console.error('Leave request failed:', response.message);
+            console.error('Full response:', response);
             throw new Error(response.message || 'เกิดข้อผิดพลาดในการส่งข้อมูล');
         }
     }).catch((error) => {
         console.error('Error submitting leave:', error);
         showErrorSection(error.message || 'เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่อีกครั้ง');
     }).finally(() => {
+        console.log('Resetting button state');
         finalConfirmButton.disabled = false;
         finalConfirmButton.innerHTML = 'ยืนยันการส่งข้อมูล';
     });
 }
 
-// Submit leave request to API
+// Submit leave request via API endpoint
 function submitLeaveRequest(data) {
-    // Submit directly to Supabase API endpoint
-    return fetch('/api/submit-leave', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            ...data,
-            source: 'direct' // Mark as direct submission (not from LINE)
-        })
-    }).then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
+    console.log('=== submitLeaveRequest called ===');
+    console.log('Input data:', data);
+    
+    // Submit via API endpoint with new format
+    return submitViaAPI({
+        action: 'submitLeave',
+        userId: data.userId,
+        displayName: data.displayName,
+        studentInfo: data.studentInfo,
+        leaveDates: data.leaveDates,
+        source: 'direct'
     });
+}
+
+// Function to submit data via API endpoint
+async function submitViaAPI(requestData) {
+    console.log('=== submitViaAPI called ===');
+    console.log('Request data:', requestData);
+    
+    try {
+        console.log('Sending request to /api/submit-leave...');
+        
+        const response = await fetch('/api/submit-leave', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
+        
+        console.log('Raw response:', response);
+        console.log('Response headers:', response.headers);
+        
+        console.log('API response status:', response.status);
+        console.log('API response ok:', response.ok);
+        
+        const result = await response.json();
+        console.log('API response data:', result);
+        
+        if (!response.ok) {
+            throw new Error(result.error || `HTTP error! status: ${response.status}`);
+        }
+        
+        if (result.ok) {
+            console.log('API request successful');
+            return {
+                success: true,
+                message: result.message || 'แจ้งลาสำเร็จ',
+                data: result.data
+            };
+        } else {
+            throw new Error(result.error || 'เกิดข้อผิดพลาดในการส่งข้อมูล');
+        }
+        
+    } catch (error) {
+        console.error('Error submitting via API:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
+        
+        return {
+            success: false,
+            message: error.message || 'เกิดข้อผิดพลาดในการส่งข้อมูล'
+        };
+    }
 }
 
 // Navigation functions
@@ -461,6 +611,11 @@ function setupEventListeners() {
     const retryBtn = document.getElementById('retry-btn');
     if (retryBtn) {
         retryBtn.addEventListener('click', retryConnection);
+    }
+    
+    const finalConfirmBtn = document.getElementById('final-confirm-btn');
+    if (finalConfirmBtn) {
+        finalConfirmBtn.addEventListener('click', finalSubmitLeave);
     }
     
     // Setup date picker

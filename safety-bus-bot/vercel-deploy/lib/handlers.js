@@ -137,24 +137,19 @@ export async function handlePostback(event) {
       const action = data.split('=')[1];
       console.log('Postback action:', action);
       await handleMainAction(event, action);
-    } else if (data.startsWith('leave_type=')) {
-      const leaveType = data.split('=')[1];
-      console.log('Postback leave_type:', leaveType);
-      await handleLeaveRequest(event, leaveType);
-    } else if (data.startsWith('confirm_leave=')) {
-      const leaveId = data.split('=')[1];
-      console.log('Postback confirm_leave:', leaveId);
-      await handleLeaveConfirmation(event, leaveId);
-    } else if (data.startsWith('leave_form_')) {
-      console.log('Postback leave_form:', data);
-      await handleLeaveFormPostback(event, data);
+    } else if (data.startsWith('leave_type=') || data.startsWith('confirm_leave=') || data.startsWith('leave_form_')) {
+      // Handle leave-related postbacks by redirecting to leave request menu
+      console.log('Leave-related postback, redirecting to leave request menu');
+      await handleLeaveRequestMenu(event);
     } else {
       // กรณี action ไม่ตรง
       console.log('Unknown postback data:', data);
       await replyLineMessage(event.replyToken, {
         type: 'text',
-        text: 'ขออภัย ไม่เข้าใจคำสั่งเมนูนี้'
+        text: 'ขออภัย ไม่เข้าใจคำสั่งเมนูนี้ กรุณาใช้เมนูหลักแทน'
       });
+      // Send main menu as fallback
+      await sendMainMenu(userId, event.replyToken);
     }
   } catch (err) {
     console.error('Error in handlePostback:', err);

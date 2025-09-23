@@ -17,7 +17,7 @@
   "license": "MIT",
   "dependencies": {
     "@line/bot-sdk": "^10.2.0",
-    "@supabase/supabase-js": "^2.57.0",
+    "@supabase/supabase-js": "^2.57.4",
     "axios": "^1.11.0",
     "canvas": "^3.2.0",
     "cors": "^2.8.5",

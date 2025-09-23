@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบ API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 ทดสอบ API Endpoints</h1>
+    
+    <div class="test-section">
+        <h3>1. ทดสอบ GET Student</h3>
+        <button onclick="testGetStudent()">ทดสอบ /api/get-student</button>
+        <div id="get-student-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. ทดสอบ Submit Leave</h3>
+        <button onclick="testSubmitLeave()">ทดสอบ /api/submit-leave</button>
+        <div id="submit-leave-result" class="result"></div>
+    </div>
+    
+    <script>
+        async function testGetStudent() {
+            const resultDiv = document.getElementById('get-student-result');
+            resultDiv.textContent = 'กำลังทดสอบ...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch('/api/get-student', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        lineId: 'test-line-id-123'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                resultDiv.textContent = `Status: ${response.status}\nResponse: ${JSON.stringify(result, null, 2)}`;
+                resultDiv.className = response.ok ? 'result success' : 'result error';
+                
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+        
+        async function testSubmitLeave() {
+            const resultDiv = document.getElementById('submit-leave-result');
+            resultDiv.textContent = 'กำลังทดสอบ...';
+            resultDiv.className = 'result';
+            
+            try {
+                const testData = {
+                    studentId: 1,
+                    studentName: 'นักเรียนทดสอบ',
+                    leaveDates: ['2025-09-25', '2025-09-26'],
+                    reason: 'ทดสอบระบบ',
+                    userId: 'test-user-123',
+                    source: 'test'
+                };
+                
+                const response = await fetch('/api/submit-leave', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                const result = await response.json();
+                
+                resultDiv.textContent = `Status: ${response.status}\nRequest: ${JSON.stringify(testData, null, 2)}\n\nResponse: ${JSON.stringify(result, null, 2)}`;
+                resultDiv.className = response.ok ? 'result success' : 'result error';
+                
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+    </script>
+</body>
+</html>

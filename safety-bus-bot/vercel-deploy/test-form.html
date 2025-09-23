@@ -3,23 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="liff-id" content="2008065330-AXGy9xda">
-    <title>Safety Bus - แจ้งลาหยุด</title>
-    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <title>ทดสอบฟอร์มแจ้งลา - Safety Bus</title>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="./js/supabase-config.js"></script>
     <link rel="stylesheet" href="./css/date-picker.css">
+    <style>
+        .test-mode {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .test-mode h3 {
+            color: #856404;
+            margin: 0;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
+        <div class="test-mode">
+            <h3>🧪 โหมดทดสอบ - ไม่ต้องใช้ LINE</h3>
+            <p>สำหรับทดสอบการทำงานของฟอร์มโดยไม่ต้องเข้าสู่ระบบ LINE</p>
+        </div>
+
         <!-- Loading Screen -->
-        <div id="loading-screen" class="loading-screen">
+        <div id="loading-screen" class="loading-screen" style="display: none;">
             <div class="loading-spinner"></div>
             <p>กำลังโหลดข้อมูล...</p>
         </div>
 
         <!-- Main Form Section -->
-        <div id="main-form" class="main-form" style="display: none;">
+        <div id="main-form" class="main-form">
             <div class="header">
                 <h1>🚌 Safety Bus</h1>
                 <h2>📝 แบบฟอร์มแจ้งลาหยุด</h2>
@@ -31,13 +48,12 @@
                 <div class="student-details">
                     <div class="info-row">
                         <span class="label">ชื่อ:</span>
-                        <span id="student-name" class="value">-</span>
+                        <span id="student-name" class="value">นักเรียนทดสอบ</span>
                     </div>
                     <div class="info-row">
                         <span class="label">รหัสนักเรียน:</span>
-                        <span id="student-code" class="value">-</span>
+                        <span id="student-code" class="value">12345</span>
                     </div>
-
                 </div>
             </div>
 
@@ -50,35 +66,36 @@
                     <label for="leave-date">เพิ่มวันที่ลา:</label>
                     <div class="date-input-group">
                         <input type="date" id="leave-date" name="leave-date">
-                        <button id="add-date-btn" class="add-date-button">+ เพิ่มวัน</button>
+                        <button id="add-date-btn" class="add-date-button">เพิ่ม</button>
                     </div>
                 </div>
                 
-                <div id="selected-dates-list" class="selected-dates-list">
-                    <h4>วันที่เลือกแล้ว:</h4>
-                    <div id="dates-container" class="dates-container">
+                <div id="selected-dates" class="selected-dates">
+                    <h4>วันที่เลือก:</h4>
+                    <div id="selected-dates-list" class="selected-dates-list">
                         <p class="no-dates">ยังไม่ได้เลือกวันที่</p>
                     </div>
                 </div>
-                
-                <div class="button-container">
-                    <button id="confirm-btn" class="confirm-button" disabled>
-                        ✅ ยืนยัน
-                    </button>
-                </div>
+            </div>
+
+            <div class="button-container">
+                <button id="confirm-btn" class="confirm-button" disabled>
+                    ✅ ยืนยันข้อมูล
+                </button>
             </div>
         </div>
 
         <!-- Confirmation Section -->
         <div id="confirmation-section" class="confirmation-section" style="display: none;">
             <div class="confirmation-header">
-                <h3>📋 ตรวจสอบข้อมูลการลา</h3>
+                <h3>📋 ยืนยันข้อมูลการลา</h3>
+                <p>กรุณาตรวจสอบข้อมูลก่อนส่ง</p>
             </div>
             
             <div class="confirmation-details">
                 <div class="student-summary">
-                    <p><strong>👤 นักเรียน:</strong> <span id="confirm-student-name">-</span></p>
-                    <p><strong>🆔 รหัส:</strong> <span id="confirm-student-code">-</span></p>
+                    <p><strong>👤 นักเรียน:</strong> <span id="confirm-student-name">นักเรียนทดสอบ</span></p>
+                    <p><strong>🆔 รหัส:</strong> <span id="confirm-student-code">12345</span></p>
                 </div>
                 
                 <div class="dates-summary">
@@ -120,6 +137,45 @@
         </div>
     </div>
     
+    <script>
+        // Mock LIFF for testing
+        window.liff = {
+            init: (config) => {
+                console.log('Mock LIFF initialized with config:', config);
+                return Promise.resolve();
+            },
+            isInClient: () => false,
+            isLoggedIn: () => true,
+            getProfile: () => Promise.resolve({
+                userId: 'test-user-123',
+                displayName: 'นักเรียนทดสอบ'
+            }),
+            closeWindow: () => {
+                alert('ในโหมดจริงหน้าต่าง LINE จะปิดที่นี่');
+                console.log('LIFF closeWindow called');
+            }
+        };
+        
+        // Mock student info for testing
+        window.studentInfo = {
+            student_id: 12345,
+            student_name: 'นักเรียนทดสอบ',
+            student_code: '12345'
+        };
+        
+        // Initialize the form
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Test form loaded');
+            
+            // Set minimum date to tomorrow
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const dateInput = document.getElementById('leave-date');
+            if (dateInput) {
+                dateInput.min = tomorrow.toISOString().split('T')[0];
+            }
+        });
+    </script>
     <script src="./js/date-picker.js"></script>
 </body>
 </html>

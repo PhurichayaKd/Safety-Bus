@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="liff-id" content="2008065330-AXGy9xda">
-    <title>Safety Bus LIFF App</title>
+    <title>Safety Bus - แจ้งลาหยุด</title>
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <link rel="stylesheet" href="./css/date-picker.css">
 </head>
@@ -16,53 +16,57 @@
             <p>กำลังโหลดข้อมูล...</p>
         </div>
 
-        <!-- Student Info Section -->
-        <div id="student-info" class="student-info" style="display: none;">
+        <!-- Main Form Section -->
+        <div id="main-form" class="main-form" style="display: none;">
             <div class="header">
                 <h1>🚌 Safety Bus</h1>
                 <h2>📝 แบบฟอร์มแจ้งลาหยุด</h2>
             </div>
             
+            <!-- Student Info Card -->
             <div class="student-card">
                 <h3>👤 ข้อมูลนักเรียน</h3>
                 <div class="student-details">
-                    <p><strong>ชื่อ:</strong> <span id="student-name">-</span></p>
-                    <p><strong>รหัสนักเรียน:</strong> <span id="student-code">-</span></p>
-                    <p><strong>ชั้น:</strong> <span id="student-class">-</span></p>
-                </div>
-                <div class="button-container">
-                    <button id="proceed-btn" class="proceed-button">📝 แจ้งลาหยุด</button>
+                    <div class="info-row">
+                        <span class="label">ชื่อ:</span>
+                        <span id="student-name" class="value">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">รหัสนักเรียน:</span>
+                        <span id="student-code" class="value">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">ชั้นเรียน:</span>
+                        <span id="student-class" class="value">-</span>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Date Selection Section -->
-        <div id="date-selection" class="date-picker-container" style="display: none;">
-            <div class="section-header">
+            <!-- Date Selection Section -->
+            <div class="date-selection-card">
                 <h3>📅 เลือกวันที่แจ้งลา</h3>
                 <p class="instruction">เลือกได้สูงสุด 3 วัน</p>
-            </div>
-            
-            <div class="date-input-wrapper">
-                <label for="leave-date">เพิ่มวันที่ลา:</label>
-                <input type="date" id="leave-date" name="leave-date">
-                <button id="add-date-btn" class="add-date-button">➕ เพิ่มวันที่</button>
-            </div>
-            
-            <div id="selected-dates-list" class="selected-dates-list">
-                <h4>วันที่เลือกแล้ว:</h4>
-                <div id="dates-container" class="dates-container">
-                    <p class="no-dates">ยังไม่ได้เลือกวันที่</p>
+                
+                <div class="date-input-wrapper">
+                    <label for="leave-date">เพิ่มวันที่ลา:</label>
+                    <div class="date-input-group">
+                        <input type="date" id="leave-date" name="leave-date">
+                        <button id="add-date-btn" class="add-date-button">+ เพิ่มวัน</button>
+                    </div>
                 </div>
-            </div>
-            
-            <div class="button-container">
-                <button id="confirm-btn" class="confirm-button" disabled>
-                    ✅ ยืนยันข้อมูล
-                </button>
-                <button id="cancel-btn" class="cancel-button">
-                    ❌ ยกเลิก
-                </button>
+                
+                <div id="selected-dates-list" class="selected-dates-list">
+                    <h4>วันที่เลือกแล้ว:</h4>
+                    <div id="dates-container" class="dates-container">
+                        <p class="no-dates">ยังไม่ได้เลือกวันที่</p>
+                    </div>
+                </div>
+                
+                <div class="button-container">
+                    <button id="confirm-btn" class="confirm-button" disabled>
+                        ✅ ยืนยัน
+                    </button>
+                </div>
             </div>
         </div>
 

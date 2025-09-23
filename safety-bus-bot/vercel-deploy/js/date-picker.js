@@ -42,12 +42,33 @@ function initializeLIFF() {
     });
 }
 
-// Get student information from LINE ID
+// Get student information from URL parameters or LINE ID
 function getStudentInfo() {
+    // Check if student info is provided via URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const studentId = urlParams.get('studentId');
+    const studentName = urlParams.get('studentName');
+    
+    if (studentId && studentName) {
+        console.log('Using student info from URL parameters:', { studentId, studentName });
+        // Use student info from URL parameters
+        studentInfo = {
+            student_id: studentId,
+            student_name: decodeURIComponent(studentName),
+            link_code: studentId // Use studentId as link_code for now
+        };
+        showStudentInfoSection();
+        return;
+    }
+    
+    // Fallback to LINE ID method
     liff.getProfile().then((profile) => {
         console.log('User profile:', profile);
         
-        // Call API to get student info
+        // Call API to get student info with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
         return fetch('/api/get-student', {
             method: 'POST',
             headers: {
@@ -55,11 +76,20 @@ function getStudentInfo() {
             },
             body: JSON.stringify({
                 lineUserId: profile.userId
-            })
+            }),
+            signal: controller.signal
+        }).finally(() => {
+            clearTimeout(timeoutId);
         });
     }).then(response => {
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            if (response.status === 404) {
+                throw new Error('ไม่พบข้อมูลนักเรียนในระบบ กรุณาติดต่อเจ้าหน้าที่เพื่อลงทะเบียน');
+            } else if (response.status >= 500) {
+                throw new Error('เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้งในภายหลัง');
+            } else {
+                throw new Error(`เกิดข้อผิดพลาด (${response.status}) กรุณาลองใหม่อีกครั้ง`);
+            }
         }
         return response.json();
     }).then(data => {
@@ -71,7 +101,17 @@ function getStudentInfo() {
         }
     }).catch((error) => {
         console.error('Error getting student info:', error);
-        showErrorSection(error.message || 'ไม่สามารถดึงข้อมูลนักเรียนได้ กรุณาติดต่อเจ้าหน้าที่');
+        
+        let errorMessage;
+        if (error.name === 'AbortError') {
+            errorMessage = 'การเชื่อมต่อใช้เวลานานเกินไป กรุณาตรวจสอบอินเทอร์เน็ตและลองใหม่';
+        } else if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต';
+        } else {
+            errorMessage = error.message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ กรุณาลองใหม่อีกครั้ง';
+        }
+        
+        showErrorSection(errorMessage);
     });
 }
 
@@ -146,6 +186,13 @@ function showErrorSection(message) {
 // Date picker functionality
 function setupDatePicker() {
     const dateInput = document.getElementById('leaveDate');
+    
+    // Check if dateInput exists before setting properties
+    if (!dateInput) {
+        console.warn('Date input element not found');
+        return;
+    }
+    
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -302,12 +349,16 @@ function finalSubmitLeave() {
 
 // Submit leave request to API
 function submitLeaveRequest(data) {
+    // Submit directly to Supabase API endpoint
     return fetch('/api/submit-leave', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify({
+            ...data,
+            source: 'direct' // Mark as direct submission (not from LINE)
+        })
     }).then(response => {
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -326,7 +377,15 @@ function goBackToDateSelection() {
 }
 
 function retryConnection() {
+    console.log('Retrying connection...');
     showSection('loading-screen');
+    currentSection = 'loading';
+    
+    // Reset variables
+    selectedDates = [];
+    studentInfo = null;
+    
+    // Wait a bit before retrying
     setTimeout(() => {
         initializeLIFF();
     }, 1000);
@@ -341,33 +400,44 @@ function cancelLeave() {
 
 // Initialize app when page loads
 window.addEventListener('load', function() {
-    console.log('Page loaded, initializing LIFF...');
+    console.log('Page loaded, checking URL parameters...');
     
     // Show loading screen initially
     showSection('loading-screen');
     
-    // Wait for LIFF SDK to load
-    waitForLIFF();
+    // Check if student info is provided via URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const studentId = urlParams.get('studentId');
+    const studentName = urlParams.get('studentName');
+    
+    if (studentId && studentName) {
+        console.log('Using student info from URL parameters:', { studentId, studentName });
+        // Use student info from URL parameters directly
+        studentInfo = {
+            student_id: studentId,
+            student_name: decodeURIComponent(studentName),
+            link_code: studentId
+        };
+        
+        // Add event listeners
+        setupEventListeners();
+        
+        // Show student info section directly
+        showStudentInfoSection();
+    } else {
+        // Fallback to LIFF if no URL parameters
+        console.log('No URL parameters found, initializing LIFF...');
+        waitForLIFF();
+    }
 });
 
-// Function to wait for LIFF SDK to load
-function waitForLIFF() {
-    if (typeof window.liff === 'undefined') {
-        console.log('Waiting for LIFF SDK to load...');
-        setTimeout(waitForLIFF, 100); // Check again after 100ms
-        return;
-    }
-    
-    console.log('LIFF SDK loaded successfully');
-    liff = window.liff;
-    
-    // Add event listeners
+// Function to setup event listeners
+function setupEventListeners() {
     const proceedBtn = document.getElementById('proceed-btn');
     if (proceedBtn) {
         proceedBtn.addEventListener('click', goToDateSelection);
     }
     
-    // Add all event listeners
     const addDateBtn = document.getElementById('add-date-btn');
     if (addDateBtn) {
         addDateBtn.addEventListener('click', addDate);
@@ -376,11 +446,6 @@ function waitForLIFF() {
     const confirmBtn = document.getElementById('confirm-btn');
     if (confirmBtn) {
         confirmBtn.addEventListener('click', confirmLeave);
-    }
-    
-    const finalConfirmBtn = document.getElementById('final-confirm-btn');
-    if (finalConfirmBtn) {
-        finalConfirmBtn.addEventListener('click', finalSubmitLeave);
     }
     
     const backBtn = document.getElementById('back-btn');
@@ -398,16 +463,42 @@ function waitForLIFF() {
         retryBtn.addEventListener('click', retryConnection);
     }
     
+    // Setup date picker
+    setupDatePicker();
+}
+
+// Function to wait for LIFF SDK to load
+function waitForLIFF() {
+    if (typeof window.liff === 'undefined') {
+        console.log('Waiting for LIFF SDK to load...');
+        setTimeout(waitForLIFF, 100); // Check again after 100ms
+        return;
+    }
+    
+    console.log('LIFF SDK loaded successfully');
+    liff = window.liff;
+    
+    // Add event listeners
+    setupEventListeners();
+    
     // Initialize LIFF
     initializeLIFF();
 }
 
+
 // Handle LIFF errors
 window.addEventListener('error', (event) => {
     console.error('Global error:', event.error);
+    if (currentSection === 'loading') {
+        showErrorSection('เกิดข้อผิดพลาดในการโหลดหน้าเว็บ กรุณาลองใหม่อีกครั้ง');
+    }
 });
 
 // Handle unhandled promise rejections
 window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
+    if (currentSection === 'loading') {
+        showErrorSection('เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ กรุณาลองใหม่อีกครั้ง');
+    }
+    event.preventDefault(); // Prevent default browser error handling
 });

@@ -177,21 +177,22 @@ export async function sendMessageWithQuickReply(userId, message, quickReply, rep
  * @param {string} userId - LINE User ID
  * @param {string} replyToken - Reply token (optional)
  */
-export async function sendMainMenu(userId, replyToken = null) {
-  const message = {
+export async function sendMainMenu(userId, replyToken) {
+  console.log(`sendMainMenu called for user: ${userId}, replyToken: ${replyToken}`);
+  const menuMessage = {
     type: 'text',
-    text: '🚌 ยินดีต้อนรับสู่ Safety Bus\n\nกรุณาใช้เมนูด้านล่างเพื่อเลือกบริการที่ต้องการ 👇'
+    text: '🚌 เมนูหลัก\n\n1. ประวัติ\n2. แจ้งลาหยุด\n3. ตำแหน่งรถ\n4. ติดต่อคนขับ\n\nเลือกเมนูโดยพิมพ์ หรือกดปุ่ม'
+    // ...สามารถเพิ่ม quick reply หรือ rich menu ได้...
   };
-  
   try {
     if (replyToken) {
-      return await replyLineMessage(replyToken, message);
+      await replyLineMessage(replyToken, menuMessage);
     } else {
-      return await sendLineMessage(userId, message);
+      // fallback: push message
+      await sendLineMessage(userId, menuMessage);
     }
-  } catch (error) {
-    console.error('Error sending main menu message:', error);
-    throw error;
+  } catch (err) {
+    console.error('Error in sendMainMenu:', err);
   }
 }
 

@@ -109,141 +109,54 @@ async function getStudentByLineId(lineUserId) {
   }
 }
 
+// Send message to user via LINE
+async function sendLineMessage(userId, message) {
+  try {
+    await client.pushMessage(userId, message);
+  } catch (error) {
+    console.error('Error sending LINE message:', error);
+  }
+}
+
 export default async function handler(req, res) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).end();
+  const { studentId, studentName, leaveDates, reason, userId, source } = req.body;
   
   try {
-    const { userId, selectedDates, action } = req.body;
-    
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId' });
-    }
-
-    // Handle different actions
-    if (action === 'getStudentInfo') {
-      const studentData = await getStudentByLineId(userId);
-      
-      if (!studentData) {
-        return res.status(404).json({ 
-          error: 'ไม่พบข้อมูลบัญชีที่ผูกไว้',
-          message: 'กรุณาผูกบัญชีด้วยรหัสนักเรียนก่อน'
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        studentData: studentData
+    // บันทึก leaveDates (array) ลง supabase
+    for (const date of leaveDates) {
+      await supabase.from('leave_requests').insert({
+        student_id: studentId,
+        leave_date: date,
+        reason,
+        status: 'approved',
+        created_at: new Date().toISOString()
       });
     }
     
-    if (action === 'submitLeave') {
-      if (!selectedDates || !Array.isArray(selectedDates) || selectedDates.length === 0) {
-        return res.status(400).json({ error: 'Missing selectedDates' });
-      }
-
-      if (selectedDates.length > 3) {
-        return res.status(400).json({ error: 'สามารถเลือกวันลาได้สูงสุด 3 วันเท่านั้น' });
-      }
-
-      // Get student data
-      const studentData = await getStudentByLineId(userId);
-      
-      if (!studentData) {
-        return res.status(404).json({ 
-          error: 'ไม่พบข้อมูลบัญชีที่ผูกไว้',
-          message: 'กรุณาผูกบัญชีด้วยรหัสนักเรียนก่อน'
-        });
-      }
-
-      const student = studentData.student;
-      const leaveRecords = [];
-
-      // บันทึกข้อมูลการลาแต่ละวัน
-      for (const dateStr of selectedDates) {
-        try {
-          // ตรวจสอบว่ามีการลาในวันนี้แล้วหรือไม่
-          const { data: existingLeave } = await supabase
-            .from('absences')
-            .select('*')
-            .eq('student_id', student.student_id)
-            .eq('start_date', dateStr)
-            .single();
-
-          if (existingLeave) {
-            continue; // ข้ามวันที่มีการลาแล้ว
-          }
-
-          // บันทึกข้อมูลการลา
-          const { data: leave, error } = await supabase
-            .from('absences')
-            .insert({
-              student_id: student.student_id,
-              absence_type: 'bus_skip',
-              start_date: dateStr,
-              end_date: dateStr,
-              reason: 'ไม่ประสงค์ขึ้นรถบัสรับ-ส่งในวันดังกล่าว',
-              status: 'approved',
-              created_by: studentData.parent_id || student.student_id,
-              created_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-          if (!error && leave) {
-            leaveRecords.push({
-              date: dateStr,
-              thaiDate: formatThaiDate(dateStr),
-              id: leave.id
-            });
-          }
-        } catch (err) {
-          console.error(`Error saving leave for date ${dateStr}:`, err);
-        }
-      }
-
-      if (leaveRecords.length === 0) {
-        return res.status(400).json({ 
-          error: 'ไม่สามารถบันทึกข้อมูลการลาได้',
-          message: 'อาจมีการลาในวันที่เลือกแล้ว'
-        });
-      }
-
-      // สร้างข้อความยืนยัน
-      const dateList = leaveRecords.map(record => `📅 ${record.thaiDate}`).join('\n');
-      const message = {
+    // ส่ง push message กลับ LINE เฉพาะเมื่อมาจาก LINE Bot
+    if (source !== 'direct' && userId) {
+      await sendLineMessage(userId, {
         type: 'text',
-        text: `✅ บันทึกการแจ้งลาเรียบร้อยแล้ว\n\n👤 นักเรียน: ${student.student_name}\n🆔 รหัส: ${student.link_code}\n\n${dateList}\n\n📝 เหตุผล: ไม่ประสงค์ขึ้นรถบัสรับ-ส่ง\n⏰ เวลาที่แจ้ง: ${new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`
-      };
-      
-      // Send message to user
-      await client.pushMessage(userId, message);
-      
-      return res.status(200).json({ 
-        success: true, 
-        message: 'Leave request submitted successfully',
-        leaveRecords: leaveRecords,
-        student: student
+        text: `✅ แจ้งลาสำเร็จ\n\nนักเรียน: ${studentName}\nรหัส: ${studentId}\nวันที่ลา: ${leaveDates.join(', ')}\nไม่ประสงค์ขึ้นรถรับ-ส่ง ในวันดังกล่าว\nระบบได้ส่งข้อมูลการแจ้งลาเรียบร้อยแล้ว`
       });
     }
-
-    return res.status(400).json({ error: 'Invalid action' });
     
+    res.status(200).json({ 
+      ok: true, 
+      message: 'แจ้งลาสำเร็จ',
+      data: {
+        studentName,
+        studentId,
+        leaveDates,
+        reason
+      }
+    });
   } catch (error) {
-    console.error('Error processing request:', error);
-    return res.status(500).json({ 
-      error: 'Internal server error',
-      message: error.message 
+    console.error('Error submitting leave request:', error);
+    res.status(500).json({ 
+      ok: false, 
+      error: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' 
     });
   }
 }

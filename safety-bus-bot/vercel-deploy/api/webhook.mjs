@@ -9,7 +9,11 @@ if (process.env.NODE_ENV !== 'production') {
 
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { handleTextMessage, handlePostback, handleFollow } from '../lib/handlers.js';
+import {
+  handleTextMessage,
+  handlePostback,
+  handleFollow,
+} from '../lib/handlers.js';
 
 // Initialize Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -19,7 +23,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // LINE configuration
 const lineConfig = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET
+  channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 
 // Send LINE message
@@ -29,14 +33,14 @@ async function sendLineMessage(replyToken, messages) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${lineConfig.channelAccessToken}`
+        Authorization: `Bearer ${lineConfig.channelAccessToken}`,
       },
       body: JSON.stringify({
         replyToken,
-        messages
-      })
+        messages,
+      }),
     });
-    
+
     if (!response.ok) {
       const error = await response.text();
       console.error('❌ LINE API Error:', error);
@@ -54,20 +58,20 @@ function validateLineSignature(body, signature, secret) {
     console.log('🔐 Validating signature...');
     console.log('- Received signature:', signature);
     console.log('- Channel secret exists:', !!secret);
-    
+
     if (!signature || !secret) {
       console.log('❌ Missing signature or secret');
       return false;
     }
-    
+
     const hash = crypto
       .createHmac('SHA256', secret)
       .update(body, 'utf8')
       .digest('base64');
-    
+
     console.log('- Generated hash:', hash);
     console.log('- Signatures match:', hash === signature);
-    
+
     return hash === signature;
   } catch (error) {
     console.error('❌ Signature validation error:', error);
@@ -81,22 +85,22 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-line-signature');
-  
+
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-  
+
   // Handle GET requests for testing
   if (req.method === 'GET') {
-    return res.status(200).json({ 
+    return res.status(200).json({
       status: 'Webhook is running',
       timestamp: new Date().toISOString(),
       environment: {
         supabase: process.env.SUPABASE_URL ? 'Connected' : 'Missing',
         lineSecret: process.env.LINE_CHANNEL_SECRET ? 'Set' : 'Missing',
-        lineToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ? 'Set' : 'Missing'
-      }
+        lineToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ? 'Set' : 'Missing',
+      },
     });
   }
 
@@ -108,37 +112,37 @@ export default async function handler(req, res) {
     // Get raw body for signature validation
     const rawBody = await buffer(req);
     const bodyString = rawBody.toString('utf8');
-    
+
     console.log('🚀 Webhook received:', req.method);
     console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
     console.log('📦 Raw body length:', bodyString.length);
-    
+
     const signature = req.headers['x-line-signature'];
-    
+
     console.log('🔍 Debug info:');
     console.log('- Body preview:', bodyString.substring(0, 100) + '...');
     console.log('- Signature:', signature);
     console.log('- Channel secret exists:', !!lineConfig.channelSecret);
-    
+
     // Validate signature
     if (!validateLineSignature(bodyString, signature, lineConfig.channelSecret)) {
       console.log('❌ Invalid signature');
       return res.status(401).json({ error: 'Invalid signature' });
     }
-    
+
     console.log('✅ Signature validated');
-    
+
     // Parse JSON body
     const body = JSON.parse(bodyString);
     const { events } = body;
-    
+
     if (!events || events.length === 0) {
       return res.status(200).json({ message: 'No events to process' });
     }
-    
+
     for (const event of events) {
       console.log('📨 Processing event:', event.type);
-      
+
       try {
         switch (event.type) {
           case 'message':
@@ -146,19 +150,19 @@ export default async function handler(req, res) {
               await handleTextMessage(event);
             }
             break;
-            
+
           case 'postback':
             await handlePostback(event);
             break;
-            
+
           case 'follow':
             await handleFollow(event);
             break;
-            
+
           case 'unfollow':
             console.log(`User ${event.source.userId} unfollowed the bot`);
             break;
-            
+
           default:
             console.log(`Unhandled event type: ${event.type}`);
         }
@@ -167,9 +171,8 @@ export default async function handler(req, res) {
         // Continue processing other events even if one fails
       }
     }
-    
+
     return res.status(200).json({ message: 'OK' });
-    
   } catch (error) {
     console.error('❌ Webhook error:', error);
     return res.status(500).json({ error: 'Internal server error' });

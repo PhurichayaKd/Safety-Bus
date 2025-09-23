@@ -44,23 +44,8 @@ async function getStudentByLineId(lineUserId) {
             }
         }
 
-        // ถ้าไม่พบจาก parent_line_links ให้ลองหาจาก students table โดยตรง
-        const { data: directStudent, error: directError } = await supabase
-            .from('students')
-            .select('student_id, student_name, grade, link_code')
-            .eq('line_user_id', lineUserId)
-            .single();
-
-        if (directStudent && !directError) {
-            return {
-                id: directStudent.student_id,
-                name: directStudent.student_name,
-                class: directStudent.grade,
-                link_code: directStudent.link_code,
-                line_user_id: lineUserId
-            };
-        }
-
+        // ถ้าไม่พบจาก parent_line_links แสดงว่าไม่มีข้อมูลในระบบ
+        console.log('No student found for LINE ID:', lineUserId);
         return null;
     } catch (error) {
         console.error('Error in getStudentByLineId:', error);

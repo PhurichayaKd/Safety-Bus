@@ -42,7 +42,7 @@ function initializeLIFF() {
     });
 }
 
-// Get student information from URL parameters or LINE ID
+// Get student information from LINE ID first, then URL parameters as fallback
 function getStudentInfo() {
     // Check if mock student info is already available (for testing)
     if (window.studentInfo) {
@@ -51,25 +51,9 @@ function getStudentInfo() {
         showStudentInfoSection();
         return;
     }
-    
-    // Check if student info is provided via URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const studentId = urlParams.get('studentId');
-    const studentName = urlParams.get('studentName');
-    
-    if (studentId && studentName) {
-        console.log('Using student info from URL parameters:', { studentId, studentName });
-        // Use student info from URL parameters
-        studentInfo = {
-            student_id: studentId,
-            student_name: decodeURIComponent(studentName),
-            link_code: studentId // Use studentId as link_code for now
-        };
-        showStudentInfoSection();
-        return;
-    }
-    
-    // Fallback to LINE ID method
+
+    // Primary method: Get from LINE ID
+    console.log('Getting student info from LINE profile...');
     liff.getProfile().then((profile) => {
         console.log('User profile:', profile);
         
@@ -77,7 +61,11 @@ function getStudentInfo() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
         
-        return fetch('/api/get-student', {
+        // Use absolute URL for production
+        const getStudentUrl = window.location.origin + '/api/get-student';
+        console.log('Get student API URL:', getStudentUrl);
+        
+        return fetch(getStudentUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -108,8 +96,26 @@ function getStudentInfo() {
             throw new Error(data.message || 'ไม่พบข้อมูลนักเรียนในระบบ');
         }
     }).catch((error) => {
-        console.error('Error getting student info:', error);
+        console.error('Error getting student info from LINE ID:', error);
         
+        // Fallback: Try to get student info from URL parameters
+        console.log('Trying fallback: URL parameters...');
+        const urlParams = new URLSearchParams(window.location.search);
+        const studentId = urlParams.get('studentId');
+        const studentName = urlParams.get('studentName');
+        
+        if (studentId && studentName) {
+            console.log('Using student info from URL parameters:', { studentId, studentName });
+            studentInfo = {
+                student_id: studentId,
+                student_name: decodeURIComponent(studentName),
+                link_code: studentId
+            };
+            showStudentInfoSection();
+            return;
+        }
+        
+        // If both methods fail, show error
         let errorMessage;
         if (error.name === 'AbortError') {
             errorMessage = 'การเชื่อมต่อใช้เวลานานเกินไป กรุณาตรวจสอบอินเทอร์เน็ตและลองใหม่';
@@ -154,7 +160,7 @@ function showSection(sectionName) {
 function showStudentInfoSection() {
     if (studentInfo) {
         document.getElementById('student-name').textContent = studentInfo.student_name || studentInfo.name || '-';
-        document.getElementById('student-code').textContent = studentInfo.link_code || studentInfo.student_id || '-';
+        document.getElementById('student-code').textContent = studentInfo.link_code || '-';
     }
     showSection('main-form');
 }
@@ -167,7 +173,7 @@ function showDateSelectionSection() {
 function showConfirmationSection() {
     // Update confirmation details
     document.getElementById('confirm-student-name').textContent = studentInfo.student_name || studentInfo.name || '-';
-    document.getElementById('confirm-student-code').textContent = studentInfo.link_code || studentInfo.student_id || '-';
+    document.getElementById('confirm-student-code').textContent = studentInfo.link_code || '-';
     
     // Update selected dates list
     const confirmDatesList = document.getElementById('confirm-dates-list');
@@ -200,8 +206,16 @@ function showSuccessSection() {
         
         if (countdown <= 0) {
             clearInterval(countdownInterval);
-            if (liff) {
+            // ใช้การตรวจสอบเดียวกับในส่วนอื่นๆ
+            const isLiffReady = liff && liff.isLoggedIn();
+            if (isLiffReady && liff.isInClient()) {
+                console.log('Closing LIFF window after countdown...');
                 liff.closeWindow();
+            } else if (isLiffReady) {
+                console.log('Closing LIFF window (not in client) after countdown...');
+                liff.closeWindow();
+            } else {
+                console.log('LIFF not available, window will remain open for testing');
             }
         }
     }, 1000);
@@ -365,14 +379,16 @@ function confirmLeave() {
 // Final submit leave request
 function finalSubmitLeave() {
     console.log('=== finalSubmitLeave called ===');
-    console.log('LIFF logged in status:', liff.isLoggedIn());
+    
     console.log('Selected dates:', selectedDates);
     console.log('Student info:', studentInfo);
     
-    if (!liff.isLoggedIn()) {
-        console.error('User not logged in');
-        showErrorSection('กรุณาเข้าสู่ระบบ LINE ก่อน');
-        return;
+    // Check if LIFF is available and logged in
+    const isLiffReady = liff && liff.isLoggedIn();
+    console.log('LIFF ready status:', isLiffReady);
+    
+    if (!isLiffReady) {
+        console.log('LIFF not ready, using mock data for testing');
     }
     
     if (!selectedDates || selectedDates.length === 0) {
@@ -396,42 +412,59 @@ function finalSubmitLeave() {
     finalConfirmButton.disabled = true;
     finalConfirmButton.innerHTML = '<span class="loading"></span>กำลังส่งข้อมูล...';
     
-    console.log('Getting user profile...');
+    console.log('Preparing leave data...');
     
-    // Get user profile and submit leave request
-    liff.getProfile().then((profile) => {
+    // Prepare leave data with profile info (real or mock)
+    const prepareAndSubmit = (profile) => {
         console.log('User profile:', profile);
         
         const leaveData = {
             action: 'submitLeave',
             userId: profile.userId,
             displayName: profile.displayName,
-            studentInfo: studentInfo,
+            studentInfo: studentInfo, // Send as object, not stringified
             leaveDates: selectedDates
         };
         
+        console.log('Student info object:', studentInfo);
+        console.log('Leave dates:', selectedDates);
         console.log('Leave data prepared:', leaveData);
         
         return submitLeaveRequest(leaveData);
-    }).then((response) => {
+    };
+    
+    // Get profile data (real or mock)
+    const profilePromise = isLiffReady 
+        ? liff.getProfile()
+        : Promise.resolve({
+            userId: 'test-user-123',
+            displayName: studentInfo?.student_name || 'Test User'
+          });
+    
+    profilePromise.then(prepareAndSubmit).then((response) => {
         console.log('Submit response:', response);
         
         if (response.success) {
             console.log('Leave request successful');
             console.log('Response data:', response.data);
             
-            // Show alert for immediate feedback
-            alert('✅ ส่งข้อมูลสำเร็จ! ข้อมูลการลาได้ถูกบันทึกเรียบร้อยแล้ว');
+            // Show success modal
+            showSuccessModal('✅ ส่งข้อมูลสำเร็จ!', 'ข้อมูลการลาได้ถูกบันทึกเรียบร้อยแล้ว');
             
             showSuccessSection();
             
-            // Fallback: Close LIFF window after 3 seconds
+            // Close LIFF window immediately after success (only if LIFF is available)
             setTimeout(() => {
-                if (liff && liff.isInClient()) {
+                if (isLiffReady && liff.isInClient()) {
                     console.log('Closing LIFF window...');
                     liff.closeWindow();
+                } else if (isLiffReady) {
+                    console.log('Closing LIFF window (not in client)...');
+                    liff.closeWindow();
+                } else {
+                    console.log('LIFF not available, window will remain open for testing');
                 }
-            }, 3000);
+            }, 2000);
         } else {
             console.error('Leave request failed:', response.message);
             console.error('Full response:', response);
@@ -439,6 +472,10 @@ function finalSubmitLeave() {
         }
     }).catch((error) => {
         console.error('Error submitting leave:', error);
+        
+        // Show error modal
+        showErrorModal('❌ เกิดข้อผิดพลาด!', error.message || 'ไม่สามารถส่งข้อมูลได้');
+        
         showErrorSection(error.message || 'เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่อีกครั้ง');
     }).finally(() => {
         console.log('Resetting button state');
@@ -457,7 +494,7 @@ function submitLeaveRequest(data) {
         action: 'submitLeave',
         userId: data.userId,
         displayName: data.displayName,
-        studentInfo: data.studentInfo,
+        studentInfo: data.studentInfo, // Send as object directly
         leaveDates: data.leaveDates,
         source: 'direct'
     });
@@ -471,7 +508,11 @@ async function submitViaAPI(requestData) {
     try {
         console.log('Sending request to /api/submit-leave...');
         
-        const response = await fetch('/api/submit-leave', {
+        // Use absolute URL for production
+        const apiUrl = window.location.origin + '/api/submit-leave';
+        console.log('API URL:', apiUrl);
+        
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -492,7 +533,7 @@ async function submitViaAPI(requestData) {
             throw new Error(result.error || `HTTP error! status: ${response.status}`);
         }
         
-        if (result.ok) {
+        if (result.ok || result.success) {
             console.log('API request successful');
             return {
                 success: true,
@@ -519,11 +560,25 @@ async function submitViaAPI(requestData) {
 
 // Navigation functions
 function goToDateSelection() {
-    showSection('date-selection');
+    // Show date selection card instead of looking for date-selection id
+    const dateCard = document.querySelector('.date-selection-card');
+    if (dateCard) {
+        dateCard.style.display = 'block';
+        console.log('Date selection card displayed successfully');
+    } else {
+        console.error('Date selection card not found');
+    }
 }
 
 function goBackToDateSelection() {
-    showSection('date-selection');
+    // Show date selection card instead of looking for date-selection id
+    const dateCard = document.querySelector('.date-selection-card');
+    if (dateCard) {
+        dateCard.style.display = 'block';
+        console.log('Date selection card displayed successfully');
+    } else {
+        console.error('Date selection card not found');
+    }
 }
 
 function retryConnection() {
@@ -652,8 +707,168 @@ window.addEventListener('error', (event) => {
 // Handle unhandled promise rejections
 window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
-    if (currentSection === 'loading') {
-        showErrorSection('เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ กรุณาลองใหม่อีกครั้ง');
-    }
-    event.preventDefault(); // Prevent default browser error handling
+    event.preventDefault();
 });
+
+// Function to show success modal
+function showSuccessModal(title, message) {
+    console.log('🎉 showSuccessModal called with:', { title, message });
+    
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        font-family: 'Sarabun', sans-serif;
+    `;
+    
+    // Create modal content
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 320px;
+        width: 90%;
+        text-align: center;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        animation: modalSlideIn 0.3s ease-out;
+    `;
+    
+    modal.innerHTML = `
+        <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+        <h3 style="color: #28a745; margin: 0 0 12px 0; font-size: 18px; font-weight: 600;">${title}</h3>
+        <p style="color: #666; margin: 0 0 20px 0; font-size: 14px; line-height: 1.4;">${message}</p>
+        <button onclick="closeSuccessModal(this)" style="
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        ">ตกลง</button>
+    `;
+    
+    overlay.className = 'modal-overlay';
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Add CSS animation
+    if (!document.querySelector('#modal-styles')) {
+        const style = document.createElement('style');
+        style.id = 'modal-styles';
+        style.textContent = `
+            @keyframes modalSlideIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(-20px) scale(0.95);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    // Auto close after 3 seconds
+    setTimeout(() => {
+        if (overlay.parentNode) {
+            overlay.remove();
+        }
+    }, 3000);
+}
+
+// Function to close success modal and LIFF window
+function closeSuccessModal(button) {
+    // Remove the modal
+    const overlay = button.closest('.modal-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+    
+    // Close LIFF window immediately
+    if (liff && liff.isLoggedIn()) {
+        console.log('Closing LIFF window from modal button...');
+        liff.closeWindow();
+    } else if (liff) {
+        console.log('Closing LIFF window (not logged in) from modal button...');
+        liff.closeWindow();
+    } else {
+        console.log('LIFF not available, cannot close window');
+    }
+}
+
+// Function to show error modal
+function showErrorModal(title, message) {
+    console.log('❌ showErrorModal called with:', { title, message });
+    
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        font-family: 'Sarabun', sans-serif;
+    `;
+    
+    // Create modal content
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 320px;
+        width: 90%;
+        text-align: center;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        animation: modalSlideIn 0.3s ease-out;
+    `;
+    
+    modal.innerHTML = `
+        <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
+        <h3 style="color: #dc3545; margin: 0 0 12px 0; font-size: 18px; font-weight: 600;">${title}</h3>
+        <p style="color: #666; margin: 0 0 20px 0; font-size: 14px; line-height: 1.4;">${message}</p>
+        <button onclick="this.closest('.modal-overlay').remove()" style="
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        ">ตกลง</button>
+    `;
+    
+    overlay.className = 'modal-overlay';
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Auto close after 5 seconds
+    setTimeout(() => {
+        if (overlay.parentNode) {
+            overlay.remove();
+        }
+    }, 5000);
+ }

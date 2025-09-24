@@ -18,6 +18,9 @@ const config = {
 const client = new Client(config);
 
 // Supabase configuration
+console.log('Supabase URL exists:', !!process.env.SUPABASE_URL);
+console.log('Supabase Key exists:', !!process.env.SUPABASE_ANON_KEY);
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
@@ -134,6 +137,16 @@ export default async function handler(req, res) {
   
   const { action, studentInfo, leaveDates, userId, source } = body;
   
+  console.log('=== Submit Leave API Called ===');
+  console.log('Request body:', JSON.stringify(body, null, 2));
+  console.log('Action:', action);
+  console.log('StudentInfo:', studentInfo);
+  console.log('LeaveDates:', leaveDates);
+  console.log('UserId:', userId);
+  console.log('Source:', source);
+  console.log('Supabase URL exists:', !!process.env.SUPABASE_URL);
+  console.log('Supabase Key exists:', !!process.env.SUPABASE_ANON_KEY);
+  
   // Handle different actions
   if (action === 'getStudentInfo') {
     try {
@@ -153,26 +166,79 @@ export default async function handler(req, res) {
     return res.status(400).json({ ok: false, error: 'Missing required fields' });
   }
   
-  const studentId = studentInfo.id;
-  const studentName = studentInfo.name;
+  // Parse studentInfo if it's a string
+  let parsedStudentInfo = studentInfo;
+  if (typeof studentInfo === 'string') {
+    try {
+      parsedStudentInfo = JSON.parse(studentInfo);
+    } catch (error) {
+      console.error('Error parsing studentInfo:', error);
+      return res.status(400).json({ ok: false, error: 'Invalid studentInfo format' });
+    }
+  }
+  
+  // Handle different field names from LIFF form
+  const studentId = parsedStudentInfo.student_id || parsedStudentInfo.id;
+  const studentName = parsedStudentInfo.student_name || parsedStudentInfo.name;
+  
+  console.log('Parsed student info:', parsedStudentInfo);
+  console.log('Extracted studentId:', studentId);
+  console.log('Extracted studentName:', studentName);
+  
+  if (!studentId || !studentName) {
+    console.error('Missing student ID or name:', { studentId, studentName, parsedStudentInfo });
+    return res.status(400).json({ ok: false, error: 'ข้อมูลนักเรียนไม่ครบถ้วน' });
+  }
+  
+  console.log('Processing leave request:', { studentId, studentName, leaveDates });
+  console.log('Supabase client initialized:', !!supabase);
+  console.log('Environment check - URL:', process.env.SUPABASE_URL ? 'exists' : 'missing');
+  console.log('Environment check - Key:', process.env.SUPABASE_ANON_KEY ? 'exists' : 'missing');
   
   try {
+    console.log('Starting database insertion...');
+    
     // บันทึก leaveDates (array) ลง supabase
-    for (const date of leaveDates) {
-      await supabase.from('leave_requests').insert({
-        student_id: studentId,
+    const insertPromises = leaveDates.map(async (date) => {
+      console.log(`Attempting to insert leave request for date: ${date}`);
+      
+      const insertData = {
+        student_id: parseInt(studentId),
         leave_date: date,
         leave_type: 'personal',
         status: 'approved',
         created_at: new Date().toISOString()
-      });
-    }
+      };
+      
+      console.log('Insert data:', insertData);
+      
+      const { data, error } = await supabase.from('leave_requests').insert(insertData).select();
+      
+      if (error) {
+        console.error('Supabase insert error for date', date, ':', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+      
+      console.log('Successfully inserted leave request for date', date, ':', data);
+      return data;
+    });
+    
+    const results = await Promise.all(insertPromises);
+    console.log('All leave requests inserted successfully. Results:', results);
     
     // ส่ง push message กลับ LINE เฉพาะเมื่อมาจาก LINE Bot
     if (source !== 'direct' && userId) {
+      // ดึงข้อมูล link_code จาก studentInfo
+      const linkCode = studentInfo?.link_code || studentId;
+      
       await sendLineMessage(userId, {
         type: 'text',
-        text: `✅ แจ้งลาสำเร็จ\n\nนักเรียน: ${studentName}\nรหัส: ${studentId}\nวันที่ลา: ${leaveDates.join(', ')}\nไม่ประสงค์ขึ้นรถรับ-ส่ง ในวันดังกล่าว\nระบบได้ส่งข้อมูลการแจ้งลาเรียบร้อยแล้ว`
+        text: `รายละเอียดข้อมูลที่ทำรายการแจ้งลา\n\nชื่อนักเรียน: ${studentName}\nรหัสนักเรียน: ${linkCode}\nวันที่ลา: ${leaveDates.join(', ')}\nไม่ประสงค์ใช้บริการรับส่งในวันดังกล่าว\n\nข้อมูลได้ส่งบันทึกแล้วเรียบร้อย`
       });
     }
     
@@ -187,10 +253,38 @@ export default async function handler(req, res) {
       }
     });
   } catch (error) {
-    console.error('Error submitting leave request:', error);
+    console.error('Error submitting leave request:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    
+    // ส่ง error message ที่ละเอียดมากขึ้น
+    let errorMessage = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
+    
+    if (error.message) {
+      if (error.message.includes('connection')) {
+        errorMessage = 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาลองใหม่อีกครั้ง';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'การเชื่อมต่อหมดเวลา กรุณาลองใหม่อีกครั้ง';
+      } else if (error.message.includes('permission')) {
+        errorMessage = 'ไม่มีสิทธิ์เข้าถึงฐานข้อมูล';
+      } else {
+        errorMessage = `เกิดข้อผิดพลาด: ${error.message}`;
+      }
+    }
+    
     res.status(500).json({ 
       ok: false, 
-      error: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' 
+      error: errorMessage,
+      debug: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        code: error.code,
+        details: error.details
+      } : undefined
     });
   }
 }

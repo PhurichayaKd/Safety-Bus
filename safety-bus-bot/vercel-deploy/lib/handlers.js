@@ -6,7 +6,9 @@ import { config } from './config.js';
 
 // Store user form states (in production, use Redis or database)
 const userFormStates = new Map();
-export { userFormStates };
+// Store user leave form sending states to prevent duplicate sends
+const userLeaveFormStates = new Map();
+export { userFormStates, userLeaveFormStates };
 
 /**
  * ตรวจสอบสถานะการผูกบัญชีและดึงข้อมูลนักเรียน
@@ -97,14 +99,24 @@ export async function handleTextMessage(event) {
     return;
   }
 
+  // คำสั่งสำหรับการทดสอบ - reset cooldown
+  if (text.toLowerCase() === 'reset cooldown' || text === 'รีเซ็ต') {
+    userLeaveFormStates.delete(userId);
+    await replyLineMessage(event.replyToken, {
+      type: 'text',
+      text: '✅ รีเซ็ต cooldown เรียบร้อยแล้ว\nตอนนี้สามารถขอฟอร์มแจ้งลาได้ทันที\n\n💡 เพื่อขอฟอร์มแจ้งลา กรุณากดปุ่ม "แจ้งลา" ในเมนู หรือพิมพ์ "แจ้งลา"'
+    });
+    return;
+  }
+
   // ตรวจสอบคำสั่งติดต่อ
   if (text.includes('ติดต่อ') || text.includes('contact') || text.includes('โทร')) {
     await handleContactRequest(event);
     return;
   }
 
-  // ตรวจสอบคำสั่งการลาหยุด
-  if (text.includes('ลา') || text.includes('absence') || text.includes('ขาด')) {
+  // ตรวจสอบคำสั่งการลาหยุด (เฉพาะคำสั่งที่ชัดเจน)
+  if (text === 'แจ้งลา' || text === 'ลา' || text === 'ขอลา' || text.includes('แจ้งลา') || text.includes('absence') || text.includes('ขาด')) {
     await handleLeaveRequestMenu(event);
     return;
   }
@@ -148,8 +160,8 @@ export async function handlePostback(event) {
         type: 'text',
         text: 'ขออภัย ไม่เข้าใจคำสั่งเมนูนี้ กรุณาใช้เมนูหลักแทน'
       });
-      // Send main menu as fallback
-      await sendMainMenu(userId, event.replyToken);
+      // ไม่ส่งเมนูเพิ่มเติม เพราะ Rich Menu จะแสดงอยู่แล้ว
+      // await sendMainMenu(userId);
     }
   } catch (err) {
     console.error('Error in handlePostback:', err);
@@ -182,7 +194,7 @@ export async function handleFollow(event) {
       text: `✅ ผูกบัญชีสำเร็จแล้ว\n\nสวัสดี${roleText === 'ผู้ปกครอง' ? 'ครับ คุณ' : 'ครับ น้อง'}${nameText}\nสถานะ: ${roleText}\n\nคุณสามารถใช้เมนูด้านล่างเพื่อ:\n• ดูประวัตินักเรียน\n• แจ้งลาหยุด\n• ตรวจสอบตำแหน่งรถ\n• ติดต่อคนขับ\n\nหากต้องการเปลี่ยนบัญชี กรุณาติดต่อโรงเรียน`
     };
     await replyLineMessage(event.replyToken, welcomeMessage);
-    await sendMainMenu(userId, null);
+    // ไม่ส่งเมนูเพิ่มเติม เพราะ Rich Menu จะแสดงอยู่แล้ว
   } else {
     // หากยังไม่ผูกบัญชี ให้แนะนำการผูกบัญชี
     const welcomeMessage = {
@@ -246,10 +258,8 @@ export async function handleMainAction(event, action) {
       case 'leave_request':
         if (!replyTokenUsed) {
           await handleLeaveRequestMenu(event);
-        } else {
-          // Use push message instead of reply
-          await handleLeaveRequestMenuPush(userId);
         }
+        // ไม่ส่งข้อความเพิ่มเติมเมื่อ replyToken ถูกใช้แล้ว เพื่อป้องกันการส่งซ้ำ
         break;
       case 'location':
       case 'bus_location':
@@ -577,8 +587,8 @@ export async function handleStudentCodeLinking(event, studentCode) {
       }
     }, 1000);
 
-    // ส่งเมนูหลัก (push message)
-    await sendMainMenu(userId, null);
+    // ไม่ส่งเมนูเพิ่มเติม เพราะ Rich Menu จะแสดงอยู่แล้ว
+    // await sendMainMenu(userId, null);
 
   } catch (error) {
     console.error('Error handling student code linking:', error);
@@ -873,6 +883,21 @@ export async function handleLeaveRequestMenu(event) {
   const userId = event.source.userId;
 
   try {
+    // ตรวจสอบสถานะการส่งฟอร์มล่าสุด เพื่อป้องกันการส่งซ้ำ
+    const lastSentTime = userLeaveFormStates.get(userId);
+    const currentTime = Date.now();
+    const cooldownPeriod = 60000; // 1 นาที (60 วินาที)
+    
+    if (lastSentTime && (currentTime - lastSentTime) < cooldownPeriod) {
+      const remainingTime = Math.ceil((cooldownPeriod - (currentTime - lastSentTime)) / 60000); // แปลงเป็นนาที
+      console.log(`🚫 Leave form cooldown active for user ${userId}, remaining: ${remainingTime} minutes`);
+      await replyLineMessage(event.replyToken, {
+        type: 'text',
+        text: `⏰ กรุณารออีก ${remainingTime} นาที ก่อนขอฟอร์มแจ้งลาใหม่\n\nเพื่อป้องกันการส่งซ้ำและลดภาระระบบ`
+      });
+      return;
+    }
+
     // ดึงข้อมูลนักเรียนจาก LINE ID
     const studentData = await getStudentByLineId(userId);
 
@@ -884,16 +909,18 @@ export async function handleLeaveRequestMenu(event) {
       return;
     }
 
+    // บันทึกเวลาที่ส่งฟอร์ม
+    userLeaveFormStates.set(userId, currentTime);
+    console.log(`📝 Leave form sent to user ${userId} at ${new Date(currentTime).toISOString()}`);
+
     const leaveText = `📝 แจ้งลาหยุด\n\n` +
-      `กรุณากดลิงก์ด้านล่างเพื่อเข้าสู่ฟอร์มแจ้งลาหยุด\n\n` +
-      `ระบบจะดึงข้อมูลชื่อและรหัสนักเรียนอัตโนมัติ\n` +
-      `สามารถเลือกวันที่ลาได้สูงสุด 3 วัน\n\n` +
       `📋 ข้อมูลนักเรียน:\n` +
       `ชื่อ: ${studentData.student.student_name}\n` +
       `รหัส: ${studentData.student.link_code}\n\n` +
       `🔗 เปิดฟอร์มแจ้งลาหยุด:\n` +
       `${config.liffAppUrl}/?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}`;
 
+    // ใช้ reply message เพื่อตอบสนองการกดเมนูเท่านั้น
     await replyLineMessage(event.replyToken, {
       type: 'text',
       text: leaveText
@@ -901,10 +928,13 @@ export async function handleLeaveRequestMenu(event) {
 
   } catch (error) {
     console.error('Error handling leave request menu:', error);
-    await replyLineMessage(event.replyToken, {
-      type: 'text',
-      text: 'เกิดข้อผิดพลาดในการเปิดฟอร์มแจ้งลาหยุด กรุณาลองใหม่อีกครั้ง'
-    });
+    // ใช้ reply message เพื่อตอบสนองการกดเมนูเท่านั้น
+    if (event.replyToken) {
+      await replyLineMessage(event.replyToken, {
+        type: 'text',
+        text: 'เกิดข้อผิดพลาดในการเปิดฟอร์มแจ้งลาหยุด กรุณาลองใหม่อีกครั้ง'
+      });
+    }
   }
 }
 
@@ -916,6 +946,21 @@ export async function handleLeaveRequestMenuPush(userId) {
   console.log(`📝 handleLeaveRequestMenuPush called for user: ${userId}`);
 
   try {
+    // ตรวจสอบสถานะการส่งฟอร์มล่าสุด เพื่อป้องกันการส่งซ้ำ
+    const lastSentTime = userLeaveFormStates.get(userId);
+    const currentTime = Date.now();
+    const cooldownPeriod = 60000; // 1 นาที (60 วินาที)
+    
+    if (lastSentTime && (currentTime - lastSentTime) < cooldownPeriod) {
+      const remainingTime = Math.ceil((cooldownPeriod - (currentTime - lastSentTime)) / 60000); // แปลงเป็นนาที
+      console.log(`🚫 Leave form cooldown active for user ${userId}, remaining: ${remainingTime} minutes`);
+      await sendLineMessage(userId, {
+        type: 'text',
+        text: `⏰ กรุณารออีก ${remainingTime} นาที ก่อนขอฟอร์มแจ้งลาใหม่\n\nเพื่อป้องกันการส่งซ้ำและลดภาระระบบ`
+      });
+      return;
+    }
+
     // ตรวจสอบการผูกบัญชี
     const { linked, student } = await checkLinkStatus(userId);
     if (!linked || !student) {
@@ -935,6 +980,10 @@ export async function handleLeaveRequestMenuPush(userId) {
       });
       return;
     }
+
+    // บันทึกเวลาที่ส่งฟอร์ม
+    userLeaveFormStates.set(userId, currentTime);
+    console.log(`📝 Leave form sent to user ${userId} at ${new Date(currentTime).toISOString()}`);
 
     const leaveText = `📝 แจ้งลาหยุด\n\n` +
       `กรุณากดลิงก์ด้านล่างเพื่อเข้าสู่ฟอร์มแจ้งลาหยุด\n\n` +
@@ -987,10 +1036,29 @@ export async function handleBusLocationRequestPush(userId) {
  * @param {Object} event - LINE webhook event
  */
 export async function handleContactDriverRequest(event) {
-  await replyLineMessage(event.replyToken, {
-    type: 'text',
-    text: '📞 ติดต่อคนขับรถ\n\n⚠️ ฟีเจอร์นี้อยู่ระหว่างการพัฒนา\nจะเปิดให้บริการในเร็วๆ นี้\n\nขออภัยในความไม่สะดวก 🙏'
-  });
+  const messages = [
+    {
+      type: 'text',
+      text: '📞 ติดต่อคนขับรถ\n\n👨‍💼 สมชาย คนขับ\n📱 เบอร์โทร: 081-234-5678\n🚌 ป้ายทะเบียน: 1กก-1234\n\n⏰ เวลาทำการ: 07:00 - 17:00 น.'
+    },
+    {
+      type: 'template',
+      altText: 'โทรหาคนขับรถ',
+      template: {
+        type: 'buttons',
+        text: 'คุณต้องการโทรหาคนขับรถหรือไม่?',
+        actions: [
+          {
+            type: 'uri',
+            label: '📞 โทรหาคนขับ',
+            uri: 'tel:0812345678'
+          }
+        ]
+      }
+    }
+  ];
+  
+  await replyLineMessage(event.replyToken, messages);
 }
 
 /**

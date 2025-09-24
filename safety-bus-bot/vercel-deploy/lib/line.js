@@ -55,6 +55,18 @@ export async function sendLineMessage(to, message) {
  */
 export async function replyLineMessage(replyToken, message) {
   try {
+    // ตรวจสอบ replyToken
+    if (!replyToken || typeof replyToken !== 'string' || replyToken.trim() === '') {
+      console.error('Invalid replyToken:', replyToken);
+      throw new Error('Invalid replyToken provided');
+    }
+
+    // ตรวจสอบข้อความ
+    if (!message) {
+      console.error('No message provided');
+      throw new Error('No message provided');
+    }
+
     const response = await fetch('https://api.line.me/v2/bot/message/reply', {
       method: 'POST',
       headers: {
@@ -70,6 +82,8 @@ export async function replyLineMessage(replyToken, message) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('LINE Reply API Error:', response.status, errorText);
+      console.error('ReplyToken used:', replyToken);
+      console.error('Message sent:', JSON.stringify(message, null, 2));
       throw new Error(`LINE Reply API Error: ${response.status}`);
     }
 

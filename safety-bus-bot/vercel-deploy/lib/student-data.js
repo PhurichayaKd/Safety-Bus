@@ -30,7 +30,7 @@ export async function getStudentByLineId(lineUserId) {
       // หาข้อมูลนักเรียนจาก students table โดยตรง
       const { data: student, error: studentError } = await supabase
         .from('students')
-        .select('student_id, student_name, grade, link_code')
+        .select('student_id, student_name, grade')
         .eq('parent_id', parentLink.parent_id)
         .single();
       
@@ -39,7 +39,6 @@ export async function getStudentByLineId(lineUserId) {
           type: 'parent',
           student: {
             student_id: student.student_id,
-            link_code: student.link_code,
             student_name: student.student_name,
             name: student.student_name,
             class: student.grade
@@ -58,8 +57,7 @@ export async function getStudentByLineId(lineUserId) {
         students!inner(
           student_id,
           student_name,
-          grade,
-          link_code
+          grade
         )
       `)
       .eq('line_user_id', lineUserId)
@@ -75,7 +73,6 @@ export async function getStudentByLineId(lineUserId) {
         type: 'driver',
         student: {
           student_id: driverLink.students.student_id,
-          link_code: driverLink.students.link_code,
           student_name: driverLink.students.student_name,
           name: driverLink.students.student_name,
           class: driverLink.students.grade

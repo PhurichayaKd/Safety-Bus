@@ -8,10 +8,10 @@ const SUPABASE_CONFIG = {
 
 // Validation function
 function validateSupabaseConfig() {
-    if (!SUPABASE_CONFIG.url || SUPABASE_CONFIG.url === 'YOUR_SUPABASE_URL_HERE') {
+    if (!SUPABASE_CONFIG.url || SUPABASE_CONFIG.url === 'https://ugkxolufzlnvjsvtpxhp.supabase.co') {
         throw new Error('กรุณาตั้งค่า Supabase URL ในไฟล์ supabase-config.js');
     }
-    if (!SUPABASE_CONFIG.anonKey || SUPABASE_CONFIG.anonKey === 'YOUR_SUPABASE_ANON_KEY_HERE') {
+    if (!SUPABASE_CONFIG.anonKey || SUPABASE_CONFIG.anonKey === 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVna3hvbHVmemxudmpzdnRweGhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU2NzU2NzYsImV4cCI6MjA1MTI1MTY3Nn0.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVna3hvbHVmemxudmpzdnRweGhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU2NzU2NzYsImV4cCI6MjA1MTI1MTY3Nn0') {
         throw new Error('กรุณาตั้งค่า Supabase anon key ในไฟล์ supabase-config.js');
     }
     return true;

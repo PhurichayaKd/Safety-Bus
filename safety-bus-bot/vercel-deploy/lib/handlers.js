@@ -457,11 +457,11 @@ export async function handleStudentCodeLinking(event, studentCode) {
       return;
     }
 
-    // ค้นหานักเรียนจากรหัส link_code
+    // ค้นหานักเรียนจากรหัส student_id
     const { data: student, error } = await supabase
       .from('students')
-      .select('student_id, student_name, grade, parent_id, student_line_id, parent_line_id')
-      .eq('link_code', studentCode)
+      .select('student_id, student_name, grade, parent_id')
+      .eq('student_id', parseInt(studentCode))
       .single();
 
     if (error || !student) {
@@ -472,48 +472,39 @@ export async function handleStudentCodeLinking(event, studentCode) {
       return;
     }
 
-    // ตรวจสอบว่า LINE ID ตรงกับนักเรียนหรือผู้ปกครอง
-    let linkType = null;
-    let linkTable = null;
-    let updateField = null;
+    // ตรวจสอบว่ามีการผูกบัญชีอยู่แล้วหรือไม่
+    const { data: existingStudentLink } = await supabase
+      .from('student_line_links')
+      .select('*')
+      .eq('student_id', student.student_id)
+      .eq('active', true)
+      .single();
 
-    if (!student.student_line_id) {
-      // ยังไม่มีการผูก LINE ID กับนักเรียน ให้ผูกให้เลย
-      linkType = 'student';
-      linkTable = 'student_line_links';
-      updateField = 'student_line_id';
-    } else if (!student.parent_line_id) {
-      // ยังไม่มีการผูก LINE ID กับผู้ปกครอง ให้ผูกให้เลย
-      linkType = 'parent';
-      linkTable = 'parent_line_links';
-      updateField = 'parent_line_id';
-    } else if (student.student_line_id === userId) {
-      linkType = 'student';
-      linkTable = 'student_line_links';
-    } else if (student.parent_line_id === userId) {
-      linkType = 'parent';
-      linkTable = 'parent_line_links';
-    } else {
+    const { data: existingParentLink } = await supabase
+      .from('parent_line_links')
+      .select('*')
+      .eq('parent_id', student.parent_id)
+      .eq('active', true)
+      .single();
+
+    // กำหนดประเภทการผูกบัญชี
+    let linkType = 'parent'; // ค่าเริ่มต้นเป็นผู้ปกครอง
+    let linkTable = 'parent_line_links';
+
+    // ถ้ามีการผูกบัญชีอยู่แล้ว ให้ตรวจสอบว่าเป็น user คนเดียวกันหรือไม่
+    if (existingParentLink && existingParentLink.line_user_id !== userId) {
       await replyLineMessage(event.replyToken, {
         type: 'text',
-        text: 'LINE ID ของคุณไม่ตรงกับข้อมูลในระบบ\nกรุณาติดต่อโรงเรียนเพื่อตรวจสอบข้อมูล'
+        text: 'รหัสนักเรียนนี้ถูกผูกบัญชีไว้แล้วกับ LINE ID อื่น\nกรุณาติดต่อโรงเรียนเพื่อตรวจสอบข้อมูล'
       });
       return;
-    }
-
-    // อัปเดต students.student_line_id ให้ตรงกับ userId ทุกครั้ง (กันข้อมูลไม่ sync)
-    const { error: updateError } = await supabase
-      .from('students')
-      .update({ student_line_id: userId })
-      .eq('student_id', student.student_id);
-    if (updateError) {
-      console.error('Error updating student_line_id:', updateError);
     }
 
     // บันทึกการผูกบัญชี
     const linkData = {
       line_user_id: userId,
-      student_id: student.student_id,
+      parent_id: student.parent_id,
+      active: true,
       linked_at: new Date().toISOString()
     };
 
@@ -544,20 +535,25 @@ export async function handleStudentCodeLinking(event, studentCode) {
     // เพิ่ม delay 1 วินาทีเพื่อให้ Supabase sync ข้อมูลก่อนดึงประวัติ
     setTimeout(async () => {
       try {
-        // ดึงข้อมูลนักเรียนจาก students table
-        const { data: student, error: studentError } = await supabase
-          .from('students')
-          .select('student_id, student_name, grade, link_code, parent_id')
-          .or(`student_line_id.eq.${userId},parent_line_id.eq.${userId}`)
+        // ดึงข้อมูลนักเรียนจาก parent_line_links และ students table
+        const { data: linkData, error: linkError } = await supabase
+          .from('parent_line_links')
+          .select(`
+            parent_id,
+            students!inner(student_id, student_name, grade, parent_id)
+          `)
+          .eq('line_user_id', userId)
+          .eq('active', true)
           .single();
 
-        if (!student || studentError) {
+        if (!linkData || linkError || !linkData.students) {
           await sendLineMessage(userId, [{ type: 'text', text: 'ไม่พบข้อมูลนักเรียน' }]);
         } else {
+          const student = linkData.students;
           let infoText = `👦 ข้อมูลนักเรียน\n`;
           infoText += `ชื่อ: ${student.student_name}\n`;
           infoText += `ชั้น: ${student.grade}\n`;
-          infoText += `รหัสนักเรียน: ${student.link_code || '-'}\n`;
+          infoText += `รหัสนักเรียน: ${student.student_id}\n`;
 
           // ดึงประวัติการเดินทาง 10 รายการล่าสุด
           const { data: history, error } = await supabase
@@ -701,7 +697,6 @@ export async function handleHistoryRequest(event) {
         student_id,
         student_name,
         grade,
-        link_code,
         start_date,
         end_date,
         parent_id,
@@ -732,8 +727,9 @@ export async function handleHistoryRequest(event) {
     
     // แสดงข้อมูลนักเรียน
     let infoText = `👦 ข้อมูลนักเรียน\n`;
-    infoText += `ชื่อ: ${student.student_name}\n`;
-    infoText += `รหัสนักเรียน: ${fullStudentData?.link_code || student.link_code || '-'}\n`;
+    infoText += `ชื่อ: ${fullStudentData?.student_name || student.student_name || '-'}\n`;
+    infoText += `รหัสนักเรียน: ${fullStudentData?.student_id || student.student_id || '-'}\n`;
+    infoText += `ชั้นเรียน: ${fullStudentData?.grade || '-'}\n`;
     infoText += `รหัสบัตร RFID: ${rfidData?.rfid_cards?.rfid_code || '-'}\n`;
     infoText += `ชื่อผู้ปกครอง: ${fullStudentData?.parents?.parent_name || '-'}\n`;
     
@@ -806,7 +802,6 @@ export async function handleHistoryRequestPush(userId) {
         student_id,
         student_name,
         grade,
-        link_code,
         start_date,
         end_date,
         parent_id,
@@ -831,8 +826,9 @@ export async function handleHistoryRequestPush(userId) {
     
     // แสดงข้อมูลนักเรียน
     let infoText = `👦 ข้อมูลนักเรียน\n`;
-    infoText += `ชื่อ: ${student.student_name}\n`;
-    infoText += `รหัสนักเรียน: ${fullStudentData?.link_code || student.link_code || '-'}\n`;
+    infoText += `ชื่อ: ${fullStudentData?.student_name || student.student_name || '-'}\n`;
+    infoText += `รหัสนักเรียน: ${fullStudentData?.student_id || student.student_id || '-'}\n`;
+    infoText += `ชั้นเรียน: ${fullStudentData?.grade || '-'}\n`;
     infoText += `รหัสบัตร RFID: ${rfidData?.rfid_cards?.rfid_code || '-'}\n`;
     infoText += `ชื่อผู้ปกครอง: ${fullStudentData?.parents?.parent_name || '-'}\n`;
     

@@ -179,9 +179,9 @@ export default function StudentFormScreen() {
   const readOnlyBorder = { borderColor: '#E5E7EB' };
   /* ----------------------------------------------------------------------- */
 
-  /* ---------------- preload draft ---------------- */
+  /* ---------------- preload draft (เฉพาะโหมดเพิ่มใหม่) ---------------- */
   useEffect(() => {
-    if (didPreload.current) return;
+    if (didPreload.current || isEdit) return; // ไม่โหลด draft ในโหมดแก้ไข
     const d = getDraft();
     if (d) {
       setStudentName(d.studentName);
@@ -197,7 +197,7 @@ export default function StudentFormScreen() {
       setGuardians(d.guardians?.length ? d.guardians : [{ name: '', phone: '', line: '', relationship: '', is_primary: true }]);
     }
     didPreload.current = true;
-  }, []);
+  }, [isEdit]);
   /* ------------------------------------------------- */
 
   // studentLine variable removed - no longer stored in database
@@ -250,10 +250,9 @@ export default function StudentFormScreen() {
           .from('students')
           .select(`
             *,
-            student_line_links!inner(line_user_id, active)
+            student_line_links(line_user_id, active)
           `)
           .eq('student_id', Number(id))
-          .eq('student_line_links.active', true)
           .maybeSingle();
         if (stuErr) throw stuErr;
         if (!alive || !stu) return;
@@ -263,8 +262,15 @@ export default function StudentFormScreen() {
         setGrade(s.grade ?? '');
         setStudentPhone(s.student_phone ?? '');
         const lineLinks = (s as any).student_line_links;
-        const lineUserId = Array.isArray(lineLinks) ? lineLinks[0]?.line_user_id : lineLinks?.line_user_id;
-        setStudentLine(lineUserId ?? '');
+        // หา LINE ID ที่ active = true
+        let lineUserId = '';
+        if (Array.isArray(lineLinks)) {
+          const activeLink = lineLinks.find((link: any) => link.active === true);
+          lineUserId = activeLink?.line_user_id ?? '';
+        } else if (lineLinks?.active === true) {
+          lineUserId = lineLinks.line_user_id ?? '';
+        }
+        setStudentLine(lineUserId);
         setStartDate(s.start_date ? new Date(s.start_date) : null);
         setEndDate(s.end_date ? new Date(s.end_date) : null);
         setLat(toNumberOrNull(s.home_latitude));
@@ -363,6 +369,7 @@ export default function StudentFormScreen() {
           studentName: s.student_name ?? '',
           grade: s.grade ?? '',
           studentPhone: s.student_phone ?? '',
+          studentLine: lineUserId,
           rfidCardId: resolvedRfidCardId,
           rfidCode: resolvedRfidCode,
           startDate: s.start_date ?? null,
@@ -394,6 +401,22 @@ export default function StudentFormScreen() {
         ...prev,
         { name: '', phone: '', line: '', relationship: '', is_primary: prev.length === 0 },
       ];
+      setDraft({ guardians: next });
+      return next;
+    });
+  };
+
+  const removeGuardian = (idx: number) => {
+    setGuardians(prev => {
+      if (prev.length <= 1) {
+        Alert.alert('ไม่สามารถลบได้', 'ต้องมีผู้ปกครองอย่างน้อย 1 คน');
+        return prev;
+      }
+      const next = prev.filter((_, i) => i !== idx);
+      // หากลบผู้ปกครองหลัก ให้ตั้งคนแรกเป็นหลัก
+      if (prev[idx]?.is_primary && next.length > 0) {
+        next[0].is_primary = true;
+      }
       setDraft({ guardians: next });
       return next;
     });
@@ -838,26 +861,24 @@ export default function StudentFormScreen() {
 
           <View style={styles.row}>
             <View style={[styles.col, { flex: 2 }]}>
-              <Text style={styles.label}>ชื่อ-นามสกุล</Text>
+              <Text style={styles.label}>ชื่อนักเรียน</Text>
               <TextInput
-                style={[styles.input, isEdit && { ...readOnlyBg, ...readOnlyBorder }]}
+                style={styles.input}
                 value={studentName}
-                onChangeText={(t) => { if (!isEdit) { setStudentName(t); setDraft({ studentName: t }); } }}
-                placeholder="เช่น ด.ช. สมชาย ใจดี"
+                onChangeText={(t) => { setStudentName(t); setDraft({ studentName: t }); }}
+                placeholder="ชื่อ-นามสกุล"
                 placeholderTextColor="#9CA3AF"
-                {...ro(!isEdit)}
               />
             </View>
             <View style={[styles.col, { flex: 1 }]}>
               <Text style={styles.label}>ชั้น</Text>
               <TextInput
-                style={[styles.input, isEdit && { ...readOnlyBg, ...readOnlyBorder }]}
+                style={styles.input}
                 value={grade}
-                onChangeText={(t) => { if (!isEdit) { setGrade(t); setDraft({ grade: t }); } }}
+                onChangeText={(t) => { setGrade(t); setDraft({ grade: t }); }}
                 placeholder="ป.5/2"
                 placeholderTextColor="#9CA3AF"
                 autoCapitalize="none"
-                {...ro(!isEdit)}
               />
             </View>
           </View>
@@ -868,8 +889,15 @@ export default function StudentFormScreen() {
               <TextInput
                 style={styles.input}
                 value={studentPhone}
-                onChangeText={(t) => { setStudentPhone(t); setDraft({ studentPhone: t }); }}
-                placeholder="เช่น 0812345678"
+                onChangeText={(t) => { 
+                  // จำกัดให้ใส่ได้เฉพาะตัวเลขและไม่เกิน 10 ตัว
+                  const numericValue = t.replace(/[^0-9]/g, '');
+                  if (numericValue.length <= 10) {
+                    setStudentPhone(numericValue); 
+                    setDraft({ studentPhone: numericValue }); 
+                  }
+                }}
+                placeholder="เบอร์โทรติดต่อ"
                 placeholderTextColor="#9CA3AF"
                 keyboardType="number-pad"
                 maxLength={10}
@@ -934,9 +962,9 @@ export default function StudentFormScreen() {
 
           {guardians.map((g, idx) => {
             const isExisting = !!g.parent_id;       // เดิม: edit ได้เฉพาะเบอร์
-            const nameEditable = !isExisting;
-            const lineEditable = !isExisting;
-            const relEditable  = !isExisting;
+            const nameEditable = true;  // อนุญาตให้แก้ไขชื่อได้เสมอ
+            const lineEditable = true;  // อนุญาตให้แก้ไข LINE ID ได้เสมอ
+            const relEditable  = true;  // อนุญาตให้แก้ไขความสัมพันธ์ได้เสมอ
             return (
               <View key={idx} style={[styles.guardCard, { marginBottom: 12 }]}>
                 <View style={styles.guardHeader}>
@@ -945,6 +973,11 @@ export default function StudentFormScreen() {
                     <Text style={styles.primaryTxt}>{g.is_primary ? 'ผู้ปกครองหลัก' : 'ตั้งเป็นผู้ปกครองหลัก'}</Text>
                   </TouchableOpacity>
                   <View style={{ flex: 1 }} />
+                  {guardians.length > 1 && (
+                    <TouchableOpacity onPress={() => removeGuardian(idx)} style={styles.deleteIconBtn}>
+                      <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 <View style={styles.row}>
@@ -960,12 +993,18 @@ export default function StudentFormScreen() {
                     />
                   </View>
                   <View style={[styles.col, { flex: 1.7 }]}>
-                    <Text style={styles.label}>เบอร์โทร</Text>
+                    <Text style={styles.label}>เบอร์โทรผู้ปกครอง</Text>
                     <TextInput
                       style={styles.input}
                       value={g.phone}
-                      onChangeText={(t) => setGuardianAt(idx, { phone: t })}
-                      placeholder="เช่น 0812345678"
+                      onChangeText={(t) => {
+                        // จำกัดให้ใส่ได้เฉพาะตัวเลขและไม่เกิน 10 ตัว
+                        const numericValue = t.replace(/[^0-9]/g, '');
+                        if (numericValue.length <= 10) {
+                          setGuardianAt(idx, { phone: numericValue });
+                        }
+                      }}
+                      placeholder="เบอร์โทรติดต่อ"
                       placeholderTextColor="#9CA3AF"
                       keyboardType="number-pad"
                       maxLength={10}
@@ -980,7 +1019,7 @@ export default function StudentFormScreen() {
                       style={[styles.input, !lineEditable && { ...readOnlyBg, ...readOnlyBorder }]}
                       value={g.line ?? ''}
                       onChangeText={(t) => lineEditable && setGuardianAt(idx, { line: t })}
-                      placeholder="เช่น line_parent"
+                      placeholder="เช่น @parent123"
                       placeholderTextColor="#9CA3AF"
                       autoCapitalize="none"
                       autoCorrect={false}
@@ -1003,9 +1042,8 @@ export default function StudentFormScreen() {
             );
           })}
 
-          <TouchableOpacity style={styles.addBtn} onPress={addGuardian}>
-            <Ionicons name="person-add-outline" size={18} color="#ffffff" />
-            <Text style={styles.addBtnTxt}>เพิ่มผู้ปกครอง</Text>
+          <TouchableOpacity style={styles.addIconBtn} onPress={addGuardian}>
+            <Ionicons name="person-add-outline" size={20} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
 
@@ -1304,22 +1342,28 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
 
-  addBtn: { 
-    flexDirection: 'row', 
+  addIconBtn: { 
+    width: 44, 
+    height: 44, 
     alignItems: 'center', 
-    gap: 8, 
+    justifyContent: 'center',
+    borderRadius: 22,
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
     marginTop: 8,
-    backgroundColor: COLORS.success,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    alignSelf: 'flex-start',
     ...shadow,
   },
-  addBtnTxt: { 
-    color: '#ffffff', 
-    fontWeight: '700',
-    fontSize: 14,
-    letterSpacing: 0.1,
+  deleteIconBtn: { 
+    width: 32, 
+    height: 32, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: COLORS.dangerSoft,
+    borderWidth: 1,
+    borderColor: COLORS.danger,
   },
 
   selectWrap: { 

@@ -10,8 +10,10 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
 
 const COLORS = {
@@ -347,30 +349,48 @@ const IndividualView: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.topBarTitle}>ดูข้อมูลรายบุคคล</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>ดูข้อมูลรายบุคคล</Text>
-        <Text style={styles.subtitle}>เลือกนักเรียนเพื่อดูประวัติรายละเอียด</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.topBarTitle}>ดูข้อมูลรายบุคคล</Text>
+        <View style={{ width: 40 }} />
+      </View>
+      
+      <View style={styles.scrollContainer}>
+        <View style={styles.header}>
+          <Text style={styles.subtitle}>เลือกนักเรียนเพื่อดูประวัติรายละเอียด</Text>
         
-        {/* แสดงสถานะการเชื่อมต่อแบบเรียลไทม์ */}
-        <View style={styles.realtimeStatus}>
-          <View style={[styles.statusIndicator, { backgroundColor: realtimeConnected ? COLORS.success : COLORS.warning }]} />
-          <Text style={styles.statusText}>
-            {realtimeConnected ? 'เชื่อมต่อแบบเรียลไทม์' : 'กำลังเชื่อมต่อ...'}
-          </Text>
-          {lastUpdate && (
-            <Text style={styles.lastUpdateText}>
-              อัปเดตล่าสุด: {lastUpdate.toLocaleTimeString('th-TH')}
+          {/* แสดงสถานะการเชื่อมต่อแบบเรียลไทม์ */}
+          <View style={styles.realtimeStatus}>
+            <View style={[styles.statusIndicator, { backgroundColor: realtimeConnected ? COLORS.success : COLORS.warning }]} />
+            <Text style={styles.statusText}>
+              {realtimeConnected ? 'เชื่อมต่อแบบเรียลไทม์' : 'กำลังเชื่อมต่อ...'}
             </Text>
-          )}
+            {lastUpdate && (
+              <Text style={styles.lastUpdateText}>
+                อัปเดตล่าสุด: {lastUpdate.toLocaleTimeString('th-TH')}
+              </Text>
+            )}
+          </View>
         </View>
       </View>
 
@@ -565,7 +585,7 @@ const IndividualView: React.FC = () => {
           )}
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -573,6 +593,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  iconBtn: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  topBarTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  scrollContainer: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

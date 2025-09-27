@@ -17,10 +17,7 @@ export default function TabsLayout() {
               iconName = focused ? 'home' : 'home-outline';
               break;
             case 'passenger-list':
-              iconName = focused ? 'people' : 'people-outline';
-              break;
-            case 'map-live':
-              iconName = 'map-outline';
+              iconName = focused ? 'map' : 'map-outline';
               break;
             default:
               iconName = 'ellipse';
@@ -30,8 +27,7 @@ export default function TabsLayout() {
       })}
     >
       <Tabs.Screen name="home" options={{ title: 'Home' }} />
-      <Tabs.Screen name="passenger-list" options={{ title: 'Passengers' }} />
-      <Tabs.Screen name="map-live" options={{ title: 'Map' }} />
+      <Tabs.Screen name="passenger-list" options={{ title: 'Map & Passengers' }} />
     </Tabs>
   );
 }

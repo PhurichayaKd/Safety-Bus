@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="liff-id" content="2008065330-AXGy9xda">
+    <meta http-equiv="Permissions-Policy" content="identity-credentials-get=()">
     <title>Safety Bus - แจ้งลาหยุด</title>
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -36,6 +37,10 @@
                     <div class="info-row">
                         <span class="label">รหัสนักเรียน:</span>
                         <span id="student-code" class="value">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">ชั้นเรียน:</span>
+                        <span id="student-class" class="value">-</span>
                     </div>
 
                 </div>
@@ -79,6 +84,7 @@
                 <div class="student-summary">
                     <p><strong>👤 นักเรียน:</strong> <span id="confirm-student-name">-</span></p>
                     <p><strong>🆔 รหัส:</strong> <span id="confirm-student-code">-</span></p>
+                    <p><strong>🎓 ชั้นเรียน:</strong> <span id="confirm-student-class">-</span></p>
                 </div>
                 
                 <div class="dates-summary">

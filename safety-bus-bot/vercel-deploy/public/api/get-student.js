@@ -1,21 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Mock data for testing
-const MOCK_STUDENTS = {
-    '100006': {
-        student_id: '100006',
-        student_name: 'กฤษฎา',
-        grade: 'ม.6/1',
-        link_code: 'ABC123'
-    },
-    '100007': {
-        student_id: '100007', 
-        student_name: 'สมชาย',
-        grade: 'ม.5/2',
-        link_code: 'DEF456'
-    }
-};
-
 // Initialize Supabase client
 function createSupabaseClient() {
     const supabaseUrl = process.env.SUPABASE_URL;
@@ -83,6 +67,7 @@ async function getStudentByLineId(lineUserId) {
             id: student.student_id,
             name: student.student_name,
             class: student.grade || 'ไม่ระบุ',
+            link_code: student.link_code,
             line_user_id: lineUserId
         };
 
@@ -94,72 +79,44 @@ async function getStudentByLineId(lineUserId) {
 
 // Get student information by Student ID
 async function getStudentByStudentId(studentId) {
+    const supabase = createSupabaseClient();
+    
     try {
         console.log('Looking up student for Student ID:', studentId);
-        
-        // Try Supabase first
-        const supabase = createSupabaseClient();
         
         // หาข้อมูลนักเรียนจาก students table โดยใช้ student_id
         const { data: student, error: studentError } = await supabase
             .from('students')
-            .select('student_id, student_name, grade')
+            .select('student_id, student_name, grade, link_code')
             .eq('student_id', studentId)
             .maybeSingle();
 
         if (studentError) {
-            console.error('Error finding student in database:', studentError);
-            console.log('Falling back to mock data due to database error');
-        } else if (student) {
-            console.log('=== FOUND STUDENT DATA FROM DATABASE ===');
-            console.log('Raw student object:', student);
-            console.log('student.grade value:', student.grade);
-            console.log('student.grade type:', typeof student.grade);
+            console.error('Error finding student:', studentError);
+            throw studentError;
+        }
 
-            return {
-                id: student.student_id,
-                name: student.student_name,
-                class: student.grade || 'ไม่ระบุ'
-            };
-        } else {
-            console.log('No student found in database for student_id:', studentId);
-            console.log('Falling back to mock data');
+        if (!student) {
+            console.log('No student found for student_id:', studentId);
+            return null;
         }
-        
-        // Fallback to mock data if database query fails or returns no results
-        if (MOCK_STUDENTS[studentId]) {
-            console.log('Using mock data fallback for student:', studentId);
-            const student = MOCK_STUDENTS[studentId];
-            console.log('=== MOCK STUDENT DATA FALLBACK ===');
-            console.log('Raw student object:', student);
-            console.log('student.grade value:', student.grade);
-            console.log('student.grade type:', typeof student.grade);
-            
-            return {
-                id: student.student_id,
-                name: student.student_name,
-                class: student.grade || 'ไม่ระบุ'
-            };
-        }
-        
-        // No data found in either database or mock data
-        console.log('No student found in database or mock data for student_id:', studentId);
-        return null;
+
+        console.log('Found student data:', {
+            student_id: student.student_id,
+            student_name: student.student_name,
+            grade: student.grade,
+            link_code: student.link_code
+        });
+
+        return {
+            student_id: student.student_id,
+            student_name: student.student_name,
+            class: student.grade || 'ไม่ระบุ',
+            link_code: student.link_code
+        };
 
     } catch (error) {
         console.error('Error in getStudentByStudentId:', error);
-        
-        // Try mock data as final fallback on error
-        if (MOCK_STUDENTS[studentId]) {
-            console.log('Using mock data as final fallback due to error');
-            const student = MOCK_STUDENTS[studentId];
-            return {
-                id: student.student_id,
-                name: student.student_name,
-                class: student.grade || 'ไม่ระบุ'
-            };
-        }
-        
         throw error;
     }
 }

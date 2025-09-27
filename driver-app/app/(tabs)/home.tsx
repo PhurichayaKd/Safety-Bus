@@ -31,50 +31,70 @@ const STATUS_LABEL: Record<BusStatus, string> = {
   finished: 'จบการเดินทาง',
 };
 
-/* ======= ENHANCED THEME (Professional Minimal) ======= */
+/* ======= CLEAN WHITE/BLUE THEME (Professional Driver App) ======= */
 const COLORS = {
-  // Background & Surface
-  bg: '#FAFBFC',
-  bgSecondary: '#F8FAFC',
-  card: '#FFFFFF',
-  cardElevated: '#FFFFFF',
+  // Primary background colors - Clean white/soft theme
+  bg: '#FAFBFC',              // Very light gray-white background
+  bgSecondary: '#F8FAFC',     // Slightly darker white
+  bgSoft: '#FFFFFF',          // Pure white for contrast
+  card: '#FFFFFF',            // Pure white for main cards
+  cardElevated: '#FFFFFF',    // Elevated card
   
-  // Text Colors
-  text: '#0F172A',
-  textSecondary: '#475569',
-  textTertiary: '#64748B',
-  textMuted: '#94A3B8',
+  // Text colors with proper contrast ratios
+  text: '#1E293B',            // Dark slate for primary text
+  textSecondary: '#475569',   // Medium slate for secondary text
+  textTertiary: '#64748B',    // Light slate for tertiary text
+  textMuted: '#94A3B8',       // Very light slate for muted text
+  textLight: '#FFFFFF',       // White text for dark backgrounds
+  textOnPrimary: '#FFFFFF',   // White text on primary colors
+  textOnSecondary: '#FFFFFF', // White text on secondary colors
   
-  // Border & Divider
-  border: '#E2E8F0',
-  borderLight: '#F1F5F9',
-  divider: '#E2E8F0',
+  // Border and divider colors - Very subtle
+  border: '#E2E8F0',          // Very light border
+  borderLight: '#F1F5F9',     // Ultra light border
+  borderSoft: '#E2E8F0',      // Soft borders
+  borderDark: '#CBD5E1',      // Slightly darker borders
+  divider: '#F1F5F9',
   
-  // Primary Brand (Blue)
-  primary: '#0a7ea4',        // ใช้สีจาก Colors.ts
-  primaryDark: '#0369A1',
-  primaryLight: '#0EA5E9',
-  primarySoft: '#EFF6FF',
-  primaryGradient: ['#0a7ea4', '#0369A1'],
+  // Primary brand colors - Resolution Blue
+  primary: '#021C8B',         // Resolution Blue - main brand color
+  primaryDark: '#010B1F',     // Darker shade for hover states
+  primaryLight: '#1E40AF',    // Lighter blue for hover states
+  primarySoft: '#EFF6FF',     // Very soft blue background
+  primaryGradient: ['#021C8B', '#1E40AF'],
   
-  // Status Colors
-  success: '#059669',
-  successSoft: '#ECFDF5',
-  warning: '#D97706',
+  // Secondary colors - New Car Blue (เปลี่ยนจากเขียวเป็นน้ำเงิน)
+  secondary: '#1B52D7',       // New Car blue
+  secondaryDark: '#1E40AF',   // Darker blue
+  secondaryLight: '#3B82F6',  // Lighter blue
+  secondarySoft: '#EFF6FF',   // Soft blue background
+  
+  // Accent colors - Clean grays
+  accent: '#64748B',          // Clean slate gray
+  accentDark: '#475569',      // Darker gray
+  accentLight: '#94A3B8',     // Lighter gray
+  accentSoft: '#F8FAFC',      // Soft gray background
+  
+  // Status colors
+  success: '#10B981',         // Clean green for success
+  successSoft: '#ECFDF5',     // Light green background
+  warning: '#F59E0B',
   warningSoft: '#FFFBEB',
-  danger: '#DC2626',
+  danger: '#EF4444',
   dangerSoft: '#FEF2F2',
-  info: '#2563EB',
-  infoSoft: '#EFF6FF',
+  info: '#021C8B',            // Resolution Blue for info
+  infoSoft: '#EFF6FF',        // Light blue background
   
-  // Interactive States
+  // Interactive states
   hover: '#F8FAFC',
   pressed: '#F1F5F9',
-  focus: '#0a7ea4',
+  focus: '#021C8B',           // Resolution Blue for focus
   
-  // Shadows
-  shadow: 'rgba(15, 23, 42, 0.08)',
-  shadowDark: 'rgba(15, 23, 42, 0.15)',
+  // Shadow colors - Very subtle
+  shadow: 'rgba(30, 41, 59, 0.04)',      // Very light shadow
+  shadowMedium: 'rgba(30, 41, 59, 0.08)', // Medium shadow
+  shadowDark: 'rgba(30, 41, 59, 0.12)',   // Darker shadow for elevation
+  shadowElevated: 'rgba(30, 41, 59, 0.16)', // Elevated shadow
 };
 
 function MenuCard({
@@ -86,24 +106,23 @@ function MenuCard({
     router.push(to as any);
   };
   return (
-    <Pressable
+    <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={`แตะเพื่อเข้าสู่${label}`}
       accessibilityState={{ disabled: !!disabled }}
-      android_ripple={{ color: '#E5E7EB', borderless: false }}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={[
         styles.menuCard,
-        pressed && styles.menuCardPressed,
         disabled && { opacity: 0.45 },
       ]}
+      activeOpacity={0.7}
     >
       <View style={styles.menuIconWrap}>
-        <Ionicons name={icon} size={20} color={COLORS.primary} />
+        <Ionicons name={icon} size={18} color={COLORS.primary} />
       </View>
       <Text style={styles.menuText}>{label}</Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -171,12 +190,22 @@ const HomePage = () => {
   const [status, setStatus] = useState<BusStatus>('enroute');
   const [pickerVisible, setPickerVisible] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
   useEffect(() => {
     (async () => {
       const phase = await AsyncStorage.getItem('trip_phase');
       setStatus(phase === 'return' ? 'waiting_return' : 'enroute');
     })();
+  }, []);
+
+  // Update date and time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const handleSignOut = async () => {
@@ -250,6 +279,28 @@ const HomePage = () => {
   const steps: BusStatus[] = ['enroute','arrived_school','waiting_return','finished'];
   const activeIndex = steps.findIndex(k => k === status);
 
+  // Format date and time for display
+  const formatDate = (date: Date) => {
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    };
+    const formattedDate = date.toLocaleDateString('th-TH', options);
+    // Convert Christian Era to Buddhist Era (add 543 years)
+    const buddhistYear = date.getFullYear() + 543;
+    return formattedDate.replace(date.getFullYear().toString(), buddhistYear.toString());
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('th-TH', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView 
@@ -286,6 +337,20 @@ const HomePage = () => {
           >
             <Ionicons name="log-out-outline" size={16} color={COLORS.danger} />
           </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* DATE AND TIME DISPLAY */}
+      <View style={styles.dateTimeContainer}>
+        <View style={styles.dateTimeCard}>
+          <View style={styles.dateSection}>
+            <Ionicons name="calendar-outline" size={14} color={COLORS.primary} />
+            <Text style={styles.dateText}>{formatDate(currentDateTime)}</Text>
+          </View>
+          <View style={styles.timeSection}>
+            <Ionicons name="time-outline" size={14} color={COLORS.success} />
+            <Text style={styles.timeText}>{formatTime(currentDateTime)}</Text>
+          </View>
         </View>
       </View>
 
@@ -382,7 +447,6 @@ const HomePage = () => {
           <View style={styles.menuGrid}>
             <MenuCard icon="person-outline"     label="ข้อมูลผู้ใช้"   to="/manage/students/profile" />
             <MenuCard icon="car-outline"        label="ข้อมูลคนขับ"   to="/driver-info" />
-            <MenuCard icon="link-outline"       label="เชื่อมโยงบัญชี" to="/auth/link-account" />
             <MenuCard icon="card-outline"       label="ออกบัตรใหม่"   to={PATHS.issueCard} />
             <MenuCard icon="document-text-outline" label="รายงาน"     to={PATHS.reports} />
           </View>
@@ -481,30 +545,25 @@ const shadowElevated = Platform.select({
 });
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.bg, 
-    paddingHorizontal: isTablet ? 24 : 16, 
-    paddingTop: 16,
-    maxWidth: isTablet ? 800 : '100%',
-    alignSelf: 'center',
-    width: '100%',
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
   },
-
-  // Enhanced Header
+  
+  // Enhanced Header Styles
   headerContainer: {
     backgroundColor: COLORS.card,
-    marginHorizontal: -20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
     ...shadow,
   },
   headerContent: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
   brandSection: {
     flexDirection: 'row',
@@ -514,260 +573,308 @@ const styles = StyleSheet.create({
   logoContainer: {
     width: 48,
     height: 48,
-    borderRadius: 12,
     backgroundColor: COLORS.primarySoft,
-    alignItems: 'center',
+    borderRadius: 24,
     justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   brandText: {
     flex: 1,
   },
-  appTitle: { 
-    fontSize: 24, 
-    fontWeight: '900', 
-    color: COLORS.text, 
-    letterSpacing: -0.5,
-    lineHeight: 28,
+  appTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    letterSpacing: 0.5,
   },
-  titleRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    columnGap: 12, 
-    marginTop: 2 
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
   },
-  subtitle: { 
-    color: COLORS.textSecondary, 
-    fontWeight: '600', 
+  subtitle: {
     fontSize: 14,
-    letterSpacing: 0.1,
+    color: COLORS.textSecondary,
+    marginRight: 12,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    columnGap: 6,
     backgroundColor: COLORS.successSoft,
-    borderRadius: 20,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: COLORS.success + '20',
+    borderRadius: 12,
   },
-  statusDot: { 
-    width: 6, 
-    height: 6, 
-    borderRadius: 3, 
-    backgroundColor: COLORS.success 
+  statusDot: {
+    width: 6,
+    height: 6,
+    backgroundColor: COLORS.success,
+    borderRadius: 3,
+    marginRight: 6,
   },
-  statusText: { 
-    color: COLORS.success, 
-    fontSize: 11, 
-    fontWeight: '700',
-    letterSpacing: 0.2,
+  statusText: {
+    fontSize: 12,
+    color: COLORS.success,
+    fontWeight: '600',
   },
-
   signOutButton: {
     width: 36,
     height: 36,
+    backgroundColor: COLORS.dangerSoft,
     borderRadius: 18,
-    backgroundColor: COLORS.dangerSoft, 
-    alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.danger + '20',
+    alignItems: 'center',
   },
 
-  /* Compact Status Card */
-  statusCard: {
-    backgroundColor: COLORS.card, 
-    borderRadius: 16, 
-    marginTop: 16,
-    borderWidth: 1, 
-    borderColor: COLORS.border, 
-    overflow: 'hidden',
+  // Date Time Display
+  dateTimeContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  dateTimeCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
     ...shadow,
   },
-  heroSurface: {
-    backgroundColor: COLORS.card, 
-    paddingVertical: 16, 
-    paddingHorizontal: 16,
-  },
-  statusHeader: {
+  dateSection: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    flex: 1,
   },
-  statusTitle: { 
-    fontSize: 12, 
-    fontWeight: '600', 
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  dateText: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: '500',
+    marginLeft: 6,
   },
-  statusLine: { 
-    color: COLORS.primary, 
-    fontSize: 22, 
-    fontWeight: '800', 
-    marginTop: 4,
-    letterSpacing: -0.3,
-    textAlign: 'center',
+  timeSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timeText: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: '600',
+    marginLeft: 6,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 
+  // Enhanced Status Card
+  statusCard: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  heroSurface: {
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    ...shadowElevated,
+  },
+  statusHeader: {
+    marginBottom: 24,
+  },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statusLine: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+
+  // Enhanced Stepper
   stepperContainer: {
-    marginTop: 12, 
-    marginBottom: 12,
+    marginBottom: 24,
   },
   stepperWrap: {
-    paddingVertical: 12, 
-    paddingHorizontal: 12,
-    backgroundColor: COLORS.bgSecondary, 
-    borderRadius: 12, 
-    borderWidth: 1, 
-    borderColor: COLORS.borderLight,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  stepItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginVertical: 8,
+  stepItem: {
+    alignItems: 'center',
+    flex: 1,
     position: 'relative',
   },
   stepDot: {
-    width: 20, 
-    height: 20, 
-    borderRadius: 10,
-    borderWidth: 2, 
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-    alignItems: 'center', 
-    justifyContent: 'center',
-    zIndex: 2,
-  },
-  stepDotActive: { 
-    borderColor: COLORS.primary, 
-    backgroundColor: COLORS.primary,
-    transform: [{ scale: 1.05 }],
-  },
-  stepLabel: { 
-    marginLeft: 10, 
-    fontWeight: '600', 
-    color: COLORS.textTertiary, 
-    fontSize: 13, 
-    flexShrink: 1,
-    letterSpacing: 0.1,
-  },
-  stepLabelActive: { 
-    color: COLORS.text, 
-    fontWeight: '700' 
-  },
-  stepBar: { 
-    position: 'absolute',
-    left: 9,
-    top: 20,
-    width: 2, 
-    height: 24,
-    backgroundColor: COLORS.border,
-    borderRadius: 1,
-    zIndex: 1,
-  },
-  stepBarActive: { 
-    backgroundColor: COLORS.primary 
-  },
-
-  updateButton: {
-    alignSelf: 'stretch', 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    columnGap: 8,
-    backgroundColor: COLORS.primary, 
-    paddingHorizontal: 20, 
-    height: 48,
-    borderRadius: 12, 
-    marginTop: 12, 
-    ...shadow,
-  },
-  updateText: { 
-    color: '#fff', 
-    fontWeight: '700', 
-    fontSize: 15,
-    letterSpacing: 0.1,
-  },
-
-  /* Compact Menus */
-  menuContainer: { 
-    marginTop: 16,
-    paddingBottom: 20,
-  },
-  menuTitle: { 
-    fontSize: 18, 
-    fontWeight: '700', 
-    color: COLORS.text, 
-    marginBottom: 12, 
-    paddingHorizontal: 2,
-    letterSpacing: -0.2,
-  },
-  menuGrid: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: isTablet ? 12 : 8, 
-    justifyContent: 'space-between' 
-  },
-  menuCard: {
-    width: isTablet ? '23%' : '47%', 
-    backgroundColor: COLORS.card, 
+    width: 32,
+    height: 32,
     borderRadius: 16,
-    paddingVertical: isTablet ? 20 : 16, 
-    paddingHorizontal: isTablet ? 16 : 12, 
-    rowGap: 10,
-    borderWidth: 1, 
-    borderColor: COLORS.border, 
-    minHeight: isTablet ? 120 : 100, 
+    backgroundColor: COLORS.bgSecondary,
+    borderWidth: 2,
+    borderColor: COLORS.border,
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    ...shadow,
-  },
-  menuCardPressed: { 
-    transform: [{ scale: 0.96 }],
-    backgroundColor: COLORS.hover,
-    borderColor: COLORS.primary + '30',
-  },
-  menuIconWrap: {
-    width: 40, 
-    height: 40, 
-    borderRadius: 12,
-    backgroundColor: COLORS.primarySoft, 
-    alignItems: 'center', 
-    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  menuText: { 
-    color: COLORS.text, 
-    fontWeight: '600', 
-    fontSize: 13,
-    letterSpacing: 0.1,
+  stepDotActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  stepLabel: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 14,
+  },
+  stepLabelActive: {
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  stepBar: {
+    position: 'absolute',
+    top: 16,
+    left: '60%',
+    right: '-60%',
+    height: 2,
+    backgroundColor: COLORS.border,
+    zIndex: -1,
+  },
+  stepBarActive: {
+    backgroundColor: COLORS.primary,
+  },
+
+  // Update Button
+  updateButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadow,
+  },
+  updateText: {
+    color: COLORS.textOnPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+
+  // Quick Stats
+  statsContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    ...shadow,
+  },
+  statIconWrap: {
+    width: 32,
+    height: 32,
+    backgroundColor: COLORS.primarySoft,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+
+  // Menu Section
+  menuContainer: {
+    paddingHorizontal: 20,
+    flex: 1,
+  },
+  menuTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 16,
+  },
+  menuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  menuCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    padding: 16,
+    width: '48%',
+    aspectRatio: 1, // Makes it square
+    marginBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    ...shadow,
+  },
+  menuIconWrap: {
+    width: 36,
+    height: 36,
+    backgroundColor: COLORS.primarySoft,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  menuText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
     lineHeight: 16,
   },
 
-  /* Enhanced Modal */
-  modalBackdrop: { 
-    flex: 1, 
-    backgroundColor: 'rgba(15, 23, 42, 0.4)', 
-    alignItems: 'center', 
+  // Modal Styles
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
   },
   modalSheet: {
-    width: '100%', 
-    backgroundColor: COLORS.card, 
-    borderRadius: 24,
-    padding: 24, 
-    rowGap: 8, 
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     maxHeight: '80%',
-    ...shadowElevated,
   },
   sheetHeader: {
     alignItems: 'center',
-    marginBottom: 20,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
   },
   sheetHandle: {
     width: 40,
@@ -776,112 +883,51 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginBottom: 16,
   },
-  sheetTitle: { 
-    fontWeight: '800', 
-    color: COLORS.text, 
-    fontSize: 18, 
-    textAlign: 'center',
-    letterSpacing: -0.3,
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 8,
   },
   sheetSubtitle: {
-    color: COLORS.textSecondary,
     fontSize: 14,
+    color: COLORS.textSecondary,
     textAlign: 'center',
-    marginTop: 4,
-    fontWeight: '500',
   },
-  sheetItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    columnGap: 14, 
+  sheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: COLORS.bgSecondary,
-    borderRadius: 16,
-    marginVertical: 4,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  sheetItemPressed: {
-    backgroundColor: COLORS.primarySoft,
-    borderColor: COLORS.primary + '30',
-    transform: [{ scale: 0.98 }],
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
   },
   sheetIconContainer: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.card,
-    alignItems: 'center',
+    backgroundColor: COLORS.bgSoft,
+    borderRadius: 20,
     justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
   },
-  sheetText: { 
-    fontWeight: '600', 
-    color: COLORS.text, 
-    fontSize: 15,
+  sheetText: {
+    fontSize: 16,
+    color: COLORS.text,
+    fontWeight: '500',
     flex: 1,
-    letterSpacing: 0.1,
   },
   closeBtn: {
-    marginTop: 16, 
-    alignSelf: 'stretch', 
-    borderRadius: 16,
-    backgroundColor: COLORS.bgSecondary,
-    borderWidth: 1, 
-    borderColor: COLORS.border, 
-    height: 52, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-  },
-  closeTxt: { 
-    fontWeight: '600', 
-    color: COLORS.textSecondary, 
-    fontSize: 15,
-    letterSpacing: 0.1,
-  },
-
-  /* Compact Stats Section */
-  statsContainer: {
     marginTop: 12,
-    marginBottom: 16,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: isTablet ? 12 : 8,
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: 12,
+    marginHorizontal: 20,
+    backgroundColor: COLORS.bgSecondary,
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    minHeight: isTablet ? 100 : 80,
-    ...shadow,
   },
-  statIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: COLORS.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  statValue: {
+  closeTxt: {
     fontSize: 16,
-    fontWeight: '800',
     color: COLORS.text,
-    letterSpacing: -0.3,
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 11,
     fontWeight: '600',
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    letterSpacing: 0.1,
   },
 });

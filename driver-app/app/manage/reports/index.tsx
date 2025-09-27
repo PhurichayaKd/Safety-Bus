@@ -135,12 +135,19 @@ export default function ReportsPage() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.title}>รายงานสรุป</Text>
+        <View style={{ width: 40 }} />
+      </View>
+      
       <ScrollView
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>รายงานสรุป</Text>
           <Text style={styles.headerSubtitle}>ข้อมูลการใช้งานระบบ</Text>
         </View>
 
@@ -221,6 +228,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    ...shadow,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.backgroundSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadow,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

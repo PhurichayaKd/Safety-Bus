@@ -163,7 +163,16 @@ export default function StudentsTablePage() {
     <View style={styles.screen}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <Text style={styles.title}>ข้อมูลนักเรียน</Text>
+        <View style={styles.leftSection}>
+          <TouchableOpacity 
+            style={styles.iconBtn} 
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={20} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.title}>ข้อมูลนักเรียน</Text>
+        </View>
         <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/manage/students/form' as any)}>
           <Ionicons name="person-add-outline" size={20} color="#fff" />
           <Text style={styles.addBtnTxt}>เพิ่มนักเรียน</Text>
@@ -251,6 +260,11 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.borderLight,
     backgroundColor: COLORS.card,
     ...shadow,
+  },
+  leftSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   iconBtn: {
     width: 40, 

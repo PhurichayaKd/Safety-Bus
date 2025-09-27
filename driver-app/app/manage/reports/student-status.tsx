@@ -8,9 +8,11 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
+  SafeAreaView,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
 
 const COLORS = {
@@ -235,24 +237,41 @@ const StudentStatusReports: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.topBarTitle}>สถานะการขึ้น-ลงรถนักเรียน</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>สถานะการขึ้น-ลงรถนักเรียน</Text>
-        <Text style={styles.subtitle}>ข้อมูลการเดินทางและสถานะนักเรียน</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.topBarTitle}>สถานะการขึ้น-ลงรถนักเรียน</Text>
+        <View style={{ width: 40 }} />
       </View>
+      
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.subtitle}>ข้อมูลการเดินทางและสถานะนักเรียน</Text>
+        </View>
 
       {/* ตัวเลือกเดือนและปี */}
       <View style={[styles.card, shadow]}>
@@ -398,6 +417,7 @@ const StudentStatusReports: React.FC = () => {
         )}
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -405,6 +425,35 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    ...shadow,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topBarTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

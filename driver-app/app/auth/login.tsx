@@ -74,6 +74,15 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Back Button */}
+      <TouchableOpacity 
+        style={styles.backButton} 
+        onPress={() => router.back()}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+      </TouchableOpacity>
+      
       <View style={styles.loginCard}>
         <Image source={require('../../assets/images/logo.png')} style={styles.logo} />
         
@@ -249,5 +258,23 @@ const styles = StyleSheet.create({
   brandBus: {
     color: COLORS.primary,
     fontWeight: '700',
+  },
+  
+  backButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 40,
+    left: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 1,
   },
 });

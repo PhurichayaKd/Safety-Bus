@@ -7,8 +7,11 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  SafeAreaView,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
 
 const COLORS = {
@@ -190,24 +193,41 @@ const EmergencyReports: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.topBarTitle}>รายงานเหตุการณ์ฉุกเฉิน</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>รายงานเหตุการณ์ฉุกเฉิน</Text>
-        <Text style={styles.subtitle}>ข้อมูลการแจ้งเตือนและเหตุการณ์ฉุกเฉิน</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.topBarTitle}>รายงานเหตุการณ์ฉุกเฉิน</Text>
+        <View style={{ width: 40 }} />
       </View>
+      
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.subtitle}>ข้อมูลการแจ้งเตือนและเหตุการณ์ฉุกเฉิน</Text>
+        </View>
 
       {/* สถิติรวม */}
       <View style={styles.statsContainer}>
@@ -288,6 +308,7 @@ const EmergencyReports: React.FC = () => {
         )}
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -295,6 +316,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    ...shadow,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadow,
+  },
+  topBarTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

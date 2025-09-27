@@ -1,15 +1,19 @@
-// src/components/PassengerListPage.tsx
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+// app/(tabs)/passenger-list.tsx - Combined Map & Passenger Management
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator,
   RefreshControl, Linking, Modal, Alert, Platform, Dimensions, Pressable,
+  SafeAreaView, StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
+import * as Location from 'expo-location';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { supabase } from '../../src/services/supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
 
 /* ======= ENHANCED THEME (Professional Minimal) ======= */
@@ -17,6 +21,7 @@ const COLORS = {
   // Background & Surface
   bg: '#FAFBFC',
   bgSecondary: '#F8FAFC',
+  surface: '#FFFFFF',
   card: '#FFFFFF',
   cardElevated: '#FFFFFF',
   
@@ -32,7 +37,7 @@ const COLORS = {
   divider: '#E2E8F0',
   
   // Primary Brand (Blue)
-  primary: '#0a7ea4',        // ใช้สีจาก Colors.ts
+  primary: '#0a7ea4',
   primaryDark: '#0369A1',
   primaryLight: '#0EA5E9',
   primarySoft: '#EFF6FF',
@@ -40,6 +45,7 @@ const COLORS = {
   
   // Status Colors
   success: '#059669',
+  successLight: '#ECFDF5',
   successSoft: '#ECFDF5',
   warning: '#D97706',
   warningSoft: '#FFFBEB',
@@ -47,6 +53,9 @@ const COLORS = {
   dangerSoft: '#FEF2F2',
   info: '#2563EB',
   infoSoft: '#EFF6FF',
+  
+  // Additional Colors
+  surfaceDisabled: '#F8FAFC',
   
   // Interactive States
   hover: '#F8FAFC',
@@ -58,24 +67,35 @@ const COLORS = {
   shadowDark: 'rgba(15, 23, 42, 0.15)',
 };
 
+// Types
 type Mode = 'send' | 'stop';
 type PDDEventType = 'pickup' | 'dropoff' | 'absent';
 type TripPhase = 'go' | 'return';
 type TripStep = 'idle' | 'boarding' | 'dropping';
+type ViewMode = 'split' | 'map' | 'list';
 
 type Student = {
   student_id: number;
   student_name: string;
   grade: string;
+  student_phone?: string | null;
   status: 'active' | 'inactive' | null;
   primary_parent?: { parent_phone?: string | null } | null;
+  home_latitude?: number | null;
+  home_longitude?: number | null;
 };
+
+type StudentWithGeo = Student & { lat: number; lng: number; dist: number };
+type Pt = { lat: number; lng: number };
 
 const STORAGE_KEYS = {
   phase: 'trip_phase',
   resetFlag: 'reset_today_flag',
   date: 'last_trip_date',
 };
+
+const UPDATE_MS = 10000;
+const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 const shadow = Platform.select({
   ios: {
@@ -97,10 +117,18 @@ const shadowElevated = Platform.select({
   android: { elevation: 6 },
 });
 
-export default function PassengerListPage() {
+export default function PassengerMapPage() {
+  // Map states
+  const webRef = useRef<WebView>(null);
+  const [bus, setBus] = useState<Pt | null>(null);
+  const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
+  
+  // Passenger states
   const [phase, setPhase] = useState<TripPhase>('go');
   const [step, setStep] = useState<TripStep>('idle');
   const [mode, setMode] = useState<Mode>('send');
+  const [viewMode, setViewMode] = useState<ViewMode>('split');
+  const [mapHeight, setMapHeight] = useState(screenHeight * 0.4);
 
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,8 +137,12 @@ export default function PassengerListPage() {
   const [sheetVisible, setSheetVisible] = useState(false);
   const [selected, setSelected] = useState<Student | null>(null);
   const [saving, setSaving] = useState(false);
+  
+  // Phone popup states
+  const [phonePopupVisible, setPhonePopupVisible] = useState(false);
+  const [selectedForPhone, setSelectedForPhone] = useState<Student | null>(null);
 
-  // sets สำหรับวันนี้
+  // Sets for today's events
   const [boardedGoSet, setBoardedGoSet] = useState<Set<number>>(new Set());
   const [boardedReturnSet, setBoardedReturnSet] = useState<Set<number>>(new Set());
   const [droppedGoSet, setDroppedGoSet] = useState<Set<number>>(new Set());
@@ -118,18 +150,146 @@ export default function PassengerListPage() {
   const [absentSet, setAbsentSet] = useState<Set<number>>(new Set());
 
   const [alertsVisible, setAlertsVisible] = useState(false);
-
   const [driverId, setDriverId] = useState<number | null>(null);
   const [driverReady, setDriverReady] = useState(false);
 
-  // start-of-today (local -> toISOString เป็น UTC)
+  // Date calculations
   const startOfTodayISO = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d.toISOString();
   }, []);
 
-  /* ---------- phase จาก AsyncStorage + reset flag ---------- */
+  // Map utilities
+  const driverIdRef = useRef<number | null>(null);
+  const getMyDriverId = useCallback(async () => {
+    if (driverIdRef.current) return driverIdRef.current;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase.from('driver_bus').select('driver_id').eq('auth_user_id', user.id).single();
+    driverIdRef.current = data?.driver_id ?? null;
+    return driverIdRef.current;
+  }, []);
+
+  const calculateDistance = useCallback((a: Pt, b: Pt) => {
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const R = 6371;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const la1 = toRad(a.lat);
+    const la2 = toRad(b.lat);
+    const aa = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(aa));
+  }, []);
+
+  const studentsWithGeo: StudentWithGeo[] = useMemo(() => {
+    if (!bus) {
+      // If no bus location, show all students without distance sorting
+      return students.map(student => {
+        const lat = student.home_latitude;
+        const lng = student.home_longitude;
+        return { ...student, lat: lat || 0, lng: lng || 0, dist: 0 };
+      });
+    }
+    
+    return students.map(student => {
+      const lat = student.home_latitude;
+      const lng = student.home_longitude;
+      if (lat == null || lng == null) {
+        // Include students without coordinates with distance 999 (will be sorted last)
+        return { ...student, lat: 0, lng: 0, dist: 999 };
+      }
+      return { ...student, lat, lng, dist: calculateDistance(bus, { lat, lng }) };
+    }).sort((a: any, b: any) => a.dist - b.dist) as StudentWithGeo[];
+  }, [students, bus, calculateDistance]);
+
+  // Map HTML
+  const mapHTML = useMemo(() => {
+    const INIT = bus ?? { lat: 13.7563, lng: 100.5018 };
+    return `
+<!doctype html><html><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  html,body,#map{height:100%;margin:0;font-family:system-ui}
+  .num{background:#0a7ea4;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font:bold 14px system-ui;border:3px solid #fff;box-shadow:0 4px 12px rgba(10,126,164,.3)}
+  .bus-marker{background:#059669;width:16px;height:16px;border-radius:50%;border:4px solid #fff;box-shadow:0 4px 12px rgba(5,150,105,.4)}
+</style>
+</head><body>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([${INIT.lat},${INIT.lng}], 15);
+L.tileLayer('${TILE_URL}', {maxZoom: 19, attribution: '&copy; OpenStreetMap'}).addTo(map);
+
+let busMarker = L.circleMarker([${INIT.lat},${INIT.lng}],{radius:10,color:'#059669',fillColor:'#059669',fill:true,fillOpacity:.9,weight:4}).addTo(map).bindPopup('🚌 ตำแหน่งรถ');
+let stuMarkers = []; let routeLine=null;
+
+function clearStudents(){stuMarkers.forEach(m=>m.remove());stuMarkers=[]; if(routeLine){routeLine.remove();routeLine=null;}}
+function setBus(lat,lng){busMarker.setLatLng([lat,lng]);}
+function addStudents(items){
+  clearStudents();
+  items.forEach((s, i)=>{
+    const ic = L.divIcon({html:'<div class="num">'+(i+1)+'</div>', className:'', iconSize:[28,28], iconAnchor:[14,14]});
+    const m = L.marker([s.lat,s.lng],{icon:ic}).addTo(map).bindPopup('👦 '+(i+1)+'. '+(s.student_name||'นักเรียน'));
+    stuMarkers.push(m);
+  });
+}
+function drawRoute(to){
+  if(routeLine) {routeLine.remove();routeLine=null;}
+  if(!to) return;
+  routeLine = L.polyline([[to.bus.lat,to.bus.lng],[to.stu.lat,to.stu.lng]],{color:'#0a7ea4',weight:4,opacity:.8,dashArray:'10,5'}).addTo(map);
+  map.fitBounds(L.latLngBounds([[to.bus.lat,to.bus.lng],[to.stu.lat,to.stu.lng]]),{padding:[30,30]});
+}
+
+function handle(raw){
+  try{
+    const m = JSON.parse(raw||'{}');
+    if(m.type==='bus') setBus(m.lat,m.lng);
+    if(m.type==='students') addStudents(m.items||[]);
+    if(m.type==='route') drawRoute(m.to||null);
+  }catch(e){}
+}
+document.addEventListener('message',e=>handle(e.data));
+window.addEventListener('message',e=>handle(e.data));
+</script></body></html>`;
+  }, [bus]);
+
+  const sendToMap = useCallback((payload: any) => {
+    const s = JSON.stringify(payload).replace(/\\/g,'\\\\').replace(/`/g,'\\`');
+    webRef.current?.injectJavaScript(`(function(){window.dispatchEvent(new MessageEvent('message',{data:\`${s}\`}));})();true;`);
+  }, []);
+
+  // Location permission
+  const requestLocationPermission = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationPermission(status === 'granted');
+      if (status !== 'granted') {
+        Alert.alert(
+          'ต้องการสิทธิ์เข้าถึงตำแหน่ง',
+          'แอปต้องการเข้าถึงตำแหน่งของคุณเพื่อแสดงตำแหน่งรถบนแผนที่',
+          [
+            { text: 'ยกเลิก', style: 'cancel' },
+            { text: 'ตั้งค่า', onPress: () => Location.requestForegroundPermissionsAsync() }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error requesting location permission:', error);
+      setLocationPermission(false);
+    }
+  };
+
+  // Check location permission on mount
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      setLocationPermission(status === 'granted');
+    })();
+  }, []);
+
+  // Phase from AsyncStorage
   useFocusEffect(
     useCallback(() => {
       (async () => {
@@ -145,35 +305,34 @@ export default function PassengerListPage() {
     }, [])
   );
 
-  /* ---------- driver_id ---------- */
+  // Driver ID setup
   useEffect(() => {
     (async () => {
-      try {
-        const { data: auth } = await supabase.auth.getUser();
-        const uid = auth?.user?.id;
-        if (!uid) throw new Error('ยังไม่พบผู้ใช้ที่ล็อกอิน');
-
-        const { data, error } = await supabase
-          .from('driver_bus')
-          .select('driver_id')
-          .eq('auth_user_id', uid)
-          .maybeSingle();
-
-        if (error) throw error;
-        if (!data?.driver_id) throw new Error('ไม่พบ driver_id ของบัญชีนี้');
-
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data } = await supabase.from('driver_bus')
+        .select('driver_id')
+        .eq('auth_user_id', user.id)
+        .single();
+      
+      if (data?.driver_id) {
         setDriverId(data.driver_id);
-      } catch (e: any) {
-        Alert.alert('แจ้งเตือน', e?.message || 'ไม่สามารถค้นหา driver_id ได้');
-      } finally {
         setDriverReady(true);
       }
     })();
   }, []);
 
-  /* ---------- students ---------- */
+  const softResetSets = () => {
+    setBoardedGoSet(new Set());
+    setBoardedReturnSet(new Set());
+    setDroppedGoSet(new Set());
+    setDroppedReturnSet(new Set());
+    setAbsentSet(new Set());
+  };
+
+  // Load students
   const fetchStudents = useCallback(async () => {
-    setLoading(true);
     const { data, error } = await supabase
       .from('students')
       .select(`
@@ -181,7 +340,9 @@ export default function PassengerListPage() {
         student_name,
         grade,
         status,
-        primary_parent:parents!students_parent_id_fkey ( parent_phone )
+        home_latitude,
+        home_longitude,
+        primary_parent:students_parent_id_fkey ( parent_phone )
       `)
       .order('student_id', { ascending: true });
 
@@ -194,7 +355,7 @@ export default function PassengerListPage() {
     setLoading(false);
   }, []);
 
-  /* ---------- events today (ของ driver นี้เท่านั้น) ---------- */
+  // Load today's events
   const fetchTodayEvents = useCallback(async () => {
     if (!driverId) { softResetSets(); return; }
 
@@ -243,361 +404,308 @@ export default function PassengerListPage() {
     })();
   }, [fetchStudents, fetchTodayEvents]);
 
-  const onRefresh = async () => {
+  // Location tracking
+  useEffect(() => {
+    let interval: any;
+
+    const startLocationTracking = async () => {
+      if (locationPermission) {
+        const ping = async () => {
+          try {
+            const pos = await Location.getCurrentPositionAsync({accuracy: Location.Accuracy.Balanced});
+            const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setBus(pt);
+            
+            // Persist location data
+            const driverId = await getMyDriverId();
+            if(driverId){
+              const nowISO = new Date().toISOString();
+              await supabase.from('driver_bus').update({
+                current_latitude: pt.lat, current_longitude: pt.lng, current_updated_at: nowISO
+              }).eq('driver_id', driverId);
+              await supabase.from('live_driver_locations').upsert({
+                driver_id: driverId, latitude: pt.lat, longitude: pt.lng, last_updated: nowISO
+              });
+            }
+          } catch (error) {
+            console.error('Error getting location:', error);
+          }
+        };
+        
+        await ping();
+        interval = setInterval(ping, UPDATE_MS);
+      }
+    };
+
+    startLocationTracking();
+    return () => interval && clearInterval(interval);
+  }, [locationPermission, getMyDriverId]);
+
+  // Send data to map
+  useEffect(() => { 
+    if(bus) sendToMap({type:'bus', lat:bus.lat, lng:bus.lng}); 
+  }, [bus, sendToMap]);
+  
+  useEffect(() => { 
+    if(studentsWithGeo.length) sendToMap({
+      type:'students',
+      items:studentsWithGeo.map(s=>({
+        student_id:s.student_id,
+        student_name:s.student_name,
+        lat:s.lat,
+        lng:s.lng
+      }))
+    }); 
+  }, [studentsWithGeo, sendToMap]);
+  
+  useEffect(() => { 
+    if(bus && studentsWithGeo[0]) {
+      sendToMap({type:'route', to:{ bus, stu:{lat:studentsWithGeo[0].lat, lng:studentsWithGeo[0].lng} }});
+    } else {
+      sendToMap({type:'route',to:null});
+    }
+  }, [bus, studentsWithGeo, sendToMap]);
+
+  // Event handlers
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchStudents();
-    await fetchTodayEvents();
+    await Promise.all([fetchStudents(), fetchTodayEvents()]);
     setRefreshing(false);
-  };
+  }, [fetchStudents, fetchTodayEvents]);
 
-  /* ---------- helpers ---------- */
-  const softResetSets = () => {
-    setBoardedGoSet(new Set());
-    setBoardedReturnSet(new Set());
-    setDroppedGoSet(new Set());
-    setDroppedReturnSet(new Set());
-    setAbsentSet(new Set());
-  };
-
-  const alreadyToday = (student_id: number, event_type: PDDEventType, loc: 'go'|'return') => {
-    if (event_type === 'pickup') {
-      return loc === 'go' ? boardedGoSet.has(student_id) : boardedReturnSet.has(student_id);
-    }
-    if (event_type === 'dropoff') {
-      return loc === 'go' ? droppedGoSet.has(student_id) : droppedReturnSet.has(student_id);
-    }
-    if (event_type === 'absent') return absentSet.has(student_id);
-    return false;
-  };
-
-  /* ====== อัปเดตชุดข้อมูลแบบ incremental เมื่อมี Realtime ====== */
-  const applyPDDEventToLocalSets = useCallback((row: any) => {
-    if (!row) return;
-
-    // สนใจเฉพาะเหตุการณ์ของ driver นี้ และเป็น "วันนี้"
-    if (driverId && row.driver_id && row.driver_id !== driverId) return;
-
-    const eventTime = new Date(row.event_time ?? row.created_at ?? Date.now());
-    const start = new Date(startOfTodayISO);
-    if (eventTime < start) return;
-
-    const sid: number = row.student_id;
-    const type: PDDEventType = row.event_type;
-    const loc: 'go' | 'return' = (row.location_type === 'return') ? 'return' : 'go';
-
-    if (loc === 'go') {
-      if (type === 'pickup') {
-        setBoardedGoSet(prev => new Set(prev).add(sid));
-        setAbsentSet(prev => { const n = new Set(prev); n.delete(sid); return n; });
-      } else if (type === 'dropoff') {
-        setDroppedGoSet(prev => new Set(prev).add(sid));
-      } else if (type === 'absent') {
-        setAbsentSet(prev => new Set(prev).add(sid));
-        setBoardedGoSet(prev => { const n = new Set(prev); n.delete(sid); return n; });
-        setDroppedGoSet(prev => { const n = new Set(prev); n.delete(sid); return n; });
-      }
-    } else {
-      if (type === 'pickup') {
-        setBoardedReturnSet(prev => new Set(prev).add(sid));
-        setAbsentSet(prev => { const n = new Set(prev); n.delete(sid); return n; });
-      } else if (type === 'dropoff') {
-        setDroppedReturnSet(prev => new Set(prev).add(sid));
-      } else if (type === 'absent') {
-        setAbsentSet(prev => new Set(prev).add(sid));
-        setBoardedReturnSet(prev => { const n = new Set(prev); n.delete(sid); return n; });
-        setDroppedReturnSet(prev => { const n = new Set(prev); n.delete(sid); return n; });
-      }
-    }
-  }, [startOfTodayISO, driverId]);
-
-  /* ---------- Realtime subscribe (เฉพาะตารางนี้) ---------- */
-  useEffect(() => {
-    if (!driverReady) return;
-
-    const channel = supabase
-      .channel('pickup_dropoff_realtime')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'pickup_dropoff' },
-        (payload) => {
-          const row = payload.new ?? payload.old;
-          if (!row) return;
-          applyPDDEventToLocalSets(row);
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [driverReady, applyPDDEventToLocalSets]);
-
-  /* ---------- คำนวณ step อัตโนมัติ ---------- */
-  useEffect(() => {
-    const activeCount = students.filter(s => s.status === 'active').length;
-    const targetGo = Math.max(0, activeCount - absentSet.size);
-    const targetReturn = boardedGoSet.size;
-
-    let next: TripStep = 'idle';
-    if (phase === 'go') {
-      if (boardedGoSet.size < targetGo) next = 'boarding';
-      else if (droppedGoSet.size < boardedGoSet.size) next = 'dropping';
-      else next = 'idle';
-    } else {
-      if (boardedReturnSet.size < targetReturn) next = 'boarding';
-      else if (droppedReturnSet.size < boardedReturnSet.size) next = 'dropping';
-      else next = 'idle';
-    }
-    setStep(next);
-  }, [phase, students, absentSet, boardedGoSet, droppedGoSet, boardedReturnSet, droppedReturnSet]);
-
-  /* ---------- state ของแต่ละคน ---------- */
-  const stateOf = useCallback(
-    (s: Student): 'pending' | 'boarded' | 'onbus' | 'absent' => {
-      const sid = s.student_id;
-      if (absentSet.has(sid)) return 'absent';
-
-      if (phase === 'go') {
-        const boarded = boardedGoSet.has(sid);
-        const dropped = droppedGoSet.has(sid);
-        if (step === 'boarding') {
-          if (dropped) return 'boarded';
-          return boarded ? 'boarded' : 'pending';
-        }
-        if (boarded && !dropped) return 'onbus';
-        if (boarded && dropped) return 'boarded';
-        return 'pending';
-      } else {
-        const boarded = boardedReturnSet.has(sid);
-        const dropped = droppedReturnSet.has(sid);
-        if (step === 'boarding') {
-          if (dropped) return 'boarded';
-          return boarded ? 'boarded' : 'pending';
-        }
-        if (boarded && !dropped) return 'onbus';
-        if (boarded && dropped) return 'boarded';
-        return 'pending';
-      }
-    },
-    [phase, step, absentSet, boardedGoSet, boardedReturnSet, droppedGoSet, droppedReturnSet]
-  );
-
-  /* ---------- ลิสต์สำหรับแสดง ---------- */
-  const listForRender = useMemo(() => {
-    if (mode === 'stop') {
-      return [...students].filter((s) => stateOf(s) === 'absent');
-    }
-    const arr = [...students].filter((s) => s.status === 'active' && stateOf(s) !== 'absent');
-
-    if (step === 'boarding') {
-      const pending = arr.filter((s) => {
-        const sid = s.student_id;
-        return phase === 'go'
-          ? !boardedGoSet.has(sid)
-          : !boardedReturnSet.has(sid);
-      });
-      const boardedNotDropped = arr.filter((s) => {
-        const sid = s.student_id;
-        return phase === 'go'
-          ? (boardedGoSet.has(sid) && !droppedGoSet.has(sid))
-          : (boardedReturnSet.has(sid) && !droppedReturnSet.has(sid));
-      });
-      return [...pending, ...boardedNotDropped];
-    }
-
-    if (step === 'dropping') {
-      return arr.filter((s) => stateOf(s) === 'onbus');
-    }
-
-    return arr.sort((a, b) => a.student_id - b.student_id);
-  }, [students, mode, step, stateOf, phase, boardedGoSet, boardedReturnSet, droppedGoSet, droppedReturnSet]);
-
-  /* ---------- โทร ---------- */
-  const callNumber = (phone?: string | null) => {
-    if (phone) Linking.openURL(`tel:${phone}`);
-  };
-
-  /* ---------- sheet ---------- */
-  const openSheet = (item: Student) => {
-    setSelected(item);
+  const handleStudentPress = (student: Student) => {
+    setSelected(student);
     setSheetVisible(true);
   };
 
-  /* ---------- Insert Event ---------- */
-  const insertPDDEvent = async (
-    student_id: number,
-    event_type: PDDEventType,
-    byParent: boolean
-  ) => {
-    if (!driverId) throw new Error('ไม่พบ driver_id');
-    const locType: 'go' | 'return' = phase === 'return' ? 'return' : 'go';
-
-    if (alreadyToday(student_id, event_type, locType)) return;
-
-    const payload: any = {
-      student_id,
-      driver_id: driverId,
-      event_type,
-      location_type: locType,
-    };
-    if (event_type === 'pickup') {
-      payload.pickup_source = byParent ? 'parent' : 'driver';
-    }
-
-    try {
-      const { error } = await supabase.from('pickup_dropoff').insert([payload]);
-      if (error) throw error;
-    } catch (e: any) {
-      const code = e?.code || e?.details?.code;
-      // 23505 = unique violation, 23P01 = exclusion violation (กันสแกนถี่)
-      if (code !== '23505' && code !== '23P01') {
-        throw e;
-      }
-      // ถ้าชน constraint ให้ถือว่า "มีรายการอยู่แล้ว" → ไม่ต้องเด้ง error
-    }
-
-    // sync local (idempotent)
-    if (locType === 'go') {
-      if (event_type === 'pickup') {
-        setBoardedGoSet((prev) => new Set(prev).add(student_id));
-        setAbsentSet((prev) => { const n = new Set(prev); n.delete(student_id); return n; });
-      } else if (event_type === 'dropoff') {
-        setDroppedGoSet((prev) => new Set(prev).add(student_id));
-      } else if (event_type === 'absent') {
-        setAbsentSet((prev) => new Set(prev).add(student_id));
-        setBoardedGoSet((prev) => { const n = new Set(prev); n.delete(student_id); return n; });
-        setDroppedGoSet((prev) => { const n = new Set(prev); n.delete(student_id); return n; });
-      }
-    } else {
-      if (event_type === 'pickup') {
-        setBoardedReturnSet((prev) => new Set(prev).add(student_id));
-        setAbsentSet((prev) => { const n = new Set(prev); n.delete(student_id); return n; });
-      } else if (event_type === 'dropoff') {
-        setDroppedReturnSet((prev) => new Set(prev).add(student_id));
-      } else if (event_type === 'absent') {
-        setAbsentSet((prev) => new Set(prev).add(student_id));
-        setBoardedReturnSet((prev) => { const n = new Set(prev); n.delete(student_id); return n; });
-        setDroppedReturnSet((prev) => { const n = new Set(prev); n.delete(student_id); return n; });
-      }
-    }
+  const handlePhaseToggle = async () => {
+    const newPhase = phase === 'go' ? 'return' : 'go';
+    setPhase(newPhase);
+    await AsyncStorage.setItem(STORAGE_KEYS.phase, newPhase);
   };
 
-  const handleMarkBoarded = async (byParent = false) => {
-    if (!selected || !driverReady) return;
-    setSaving(true);
-    try {
-      await insertPDDEvent(selected.student_id, 'pickup', byParent);
-      setSheetVisible(false);
-    } catch (e: any) {
-      Alert.alert('เกิดข้อผิดพลาด', e?.message || 'บันทึกไม่สำเร็จ');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleMarkDropped = async () => {
-    if (!selected || !driverReady) return;
-    setSaving(true);
-    try {
-      await insertPDDEvent(selected.student_id, 'dropoff', false);
-      setSheetVisible(false);
-    } catch (e: any) {
-      Alert.alert('เกิดข้อผิดพลาด', e?.message || 'บันทึกไม่สำเร็จ');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleMarkAbsent = async () => {
-    if (!selected || !driverReady) return;
-    setSaving(true);
-    try {
-      await insertPDDEvent(selected.student_id, 'absent', false);
-      setSheetVisible(false);
-    } catch (e: any) {
-      Alert.alert('เกิดข้อผิดพลาด', e?.message || 'บันทึกไม่สำเร็จ');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* ---------- UI ของแต่ละรายการ ---------- */
-  const renderItem = ({ item, index }: { item: Student; index: number }) => {
-    const st = stateOf(item);
-
-    const dotColor =
-      st === 'pending' ? '#9CA3AF' :
-      st === 'boarded' ? '#22C55E' :
-      st === 'onbus' ? '#F59E0B' : '#EF4444';
-    const chipBg =
-      st === 'pending' ? '#F3F4F6' :
-      st === 'boarded' ? '#E8FCEB' :
-      st === 'onbus' ? '#FEF3C7' : '#FFECEC';
-
-    let label = 'สถานะ';
-    if (step === 'boarding') {
-      if (st === 'pending') {
-        label = phase === 'go' ? 'ยังไม่ขึ้นรถ' : 'รอขึ้นรถกลับ';
-      } else {
-        label = phase === 'go' ? 'ขึ้นรถแล้ว' : 'ลงรถ';
-      }
-    } else if (step === 'dropping') {
-      label = st === 'onbus' ? 'ยังไม่ลงรถ' : 'ลงรถแล้ว';
-    } else {
-      label = st === 'absent' ? 'ลา/หยุด' : (phase === 'go' ? 'รอขึ้นรถ' : 'รอขึ้นรถกลับ');
-    }
-
-    const order = index + 1;
-
-    return (
-      <Pressable 
-        style={({ pressed }) => [
-          styles.card,
-          pressed && styles.cardPressed
-        ]} 
-        onPress={() => openSheet(item)} 
-        accessibilityRole="button"
-        accessibilityLabel={`นักเรียน ${item.student_name} ชั้น ${item.grade} สถานะ ${label}`}
-        accessibilityHint="แตะเพื่อดูตัวเลือกการจัดการสถานะ"
-        accessibilityState={{ selected: selected?.student_id === item.student_id }}
+  // Render functions
+  const renderViewModeToggle = () => (
+    <View style={styles.viewToggleContainer}>
+      <TouchableOpacity
+        style={[styles.viewToggleButton, viewMode === 'split' && styles.viewToggleActive]}
+        onPress={() => setViewMode('split')}
       >
-        <View style={styles.orderBadge}>
-          <Text style={styles.orderText}>{order}</Text>
-        </View>
+        <Ionicons name="grid-outline" size={18} color={viewMode === 'split' ? COLORS.card : COLORS.textSecondary} />
+        <Text style={[styles.viewToggleText, viewMode === 'split' && styles.viewToggleTextActive]}>แยกหน้า</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.viewToggleButton, viewMode === 'map' && styles.viewToggleActive]}
+        onPress={() => setViewMode('map')}
+      >
+        <Ionicons name="map-outline" size={18} color={viewMode === 'map' ? COLORS.card : COLORS.textSecondary} />
+        <Text style={[styles.viewToggleText, viewMode === 'map' && styles.viewToggleTextActive]}>แผนที่</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.viewToggleButton, viewMode === 'list' && styles.viewToggleActive]}
+        onPress={() => setViewMode('list')}
+      >
+        <Ionicons name="list-outline" size={18} color={viewMode === 'list' ? COLORS.card : COLORS.textSecondary} />
+        <Text style={[styles.viewToggleText, viewMode === 'list' && styles.viewToggleTextActive]}>รายชื่อ</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
-        <View style={[styles.avatar, { backgroundColor: chipBg }]}>
-          <Text style={[styles.avatarText, { color: dotColor }]}>
-            {item.student_name?.charAt(0) || '?'}
-          </Text>
-        </View>
+  const getStudentStatus = (student: Student) => {
+    const sid = student.student_id;
+    if (absentSet.has(sid)) return { status: 'absent', color: COLORS.textMuted, icon: 'close-circle', label: 'ขาด' };
+    
+    if (phase === 'go') {
+      if (droppedGoSet.has(sid)) return { status: 'dropped', color: COLORS.success, icon: 'checkmark-circle', label: 'ส่งแล้ว' };
+      if (boardedGoSet.has(sid)) return { status: 'boarded', color: COLORS.warning, icon: 'car', label: 'ขึ้นรถ' };
+      return { status: 'waiting', color: COLORS.textTertiary, icon: 'time-outline', label: 'รอรับ' };
+    } else {
+      if (droppedReturnSet.has(sid)) return { status: 'dropped', color: COLORS.success, icon: 'checkmark-circle', label: 'ส่งแล้ว' };
+      if (boardedReturnSet.has(sid)) return { status: 'boarded', color: COLORS.warning, icon: 'car', label: 'ขึ้นรถ' };
+      return { status: 'waiting', color: COLORS.textTertiary, icon: 'time-outline', label: 'รอรับ' };
+    }
+  };
 
-        <View style={styles.info}>
-          <View style={styles.nameRow}>
-            <Text style={styles.name} numberOfLines={1}>{item.student_name}</Text>
-            <Text style={styles.grade}>{item.grade}</Text>
-          </View>
-          <View style={[styles.statusChip, { backgroundColor: chipBg }]}>
-            <View style={[styles.dot, { backgroundColor: dotColor }]} />
-            <Text style={[styles.statusChipText, { color: dotColor }]}>{label}</Text>
-          </View>
-        </View>
+  const handleStudentPhonePress = (phoneNumber: string) => {
+    Linking.openURL(`tel:${phoneNumber}`);
+  };
 
-        <TouchableOpacity
-          onPress={() => callNumber(item.primary_parent?.parent_phone)}
-          style={styles.callBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel={`โทรหาผู้ปกครองของ ${item.student_name}`}
-          accessibilityHint="แตะเพื่อโทรหาผู้ปกครอง"
+  const handleParentPhonePress = (phoneNumber: string) => {
+    Linking.openURL(`tel:${phoneNumber}`);
+  };
+
+  const handlePhonePress = (student: Student) => {
+    setSelectedForPhone(student);
+    setPhonePopupVisible(true);
+  };
+
+  const handleCallStudent = () => {
+    if (selectedForPhone?.student_phone) {
+      Linking.openURL(`tel:${selectedForPhone.student_phone}`);
+    }
+    setPhonePopupVisible(false);
+  };
+
+  const handleCallParent = () => {
+    if (selectedForPhone?.primary_parent?.parent_phone) {
+      Linking.openURL(`tel:${selectedForPhone.primary_parent.parent_phone}`);
+    }
+    setPhonePopupVisible(false);
+  };
+
+  const handleStatusUpdate = async (eventType: PDDEventType) => {
+    if (!selected || !driverId) return;
+    
+    setSheetVisible(false);
+    
+    try {
+      const now = new Date().toISOString();
+      const location = phase === 'go' ? 'go' : 'return';
+      
+      // Insert into pickup_dropoff table
+      const { error } = await supabase
+        .from('pickup_dropoff')
+        .insert({
+          student_id: selected.student_id,
+          driver_id: driverId,
+          event_type: eventType,
+          event_time: now,
+          location: location,
+        });
+
+      if (error) {
+        console.error('Error updating status:', error);
+        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปเดตสถานะได้');
+        return;
+      }
+
+      // Update local state
+      const sid = selected.student_id;
+      if (eventType === 'pickup') {
+        if (phase === 'go') {
+          setBoardedGoSet(prev => new Set([...prev, sid]));
+        } else {
+          setBoardedReturnSet(prev => new Set([...prev, sid]));
+        }
+      } else if (eventType === 'dropoff') {
+        if (phase === 'go') {
+          setDroppedGoSet(prev => new Set([...prev, sid]));
+        } else {
+          setDroppedReturnSet(prev => new Set([...prev, sid]));
+        }
+      } else if (eventType === 'absent') {
+        setAbsentSet(prev => new Set([...prev, sid]));
+      }
+
+      // Show success message
+      const statusText = eventType === 'pickup' ? 'ขึ้นรถแล้ว' : 
+                        eventType === 'dropoff' ? 'ส่งแล้ว' : 'หยุด';
+      Alert.alert('สำเร็จ', `อัปเดตสถานะ "${statusText}" สำหรับ ${selected.student_name} แล้ว`);
+      
+    } catch (error) {
+      console.error('Error updating student status:', error);
+      Alert.alert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการอัปเดตสถานะ');
+    }
+  };
+
+  const handlePanGesture = (event: any) => {
+    if (event.nativeEvent.state === State.ACTIVE) {
+      const newHeight = mapHeight + event.nativeEvent.translationY;
+      const minHeight = screenHeight * 0.2; // ขั้นต่ำ 20% - ไม่ให้รายชื่อปิดแผนที่ทั้งหมด
+      const maxHeight = screenHeight * 0.8; // สูงสุด 80% - ไม่ให้แผนที่ปิดรายชื่อทั้งหมด
+      
+      if (newHeight >= minHeight && newHeight <= maxHeight) {
+        setMapHeight(newHeight);
+      }
+    }
+  };
+
+  const StudentItem = ({ item, index }: { item: StudentWithGeo; index: number }) => {
+    const statusInfo = getStudentStatus(item);
+    const studentPhone = item.student_phone;
+    const parentPhone = item.primary_parent?.parent_phone;
+    
+    const handlePhoneButtonPress = (e: any) => {
+      e.stopPropagation();
+      handlePhonePress(item);
+    };
+    
+    return (
+      <TouchableOpacity 
+        style={styles.studentCard}
+        onPress={() => handleStudentPress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.studentNumber}>
+          <Text style={styles.studentNumberText}>{index + 1}</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.studentInfoTouchable}
+          onPress={() => handleStudentPress(item)}
+          activeOpacity={1}
         >
-          <Ionicons name="call" size={18} color={COLORS.primary} />
+          <View style={styles.studentInfo}>
+            <Text style={styles.studentName}>{item.student_name}</Text>
+            <View style={styles.studentDetails}>
+              <View style={styles.detailRow}>
+                <Ionicons name="school-outline" size={14} color={COLORS.textSecondary} />
+                <Text style={styles.studentGrade}>ชั้น {item.grade}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Ionicons name={statusInfo.icon as any} size={14} color={statusInfo.color} />
+                <Text style={[styles.statusText, { color: statusInfo.color }]}>
+                  {statusInfo.label}
+                </Text>
+              </View>
+            </View>
+          </View>
         </TouchableOpacity>
-      </Pressable>
+        {/* ปุ่มโทร */}
+        {(studentPhone || parentPhone) ? (
+          <TouchableOpacity 
+            style={styles.phoneIconButton}
+            onPress={handlePhoneButtonPress}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="call" size={22} color={COLORS.primary} />
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.phoneIconButton, styles.phoneIconButtonDisabled]}>
+            <Ionicons name="call" size={22} color={COLORS.textMuted} />
+          </View>
+        )}
+      </TouchableOpacity>
     );
   };
 
+  // Loading state
   if (loading || !driverReady) {
     return (
-      <View style={styles.loadingWrap}>
-        <ActivityIndicator size="large" />
-        <Text style={{ marginTop: 8, color: '#6B7280' }}>กำลังโหลดข้อมูล...</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
       </View>
+    );
+  }
+
+  // Location permission request
+  if (locationPermission === null) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.permissionContainer}>
+          <View style={styles.permissionIconWrap}>
+            <Ionicons name="location-outline" size={48} color={COLORS.primary} />
+          </View>
+          <Text style={styles.permissionTitle}>ต้องการสิทธิ์เข้าถึงตำแหน่ง</Text>
+          <Text style={styles.permissionSubtitle}>
+            แอปต้องการเข้าถึงตำแหน่งของคุณเพื่อแสดงตำแหน่งรถบนแผนที่และคำนวณเส้นทางไปยังนักเรียน
+          </Text>
+          <TouchableOpacity style={styles.permissionButton} onPress={requestLocationPermission}>
+            <Ionicons name="checkmark" size={20} color="#fff" />
+            <Text style={styles.permissionButtonText}>อนุญาต</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -607,292 +715,357 @@ export default function PassengerListPage() {
   const absent = absentSet.size;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+      
       {/* Enhanced Header */}
       <View style={styles.headerContainer}>
         <View style={styles.headerContent}>
           <View style={styles.brandSection}>
-            <View style={styles.logoContainer}>
-              <Ionicons name="people" size={24} color={COLORS.primary} />
-            </View>
+            <Ionicons name="bus" size={24} color={COLORS.primary} />
             <View style={styles.brandText}>
-              <Text style={styles.appTitle}>รายชื่อผู้โดยสาร</Text>
+              <Text style={styles.appTitle}>แผนที่ & รายชื่อผู้โดยสาร</Text>
               <View style={styles.titleRow}>
-                <Text style={styles.subtitle}>จัดการข้อมูลนักเรียน</Text>
-                <View style={styles.statusBadge}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>ออนไลน์</Text>
-                </View>
+                <Text style={styles.subtitle}>จัดการเส้นทางและนักเรียน</Text>
+                {bus && (
+                  <View style={styles.statusBadge}>
+                    <View style={styles.statusDot} />
+                    <Text style={styles.statusText}>ออนไลน์</Text>
+                  </View>
+                )}
               </View>
             </View>
           </View>
+          
           <TouchableOpacity 
             onPress={() => setAlertsVisible(true)} 
-            style={styles.bellButton} 
-            accessibilityLabel="การแจ้งเตือน"
+            style={styles.bellButton}
           >
-            <Ionicons name="notifications-outline" size={20} color={COLORS.primary} />
+            <Ionicons name="notifications-outline" size={20} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Enhanced Summary Stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: COLORS.card }]}>
-            <View style={[styles.statIconWrap, { backgroundColor: COLORS.primarySoft }]}>
-              <Ionicons name="people" size={16} color={COLORS.primary} />
-            </View>
-            <Text style={styles.statValue}>{total}</Text>
+        {/* View Mode Toggle */}
+        {renderViewModeToggle()}
+
+        {/* Stats Row */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{total}</Text>
             <Text style={styles.statLabel}>ทั้งหมด</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: COLORS.card }]}>
-            <View style={[styles.statIconWrap, { backgroundColor: COLORS.successSoft }]}>
-              <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-            </View>
-            <Text style={styles.statValue}>{came}</Text>
-            <Text style={styles.statLabel}>มาแล้ว</Text>
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, {color: COLORS.warning}]}>{came}</Text>
+            <Text style={styles.statLabel}>ขึ้นรถ</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: COLORS.card }]}>
-            <View style={[styles.statIconWrap, { backgroundColor: COLORS.infoSoft }]}>
-              <Ionicons name="arrow-back-circle" size={16} color={COLORS.info} />
-            </View>
-            <Text style={styles.statValue}>{back}/{came}</Text>
-            <Text style={styles.statLabel}>กลับบ้าน</Text>
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, {color: COLORS.success}]}>{back}</Text>
+            <Text style={styles.statLabel}>ลงรถ</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: COLORS.card }]}>
-            <View style={[styles.statIconWrap, { backgroundColor: COLORS.dangerSoft }]}>
-              <Ionicons name="close-circle" size={16} color={COLORS.danger} />
-            </View>
-            <Text style={styles.statValue}>{absent}</Text>
-            <Text style={styles.statLabel}>ลา/หยุด</Text>
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, {color: COLORS.textMuted}]}>{absent}</Text>
+            <Text style={styles.statLabel}>ขาด</Text>
           </View>
         </View>
       </View>
 
-      {/* Enhanced Toggle */}
-      <View style={styles.toggleContainer}>
-        <View style={styles.toggleWrapper}>
-          <Pressable 
-            style={({ pressed }) => [
-              styles.toggleBtn, 
-              mode === 'send' && styles.toggleActive,
-              pressed && styles.togglePressed
-            ]} 
-            onPress={() => setMode('send')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: mode === 'send' }}
-          >
-            <View style={styles.toggleContent}>
-              <Ionicons 
-                name={phase === 'go' ? 'bus' : 'home'} 
-                size={16} 
-                color={mode === 'send' ? '#fff' : COLORS.textSecondary} 
-              />
-              <Text style={[styles.toggleText, mode === 'send' && styles.toggleTextActive]}>
-                {phase === 'go'
-                  ? (step === 'dropping' ? 'ลงรถ (เช้า)' : 'รับ–ส่ง (เช้า)')
-                  : (step === 'dropping' ? 'ลงรถ (เย็น)' : 'รับกลับบ้าน')}
+      {/* Main Content */}
+      <View style={styles.mainContent}>
+        {/* Map Section */}
+        {(viewMode === 'split' || viewMode === 'map') && (
+          <View style={[
+            styles.mapSection,
+            viewMode === 'map' ? styles.mapFullHeight : { height: mapHeight }
+          ]}>
+            <WebView 
+              ref={webRef} 
+              source={{ html: mapHTML }} 
+              originWhitelist={['*']} 
+              javaScriptEnabled 
+              domStorageEnabled 
+              mixedContentMode="always"
+              style={styles.webview}
+            />
+          </View>
+        )}
+
+        {/* Resizable Divider for Split View */}
+        {viewMode === 'split' && (
+          <PanGestureHandler onGestureEvent={handlePanGesture}>
+            <View style={styles.resizeDivider}>
+              <View style={styles.resizeHandle} />
+            </View>
+          </PanGestureHandler>
+        )}
+
+        {/* Passenger List Section */}
+        {(viewMode === 'split' || viewMode === 'list') && (
+          <View style={[
+            styles.listSection,
+            viewMode === 'list' ? styles.listFullHeight : styles.listSplitHeight
+          ]}>
+            <View style={styles.listHeader}>
+              <Text style={styles.listTitle}>ลำดับที่ต้องรับ-ส่ง</Text>
+              <Text style={styles.listSubtitle}>
+                {studentsWithGeo.length} นักเรียน • เรียงตามระยะทางใกล้สุด
               </Text>
             </View>
-          </Pressable>
-          <Pressable 
-            style={({ pressed }) => [
-              styles.toggleBtn, 
-              mode === 'stop' && styles.toggleActive,
-              pressed && styles.togglePressed
-            ]} 
-            onPress={() => setMode('stop')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: mode === 'stop' }}
-          >
-            <View style={styles.toggleContent}>
-              <Ionicons 
-                name="close-circle" 
-                size={16} 
-                color={mode === 'stop' ? '#fff' : COLORS.textSecondary} 
-              />
-              <Text style={[styles.toggleText, mode === 'stop' && styles.toggleTextActive]}>ลา–หยุด</Text>
-            </View>
-          </Pressable>
-        </View>
+            
+            <FlatList 
+              data={studentsWithGeo} 
+              keyExtractor={v => String(v.student_id)} 
+              renderItem={({ item, index }) => <StudentItem item={item} index={index} />} 
+              ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+              showsVerticalScrollIndicator={true}
+              indicatorStyle="default"
+              contentContainerStyle={styles.listContainer}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  colors={[COLORS.primary]}
+                  tintColor={COLORS.primary}
+                />
+              }
+              // Performance optimizations
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              updateCellsBatchingPeriod={50}
+              initialNumToRender={10}
+              windowSize={10}
+              getItemLayout={(data, index) => ({
+                length: 100, // Approximate height of each item (increased for more content)
+                offset: 108 * index, // 100 + 8 separator
+                index,
+              })}
+              // Better scrolling experience
+              bounces={true}
+              bouncesZoom={false}
+              alwaysBounceVertical={true}
+              scrollEventThrottle={16}
+            />
+          </View>
+        )}
       </View>
 
-      {/* List */}
-      <FlatList
-        data={listForRender}
-        keyExtractor={(item) => String(item.student_id)}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <View style={{ alignItems: 'center', marginTop: 40 }}>
-            <Ionicons name="people-outline" size={36} color="#9CA3AF" />
-            <Text style={{ color: '#9CA3AF', marginTop: 8 }}>ไม่พบข้อมูลผู้โดยสาร</Text>
-          </View>
-        }
-      />
-
-      {/* Enhanced Action Sheet */}
-      <Modal transparent visible={sheetVisible} animationType="slide" onRequestClose={() => setSheetVisible(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setSheetVisible(false)}>
-          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.sheetHeader}>
-              <View style={styles.sheetHandle} />
-              <Text style={styles.sheetTitle}>สถานะนักเรียน</Text>
-              <Text style={styles.sheetSub}>{selected?.student_name} · {selected?.grade}</Text>
-            </View>
-
-            {/* เช็คขึ้นรถ */}
-            {step !== 'dropping' && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.sheetItem,
-                  pressed && styles.sheetItemPressed
-                ]}
-                onPress={() => handleMarkBoarded(false)}
-                disabled={
-                  saving ||
-                  !selected ||
-                  (phase === 'go'
-                    ? boardedGoSet.has(selected.student_id)
-                    : boardedReturnSet.has(selected.student_id))
-                }
-              >
-                <View style={[styles.sheetIconContainer, { backgroundColor: COLORS.successSoft }]}>
-                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                </View>
-                <Text style={styles.sheetText}>
-                  {phase === 'go' ? 'เช็คขึ้นรถแล้ว (เช้า)' : 'เช็คขึ้นรถแล้ว (กลับ)'}
+      {/* Student Status Modal */}
+      <Modal
+        transparent
+        visible={sheetVisible}
+        animationType="fade"
+        onRequestClose={() => setSheetVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalBackdrop} 
+          activeOpacity={1} 
+          onPress={() => setSheetVisible(false)}
+        >
+          <View style={styles.modalSheet}>
+            <TouchableOpacity activeOpacity={1}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  {selected?.student_name}
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-              </Pressable>
-            )}
-
-            {/* ผู้ปกครองมารับ */}
-            {step !== 'dropping' && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.sheetItem,
-                  pressed && styles.sheetItemPressed
-                ]}
-                onPress={() => handleMarkBoarded(true)}
-                disabled={
-                  saving ||
-                  !selected ||
-                  (phase === 'go'
-                    ? boardedGoSet.has(selected.student_id)
-                    : boardedReturnSet.has(selected.student_id))
-                }
-              >
-                <View style={[styles.sheetIconContainer, { backgroundColor: COLORS.infoSoft }]}>
-                  <Ionicons name="person-circle" size={20} color={COLORS.info} />
-                </View>
-                <Text style={styles.sheetText}>
-                  ผู้ปกครองมารับ {phase === 'return' ? '(นับเป็นกลับแล้ว)' : '(นับเป็นขึ้นรถ)'}
-                </Text>
-                <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-              </Pressable>
-            )}
-
-            {/* ลงรถ */}
-            {(step === 'dropping' ||
-              (phase === 'return' && selected && boardedReturnSet.has(selected.student_id))) && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.sheetItem,
-                  pressed && styles.sheetItemPressed
-                ]}
-                onPress={handleMarkDropped}
-                disabled={
-                  saving ||
-                  !selected ||
-                  (phase === 'go'
-                    ? droppedGoSet.has(selected.student_id)
-                    : droppedReturnSet.has(selected.student_id))
-                }
-              >
-                <View style={[styles.sheetIconContainer, { backgroundColor: COLORS.warningSoft }]}>
-                  <Ionicons name="log-out-outline" size={20} color={COLORS.warning} />
-                </View>
-                <Text style={styles.sheetText}>ลงรถแล้ว</Text>
-                <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-              </Pressable>
-            )}
-
-            {/* ลา–หยุด */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.sheetItem,
-                pressed && styles.sheetItemPressed
-              ]}
-              onPress={handleMarkAbsent}
-              disabled={saving || !selected || absentSet.has(selected.student_id)}
-            >
-              <View style={[styles.sheetIconContainer, { backgroundColor: COLORS.dangerSoft }]}>
-                <Ionicons name="close-circle" size={20} color={COLORS.danger} />
+                <TouchableOpacity 
+                  onPress={() => setSheetVisible(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+                </TouchableOpacity>
               </View>
-              <Text style={styles.sheetText}>ลา–หยุด (วันนี้)</Text>
-              <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-            </Pressable>
-
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setSheetVisible(false)} disabled={saving}>
-              {saving ? <ActivityIndicator /> : <Text style={styles.closeTxt}>ยกเลิก</Text>}
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Alerts Drawer (placeholder) */}
-      <Modal transparent visible={alertsVisible} animationType="fade" onRequestClose={() => setAlertsVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.alertsSheet}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>การแจ้งเตือน</Text>
-              <Text style={styles.sheetSub}>สวิตช์ฉุกเฉิน / เซ็นเซอร์ (ยังไม่เชื่อม IoT)</Text>
-            </View>
-
-            <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-              <Ionicons name="notifications-off-outline" size={28} color="#9CA3AF" />
-              <Text style={{ color: '#6B7280', marginTop: 8 }}>ยังไม่มีการแจ้งเตือน</Text>
-            </View>
-
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setAlertsVisible(false)}>
-              <Text style={styles.closeTxt}>ปิด</Text>
+              
+              <View style={styles.modalContent}>
+                <Text style={styles.modalSubtitle}>เลือกสถานะนักเรียน</Text>
+                
+                <TouchableOpacity 
+                  style={styles.statusOption}
+                  onPress={() => handleStatusUpdate('pickup')}
+                >
+                  <View style={[styles.statusIcon, { backgroundColor: COLORS.warning + '20' }]}>
+                    <Ionicons name="car" size={20} color={COLORS.warning} />
+                  </View>
+                  <Text style={styles.statusOptionText}>ขึ้นรถแล้ว</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.statusOption}
+                  onPress={() => handleStatusUpdate('dropoff')}
+                >
+                  <View style={[styles.statusIcon, { backgroundColor: COLORS.success + '20' }]}>
+                    <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                  </View>
+                  <Text style={styles.statusOptionText}>ผู้ปกครองมารับ</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.statusOption}
+                  onPress={() => handleStatusUpdate('absent')}
+                >
+                  <View style={[styles.statusIcon, { backgroundColor: COLORS.danger + '20' }]}>
+                    <Ionicons name="close-circle" size={20} color={COLORS.danger} />
+                  </View>
+                  <Text style={styles.statusOptionText}>หยุด</Text>
+                </TouchableOpacity>
+              </View>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
-    </View>
+
+      {/* Phone Popup Modal */}
+      <Modal
+        transparent
+        visible={phonePopupVisible}
+        animationType="fade"
+        onRequestClose={() => setPhonePopupVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalBackdrop} 
+          activeOpacity={1} 
+          onPress={() => setPhonePopupVisible(false)}
+        >
+          <View style={styles.phonePopupContainer}>
+            <View style={styles.phonePopupHeader}>
+              <Text style={styles.phonePopupTitle}>โทรหา</Text>
+              <Text style={styles.phonePopupStudentName}>{selectedForPhone?.student_name}</Text>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setPhonePopupVisible(false)}
+              >
+                <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.phonePopupContent}>
+              {/* Student Phone */}
+              {selectedForPhone?.student_phone ? (
+                <TouchableOpacity 
+                  style={styles.phoneContactOption}
+                  onPress={handleCallStudent}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.phoneContactIcon, { backgroundColor: COLORS.primaryLight }]}>
+                    <Ionicons name="person" size={24} color={COLORS.primary} />
+                  </View>
+                  <View style={styles.phoneContactInfo}>
+                    <Text style={styles.phoneContactLabel}>นักเรียน</Text>
+                    <Text style={styles.phoneContactNumber}>{selectedForPhone.student_phone}</Text>
+                  </View>
+                  <Ionicons name="call" size={20} color={COLORS.primary} />
+                </TouchableOpacity>
+              ) : (
+                <View style={[styles.phoneContactOption, styles.phoneContactDisabled]}>
+                  <View style={[styles.phoneContactIcon, { backgroundColor: COLORS.surfaceDisabled }]}>
+                    <Ionicons name="person" size={24} color={COLORS.textMuted} />
+                  </View>
+                  <View style={styles.phoneContactInfo}>
+                    <Text style={[styles.phoneContactLabel, { color: COLORS.textMuted }]}>นักเรียน</Text>
+                    <Text style={[styles.phoneContactNumber, { color: COLORS.textMuted }]}>ไม่มีเบอร์โทร</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Parent Phone */}
+              {selectedForPhone?.primary_parent?.parent_phone ? (
+                <TouchableOpacity 
+                  style={styles.phoneContactOption}
+                  onPress={handleCallParent}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.phoneContactIcon, { backgroundColor: COLORS.successLight }]}>
+                    <Ionicons name="people" size={24} color={COLORS.success} />
+                  </View>
+                  <View style={styles.phoneContactInfo}>
+                    <Text style={styles.phoneContactLabel}>ผู้ปกครอง</Text>
+                    <Text style={styles.phoneContactNumber}>{selectedForPhone.primary_parent.parent_phone}</Text>
+                  </View>
+                  <Ionicons name="call" size={20} color={COLORS.success} />
+                </TouchableOpacity>
+              ) : (
+                <View style={[styles.phoneContactOption, styles.phoneContactDisabled]}>
+                  <View style={[styles.phoneContactIcon, { backgroundColor: COLORS.surfaceDisabled }]}>
+                    <Ionicons name="people" size={24} color={COLORS.textMuted} />
+                  </View>
+                  <View style={styles.phoneContactInfo}>
+                    <Text style={[styles.phoneContactLabel, { color: COLORS.textMuted }]}>ผู้ปกครอง</Text>
+                    <Text style={[styles.phoneContactNumber, { color: COLORS.textMuted }]}>ไม่มีเบอร์โทร</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+    </SafeAreaView>
   );
 }
 
-/* ============================= Styles ============================= */
-
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.bg, 
-    paddingHorizontal: isTablet ? 19.2 : 16,
-    paddingTop: 16,
-    maxWidth: isTablet ? 800 : '100%',
-    alignSelf: 'center',
-    width: '100%',
-  },
-  loadingWrap: { 
-    flex: 1, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
+  container: {
+    flex: 1,
     backgroundColor: COLORS.bg,
-    gap: 12,
   },
-
-  // Header Styles (matching HomePage)
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.bg,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  permissionIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.primarySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  permissionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  permissionSubtitle: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  permissionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  permissionButtonText: {
+    color: COLORS.card,
+    fontSize: 16,
+    fontWeight: '600',
+  },
   headerContainer: {
     backgroundColor: COLORS.card,
-    marginHorizontal: -20,
+    paddingTop: Platform.OS === 'ios' ? 0 : 8,
+    paddingBottom: 16,
     paddingHorizontal: 20,
-    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
     ...shadow,
@@ -901,375 +1074,439 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 16,
   },
   brandSection: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  logoContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: COLORS.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
+
   brandText: {
     flex: 1,
   },
-  appTitle: { 
-    fontSize: 24, 
-    fontWeight: '900', 
-    color: COLORS.text, 
-    letterSpacing: -0.5,
-    lineHeight: 28,
+  appTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
   },
-  titleRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    columnGap: 12, 
-    marginTop: 2 
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  subtitle: { 
-    color: COLORS.textSecondary, 
-    fontWeight: '600', 
+  subtitle: {
     fontSize: 14,
-    letterSpacing: 0.1,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    columnGap: 6,
     backgroundColor: COLORS.successSoft,
-    borderRadius: 20,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: COLORS.success + '20',
+    borderRadius: 12,
+    gap: 4,
   },
-  statusDot: { 
-    width: 6, 
-    height: 6, 
-    borderRadius: 3, 
-    backgroundColor: COLORS.success 
-  },
-  statusText: { 
-    color: COLORS.success, 
-    fontSize: 11, 
-    fontWeight: '700',
-    letterSpacing: 0.2,
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.success,
   },
   bellButton: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.primarySoft,
-    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: COLORS.bgSecondary,
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.primary + '20',
-  },
-
-  // Stats Container (matching HomePage)
-  statsContainer: {
-    marginTop: 16,
-    marginBottom: 16,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: isTablet ? 12 : 8,
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    minHeight: isTablet ? 100 : 80,
-    ...shadow,
   },
-  statIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: COLORS.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
-    letterSpacing: -0.3,
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    letterSpacing: 0.1,
-  },
-
-  toggleContainer: {
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  toggleWrapper: {
+  viewToggleContainer: {
     flexDirection: 'row',
     backgroundColor: COLORS.bgSecondary,
     borderRadius: 12,
     padding: 4,
-    gap: 4,
-    ...shadow,
+    marginBottom: 16,
   },
-  toggleBtn: {
+  viewToggleButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-  },
-  toggleActive: {
-    backgroundColor: COLORS.primary,
-    ...shadowElevated,
-  },
-  togglePressed: {
-    backgroundColor: COLORS.pressed,
-    transform: [{ scale: 0.98 }],
-  },
-  toggleContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 6,
   },
-  toggleText: {
+  viewToggleActive: {
+    backgroundColor: COLORS.primary,
+  },
+  viewToggleText: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.textSecondary,
-    textAlign: 'center',
   },
-  toggleTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+  viewToggleTextActive: {
+    color: COLORS.card,
   },
-
-  // Card Styles
-  card: {
+  statsContainer: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  statItem: {
     alignItems: 'center',
-    backgroundColor: COLORS.card,
-    padding: isTablet ? 16 : 12,
-    borderRadius: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    ...shadow,
   },
-  cardPressed: {
-    backgroundColor: COLORS.pressed,
-    transform: [{ scale: 0.98 }],
-  },
-  orderBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primarySoft,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '20',
-  },
-  orderText: { 
-    fontSize: 13, 
-    fontWeight: '800', 
+  statNumber: {
+    fontSize: 20,
+    fontWeight: '700',
     color: COLORS.primary,
-    letterSpacing: -0.2,
+    marginBottom: 2,
   },
-
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    borderWidth: 2,
-    borderColor: COLORS.primary + '20',
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
-  avatarText: { 
-    color: COLORS.primary, 
-    fontWeight: '800',
-    fontSize: 18,
-    letterSpacing: -0.3,
+  mainContent: {
+    flex: 1,
   },
-
-  info: { flex: 1 },
-  nameRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  name: { 
-    flex: 1, 
-    fontWeight: '800', 
-    fontSize: 16, 
-    color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  grade: { 
-    fontSize: 12, 
-    color: COLORS.textSecondary, 
-    fontWeight: '600',
-    backgroundColor: COLORS.bgSecondary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginLeft: 8,
-  },
-
-  statusChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  statusChipText: { 
-    fontSize: 12, 
-    fontWeight: '700',
-    letterSpacing: 0.1,
-  },
-  dot: { 
-    width: 8, 
-    height: 8, 
-    borderRadius: 4 
-  },
-
-  callBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.successSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-    borderWidth: 1,
-    borderColor: COLORS.success + '30',
-  },
-
-  // Modal Styles
-  modalBackdrop: { 
-    flex: 1, 
-    backgroundColor: 'rgba(15, 23, 42, 0.4)', 
-    alignItems: 'center', 
-    justifyContent: 'flex-end' 
-  },
-  modalSheet: {
-    width: '100%',
+  mapSection: {
     backgroundColor: COLORS.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '80%',
-    ...shadowElevated,
-  },
-  sheetHeader: { 
-    marginBottom: 16,
-    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
-  sheetTitle: { 
-    fontWeight: '800', 
-    color: COLORS.text, 
-    fontSize: 18,
-    letterSpacing: -0.3,
+  mapSplitHeight: {
+    height: screenHeight * 0.4,
   },
-  sheetSub: { 
-    color: COLORS.textSecondary, 
-    marginTop: 4,
-    fontSize: 14,
-    fontWeight: '600',
+  mapFullHeight: {
+    flex: 1,
   },
-
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: COLORS.borderLight,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
+  webview: {
+    flex: 1,
   },
-  sheetItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 12, 
+  listSection: {
+    backgroundColor: COLORS.bg,
+  },
+  listSplitHeight: {
+    flex: 1,
+  },
+  listFullHeight: {
+    flex: 1,
+  },
+  listHeader: {
+    paddingHorizontal: 20,
     paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: COLORS.card,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  listTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  listSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  listContainer: {
+    padding: 16,
+    paddingBottom: 120,
+    flexGrow: 1,
+  },
+  studentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    padding: 16,
     borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    gap: 12,
+    ...shadow,
   },
-  sheetItemPressed: {
-    backgroundColor: COLORS.pressed,
-    transform: [{ scale: 0.98 }],
+  studentNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  sheetIconContainer: {
-    width: 36,
+  studentNumberText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.card,
+  },
+  studentInfoTouchable: {
+    flex: 1,
+  },
+  studentInfo: {
+    flex: 1,
+  },
+  studentName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  studentDetails: {
+    gap: 4,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  studentGrade: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  studentDistance: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  studentPhone: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  studentStatus: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  statusIndicator: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  phoneButtonsContainer: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  phoneButton: {
+    width: 50,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
+    backgroundColor: COLORS.surface,
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  sheetText: { 
-    flex: 1,
-    fontWeight: '600', 
-    color: COLORS.text,
-    fontSize: 15,
-    letterSpacing: -0.1,
-  },
-
-  closeBtn: {
-    marginTop: 16,
-    alignSelf: 'stretch',
-    borderRadius: 12,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
-    height: 48,
-    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  studentPhoneButton: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  parentPhoneButton: {
+    backgroundColor: COLORS.successLight,
+    borderColor: COLORS.success,
+  },
+  phoneButtonDisabled: {
+    backgroundColor: COLORS.surfaceDisabled,
+    borderColor: COLORS.borderLight,
+  },
+  phoneButtonText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  phoneButtonTextDisabled: {
+    color: COLORS.textMuted,
+  },
+  phoneIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primaryLight,
     justifyContent: 'center',
-    backgroundColor: COLORS.bgSecondary,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  closeTxt: { 
-    fontWeight: '700', 
-    color: COLORS.textSecondary,
-    fontSize: 16,
+  phoneIconButtonDisabled: {
+    backgroundColor: COLORS.surfaceDisabled,
+    borderColor: COLORS.borderLight,
+    shadowOpacity: 0,
+    elevation: 0,
   },
-
-  alertsSheet: {
-    width: '100%',
+  resizeDivider: {
+    height: 20,
+    backgroundColor: COLORS.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  resizeHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: COLORS.textTertiary,
+    borderRadius: 2,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
     backgroundColor: COLORS.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '80%',
-    ...shadowElevated,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    maxHeight: '50%',
   },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.bgSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    padding: 20,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+  },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    marginBottom: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  statusIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+  // Phone Popup Styles
+  phonePopupContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginVertical: 40,
+    maxWidth: screenWidth - 32,
+    width: '100%',
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  phonePopupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  phonePopupTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  phonePopupStudentName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 12,
+  },
+  phonePopupContent: {
+    padding: 24,
+    gap: 16,
+  },
+  phoneContactOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    backgroundColor: COLORS.bg,
+    borderRadius: 16,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    minHeight: 80,
+  },
+  phoneContactDisabled: {
+    opacity: 0.6,
+  },
+  phoneContactIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  phoneContactInfo: {
+    flex: 1,
+  },
+  phoneContactLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  phoneContactNumber: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+
+
 });

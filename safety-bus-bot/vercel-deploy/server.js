@@ -1,52 +1,63 @@
-// Simple Express server for development
-import dotenv from 'dotenv';
-
-// Load .env.local for development
-dotenv.config({ path: '.env.local' });
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
-import cors from 'cors';
+import dotenv from 'dotenv';
 
-// Import API handlers
-import submitLeaveHandler from './api/submit-leave.js';
-import getLeaveRequestsHandler from './api/get-leave-requests.js';
-import cancelLeaveHandler from './api/cancel-leave.js';
-import getStudentHandler from './api/get-student.js';
-import getDriverHandler from './api/get-driver.js';
-import webhookHandler from './api/webhook.mjs';
+// Load environment variables
+dotenv.config();
 
+// Debug environment variables
+console.log('Environment variables loaded:');
+console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
+console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'Present' : 'Missing');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
 app.use(express.json());
-app.use(express.raw({ type: 'application/json' }));
-
-// Serve static files
 app.use(express.static('.'));
 
-// API routes
-app.use('/api/submit-leave', submitLeaveHandler);
-app.use('/api/get-leave-requests', getLeaveRequestsHandler);
-app.use('/api/cancel-leave', cancelLeaveHandler);
-app.use('/api/get-student', getStudentHandler);
-app.use('/api/get-driver', getDriverHandler);
-app.use('/api/webhook', webhookHandler);
+// Handle API routes with middleware
+app.use('/api', async (req, res, next) => {
+    const apiPath = req.path.substring(1); // Remove leading slash
+    const apiFile = path.join(__dirname, 'api', `${apiPath}.js`);
+    
+    try {
+        if (fs.existsSync(apiFile)) {
+            // Import the API module
+            const apiModule = await import(`file://${apiFile}`);
+            const handler = apiModule.default || apiModule;
+            
+            if (typeof handler === 'function') {
+                await handler(req, res);
+            } else {
+                res.status(500).json({ error: 'Invalid API handler' });
+            }
+        } else {
+            res.status(404).json({ error: 'API endpoint not found' });
+        }
+    } catch (error) {
+        console.error('API Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 
-
-// Serve index.html for root
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+// Serve static files - fallback to index.html for SPA
+app.use((req, res) => {
+    const filePath = path.join(__dirname, req.path === '/' ? 'index.html' : req.path);
+    
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        res.sendFile(filePath);
+    } else {
+        res.sendFile(path.join(__dirname, 'index.html'));
+    }
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
-    console.log(`📱 LIFF App: http://localhost:${PORT}`);
-    console.log(`🔗 API endpoints available at /api/*`);
+    console.log(`Server running at http://localhost:${PORT}`);
 });

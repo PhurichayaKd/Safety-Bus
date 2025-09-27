@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useColorScheme } from '../hooks/useColorScheme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
@@ -59,14 +60,14 @@ function RootLayoutNav() {
   if (!fontsLoaded || loading) return null;
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack>
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-    </>
+    </GestureHandlerRootView>
   );
 }
 

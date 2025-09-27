@@ -147,19 +147,15 @@ function getStudentInfo() {
                     throw new Error('API call failed');
                 }
             }).then(data => {
-                console.log('API Response received:', data);
                 if (data.success && data.student) {
                     studentInfo = data.student;
                     console.log('Complete student info loaded from API:', studentInfo);
-                    console.log('Student class from API:', studentInfo.class);
                 } else {
-                    console.log('API response structure:', data);
                     throw new Error('No student data in response');
                 }
                 showStudentInfoSection();
             }).catch(error => {
                 console.log('Failed to get complete info from API, using URL parameters only:', error);
-                console.log('Error details:', error);
                 // Fallback to URL parameters only
                 studentInfo = {
                     student_id: studentId,
@@ -167,7 +163,6 @@ function getStudentInfo() {
                     link_code: studentId,
                     class: 'ไม่ระบุ' // Default class for URL fallback
                 };
-                console.log('Using fallback student info:', studentInfo);
                 showStudentInfoSection();
             });
             return;
@@ -229,12 +224,12 @@ function showSection(sectionName) {
 function showStudentInfoSection() {
     if (studentInfo) {
         document.getElementById('student-name').textContent = studentInfo.student_name || studentInfo.name || '-';
-        document.getElementById('student-code').textContent = studentInfo.id || studentInfo.student_id || '-';
+        document.getElementById('student-code').textContent = studentInfo.student_id || studentInfo.id || studentInfo.link_code || '-';
         document.getElementById('student-class').textContent = studentInfo.class || 'ไม่ระบุ';
         
         console.log('Student info displayed:', {
             name: studentInfo.student_name || studentInfo.name,
-            code: studentInfo.id || studentInfo.student_id,
+            code: studentInfo.student_id || studentInfo.id || studentInfo.link_code,
             class: studentInfo.class
         });
     }
@@ -249,7 +244,7 @@ function showDateSelectionSection() {
 function showConfirmationSection() {
     // Update confirmation details
     document.getElementById('confirm-student-name').textContent = studentInfo.student_name || studentInfo.name || '-';
-    document.getElementById('confirm-student-code').textContent = studentInfo.id || studentInfo.student_id || '-';
+    document.getElementById('confirm-student-code').textContent = studentInfo.student_id || studentInfo.id || studentInfo.link_code || '-';
     document.getElementById('confirm-student-class').textContent = studentInfo.class || 'ไม่ระบุ';
     
     // Update selected dates list

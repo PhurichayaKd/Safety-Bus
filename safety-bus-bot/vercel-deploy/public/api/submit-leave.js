@@ -212,48 +212,24 @@ export default async function handler(req, res) {
       
       console.log('Insert data:', insertData);
       
-      try {
-        const { data, error } = await supabase.from('leave_requests').insert(insertData).select();
-        
-        if (error) {
-           console.error('Supabase insert error for date', date, ':', {
-             message: error.message,
-             details: error.details,
-             hint: error.hint,
-             code: error.code
-           });
-           
-           // Use mock data fallback for testing
-           console.log('Using mock data fallback for leave request');
-           return {
-             id: Math.floor(Math.random() * 1000),
-             student_id: parseInt(studentId),
-             leave_date: date,
-             leave_type: 'personal',
-             status: 'approved',
-             created_at: new Date().toISOString(),
-             mock: true
-           };
-         }
-        
-        console.log('Successfully inserted leave request for date', date, ':', data);
-        return data;
-      } catch (dbError) {
-        console.error('Database connection error, using mock data fallback:', dbError.message);
-        return {
-          id: Math.floor(Math.random() * 1000),
-          student_id: parseInt(studentId),
-          leave_date: date,
-          leave_type: 'personal',
-          status: 'approved',
-          created_at: new Date().toISOString(),
-          mock: true
-        };
+      const { data, error } = await supabase.from('leave_requests').insert(insertData).select();
+      
+      if (error) {
+        console.error('Supabase insert error for date', date, ':', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
       }
+      
+      console.log('Successfully inserted leave request for date', date, ':', data);
+      return data;
     });
     
     const results = await Promise.all(insertPromises);
-    console.log('All leave requests processed successfully. Results:', results);
+    console.log('All leave requests inserted successfully. Results:', results);
     
     // ส่ง push message กลับ LINE เฉพาะเมื่อมาจาก LINE Bot
     if (source !== 'direct' && userId) {

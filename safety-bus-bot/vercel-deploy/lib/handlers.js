@@ -912,7 +912,8 @@ export async function handleLeaveRequestMenu(event) {
     const leaveText = `📝 แจ้งลาหยุด\n\n` +
       `📋 ข้อมูลนักเรียน:\n` +
       `ชื่อ: ${studentData.student.student_name}\n` +
-      `รหัส: ${studentData.student.link_code}\n\n` +
+      `รหัส: ${studentData.student.student_id}\n` +
+      `ชั้น: ${studentData.student.grade || 'ไม่ระบุ'}\n\n` +
       `🔗 เปิดฟอร์มแจ้งลาหยุด:\n` +
       `${config.liffAppUrl}/?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}`;
 
@@ -987,7 +988,8 @@ export async function handleLeaveRequestMenuPush(userId) {
       `สามารถเลือกวันที่ลาได้สูงสุด 3 วัน\n\n` +
       `📋 ข้อมูลนักเรียน:\n` +
       `ชื่อ: ${studentData.student.student_name}\n` +
-      `รหัส: ${studentData.student.link_code}\n\n` +
+      `รหัส: ${studentData.student.student_id}\n` +
+      `ชั้น: ${studentData.student.grade || 'ไม่ระบุ'}\n\n` +
       `🔗 เปิดฟอร์มแจ้งลาหยุด:\n` +
       `${config.liffAppUrl}/?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}`;
 

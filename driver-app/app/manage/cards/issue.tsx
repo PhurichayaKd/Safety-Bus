@@ -513,7 +513,7 @@ const COLORS = {
   borderLight: '#F1F5F9',
   
   // Primary colors
-  primary: '#3B82F6',
+  primary: '#021C8B',
   primarySoft: '#EFF6FF',
   
   // Status colors
@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
     marginTop: 20, 
     height: 52, 
     borderRadius: 16, 
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.success,
     alignItems: 'center', 
     justifyContent: 'center', 
     flexDirection: 'row', 

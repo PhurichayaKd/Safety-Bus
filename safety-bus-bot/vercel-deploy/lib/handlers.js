@@ -66,6 +66,12 @@ export async function handleTextMessage(event) {
     }
   }
 
+  // ตรวจสอบว่าเป็นรหัสเชื่อมโยง 8 ตัวอักษร (A-Z, 0-9)
+  if (/^[A-Z0-9]{8}$/.test(text.toUpperCase())) {
+    await handleLinkCodeVerification(event, text.toUpperCase());
+    return;
+  }
+
   // ตรวจสอบว่าเป็นรหัสนักเรียน 6 หลัก (สำหรับผูกบัญชี)
   if (/^[0-9]{6}$/.test(text)) {
     await handleStudentCodeLinking(event, text);
@@ -346,15 +352,37 @@ export async function handleAccountLinking(event, token) {
   const userId = event.source.userId;
 
   try {
-    // ตรวจสอบโทเคนในฐานข้อมูล
-    const { data: linkData, error } = await supabase
-      .from('link_tokens')
-      .select('*')
+    // ตรวจสอบโทเคนในฐานข้อมูล - ค้นหาในทั้งสองตาราง
+    let linkData = null;
+    let userType = null;
+
+    // ค้นหาในตาราง student_link_tokens ก่อน
+    const { data: studentToken, error: studentError } = await supabase
+      .from('student_link_tokens')
+      .select('*, students(student_name, class)')
       .eq('token', token)
-      .eq('used', false)
+      .is('used_at', null)
       .single();
 
-    if (error || !linkData) {
+    if (studentToken && !studentError) {
+      linkData = studentToken;
+      userType = 'student';
+    } else {
+      // ถ้าไม่พบในตาราง student ให้ค้นหาในตาราง parent
+      const { data: parentToken, error: parentError } = await supabase
+        .from('parent_link_tokens')
+        .select('*, parents(parent_name)')
+        .eq('token', token)
+        .is('used_at', null)
+        .single();
+
+      if (parentToken && !parentError) {
+        linkData = parentToken;
+        userType = 'parent';
+      }
+    }
+
+    if (!linkData) {
       await replyLineMessage(event.replyToken, {
         type: 'text',
         text: 'โทเคนไม่ถูกต้องหรือหมดอายุแล้ว\nกรุณาขอโทเคนใหม่จากโรงเรียน'
@@ -375,31 +403,55 @@ export async function handleAccountLinking(event, token) {
     }
 
     // สร้างการเชื่อมโยง
-    const { error: linkError } = await supabase
-      .from('parent_line_links')
-      .insert({
-        line_user_id: userId,
-        parent_id: linkData.parent_id,
-        active: true,
-        linked_at: new Date().toISOString()
-      });
+    let linkError = null;
+    if (userType === 'student') {
+      const { error } = await supabase
+        .from('student_line_links')
+        .insert({
+          line_user_id: userId,
+          student_id: linkData.student_id,
+          active: true,
+          linked_at: new Date().toISOString()
+        });
+      linkError = error;
+    } else if (userType === 'parent') {
+      const { error } = await supabase
+        .from('parent_line_links')
+        .insert({
+          line_user_id: userId,
+          parent_id: linkData.parent_id,
+          active: true,
+          linked_at: new Date().toISOString()
+        });
+      linkError = error;
+    }
 
     if (linkError) {
       throw linkError;
     }
 
     // ทำเครื่องหมายโทเคนว่าใช้แล้ว
+    const tableName = userType === 'student' ? 'student_link_tokens' : 'parent_link_tokens';
     await supabase
-      .from('link_tokens')
-      .update({ used: true, used_at: new Date().toISOString() })
+      .from(tableName)
+      .update({ 
+        used_at: new Date().toISOString(),
+        used_by_line_user_id: userId
+      })
       .eq('token', token);
 
-    // ดึงข้อมูลนักเรียน
-    const studentData = await getStudentByLineId(userId);
+    // ส่งข้อความยืนยัน
+    const userName = userType === 'student' 
+      ? linkData.students?.student_name 
+      : linkData.parents?.parent_name;
+    
+    const userClass = userType === 'student' 
+      ? linkData.students?.class 
+      : 'ผู้ปกครอง';
 
     await replyLineMessage(event.replyToken, {
       type: 'text',
-      text: `✅ ผูกบัญชีสำเร็จ!\n\nนักเรียน: ${studentData?.student?.student_name || 'N/A'}\nชั้น: ${studentData?.student?.class || 'N/A'}\n\nสามารถใช้งานระบบได้แล้ว\nพิมพ์ "เมนู" เพื่อเริ่มต้น`
+      text: `✅ ผูกบัญชีสำเร็จ!\n\n${userType === 'student' ? 'นักเรียน' : 'ผู้ปกครอง'}: ${userName || 'N/A'}\n${userType === 'student' ? 'ชั้น' : 'สถานะ'}: ${userClass || 'N/A'}\n\nสามารถใช้งานระบบได้แล้ว\nพิมพ์ "เมนู" เพื่อเริ่มต้น`
     });
 
   } catch (error) {
@@ -486,6 +538,17 @@ export async function handleStudentCodeLinking(event, studentCode) {
       .eq('parent_id', student.parent_id)
       .eq('active', true)
       .single();
+
+    // ตรวจสอบ LINE ID ที่คนขับเก็บไว้ในฐานข้อมูล
+    const lineIdValidation = await validateAndUpdateLineId(userId, student.student_id, student.parent_id);
+    
+    if (!lineIdValidation.isValid) {
+      await replyLineMessage(event.replyToken, {
+        type: 'text',
+        text: lineIdValidation.message
+      });
+      return;
+    }
 
     // กำหนดประเภทการผูกบัญชี
     let linkType = 'parent'; // ค่าเริ่มต้นเป็นผู้ปกครอง
@@ -592,6 +655,119 @@ export async function handleStudentCodeLinking(event, studentCode) {
       type: 'text',
       text: 'เกิดข้อผิดพลาดในการตรวจสอบรหัสนักเรียน กรุณาลองใหม่อีกครั้ง'
     });
+  }
+}
+
+/**
+ * ตรวจสอบและอัปเดต LINE User ID ในฐานข้อมูล
+ * @param {string} userId - LINE User ID ที่ได้จาก webhook
+ * @param {number} studentId - รหัสนักเรียน
+ * @param {number} parentId - รหัสผู้ปกครอง
+ * @returns {Object} ผลการตรวจสอบ
+ */
+async function validateAndUpdateLineId(userId, studentId, parentId) {
+  try {
+    // ตรวจสอบว่า LINE User ID มีรูปแบบที่ถูกต้อง (U + 32 ตัวอักษร/ตัวเลข)
+    const lineIdPattern = /^U[a-f0-9]{32}$/i;
+    if (!lineIdPattern.test(userId)) {
+      return {
+        isValid: false,
+        message: 'รูปแบบ LINE User ID ไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบ'
+      };
+    }
+
+    // ตรวจสอบใน student_line_links ก่อน
+    const { data: studentLineData, error: studentError } = await supabase
+      .from('student_line_links')
+      .select('*')
+      .eq('student_id', studentId)
+      .eq('active', true)
+      .single();
+
+    if (studentLineData && !studentError) {
+      // ถ้ามี LINE ID ที่บันทึกไว้แล้ว ให้ตรวจสอบว่าตรงกันหรือไม่
+      if (studentLineData.line_user_id && studentLineData.line_user_id !== userId) {
+        return {
+          isValid: false,
+          message: 'LINE ID ไม่ตรงกับที่บันทึกไว้ในระบบ\nกรุณาติดต่อคนขับหรือโรงเรียนเพื่อตรวจสอบข้อมูล'
+        };
+      }
+
+      // ถ้า LINE ID ยังไม่ได้บันทึก หรือเป็นค่าว่าง ให้อัปเดต
+      if (!studentLineData.line_user_id || studentLineData.line_user_id.trim() === '') {
+        const { error: updateError } = await supabase
+          .from('student_line_links')
+          .update({ 
+            line_user_id: userId,
+            linked_at: new Date().toISOString()
+          })
+          .eq('student_id', studentId)
+          .eq('active', true);
+
+        if (updateError) {
+          console.error('Error updating student LINE ID:', updateError);
+          return {
+            isValid: false,
+            message: 'เกิดข้อผิดพลาดในการอัปเดต LINE ID กรุณาลองใหม่อีกครั้ง'
+          };
+        }
+      }
+
+      return { isValid: true, message: 'ตรวจสอบ LINE ID สำเร็จ (นักเรียน)' };
+    }
+
+    // ตรวจสอบใน parent_line_links
+    const { data: parentLineData, error: parentError } = await supabase
+      .from('parent_line_links')
+      .select('*')
+      .eq('parent_id', parentId)
+      .eq('active', true)
+      .single();
+
+    if (parentLineData && !parentError) {
+      // ถ้ามี LINE ID ที่บันทึกไว้แล้ว ให้ตรวจสอบว่าตรงกันหรือไม่
+      if (parentLineData.line_user_id && parentLineData.line_user_id !== userId) {
+        return {
+          isValid: false,
+          message: 'LINE ID ไม่ตรงกับที่บันทึกไว้ในระบบ\nกรุณาติดต่อคนขับหรือโรงเรียนเพื่อตรวจสอบข้อมูล'
+        };
+      }
+
+      // ถ้า LINE ID ยังไม่ได้บันทึก หรือเป็นค่าว่าง ให้อัปเดต
+      if (!parentLineData.line_user_id || parentLineData.line_user_id.trim() === '') {
+        const { error: updateError } = await supabase
+          .from('parent_line_links')
+          .update({ 
+            line_user_id: userId,
+            linked_at: new Date().toISOString()
+          })
+          .eq('parent_id', parentId)
+          .eq('active', true);
+
+        if (updateError) {
+          console.error('Error updating parent LINE ID:', updateError);
+          return {
+            isValid: false,
+            message: 'เกิดข้อผิดพลาดในการอัปเดต LINE ID กรุณาลองใหม่อีกครั้ง'
+          };
+        }
+      }
+
+      return { isValid: true, message: 'ตรวจสอบ LINE ID สำเร็จ (ผู้ปกครอง)' };
+    }
+
+    // ถ้าไม่พบข้อมูลในทั้งสองตาราง
+    return {
+      isValid: false,
+      message: 'ไม่พบข้อมูล LINE ID ในระบบ\nกรุณาติดต่อคนขับเพื่อเพิ่มข้อมูลของคุณในระบบก่อน'
+    };
+
+  } catch (error) {
+    console.error('Error validating LINE ID:', error);
+    return {
+      isValid: false,
+      message: 'เกิดข้อผิดพลาดในการตรวจสอบ LINE ID กรุณาลองใหม่อีกครั้ง'
+    };
   }
 }
 
@@ -1070,4 +1246,91 @@ export async function handleContactDriverRequestPush(userId) {
     type: 'text',
     text: '📞 ติดต่อคนขับรถ\n\n⚠️ ฟีเจอร์นี้อยู่ระหว่างการพัฒนา\nจะเปิดให้บริการในเร็วๆ นี้\n\nขออภัยในความไม่สะดวก 🙏'
   }]);
+}
+
+/**
+ * จัดการการตรวจสอบรหัสเชื่อมโยง
+ * @param {Object} event - LINE webhook event
+ * @param {string} linkCode - รหัสเชื่อมโยงที่ผู้ใช้ส่งมา
+ */
+export async function handleLinkCodeVerification(event, linkCode) {
+  const userId = event.source.userId;
+  const replyToken = event.replyToken;
+
+  console.log(`🔗 Link code verification: ${linkCode} from user: ${userId}`);
+
+  try {
+    // ตรวจสอบว่าผู้ใช้ได้เชื่อมโยงบัญชีแล้วหรือไม่
+    const { linked } = await checkLinkStatus(userId);
+    
+    if (linked) {
+      await replyLineMessage(replyToken, {
+        type: 'text',
+        text: '❌ บัญชีของคุณได้เชื่อมโยงแล้ว\nไม่สามารถใช้รหัสเชื่อมโยงใหม่ได้'
+      });
+      return;
+    }
+
+    // เรียก API ตรวจสอบรหัสเชื่อมโยง
+    const verifyResponse = await fetch(`${process.env.VERCEL_URL || 'http://localhost:3000'}/api/verify-link-code`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        linkCode: linkCode,
+        lineUserId: userId
+      })
+    });
+
+    const result = await verifyResponse.json();
+
+    if (result.success) {
+      // เชื่อมโยงสำเร็จ
+      const userTypeText = result.userType === 'student' ? 'นักเรียน' : 'ผู้ปกครอง';
+      
+      await replyLineMessage(replyToken, [
+        {
+          type: 'text',
+          text: `✅ เชื่อมโยง LINE ID สำเร็จ!\n\n👤 ชื่อ: ${result.userData.name}\n🆔 รหัส: ${result.userData.id}\n📋 ประเภท: ${userTypeText}\n\n🎉 ยินดีต้อนรับสู่ระบบ Safety Bus!`
+        },
+        {
+          type: 'text',
+          text: '🚌 ตอนนี้คุณสามารถใช้งานระบบได้แล้ว\n\n📱 ใช้เมนูด้านล่างเพื่อ:\n• ดูตำแหน่งรถบัส\n• แจ้งลาหยุด\n• ดูประวัติการเดินทาง\n• ติดต่อคนขับรถ'
+        }
+      ]);
+
+      // ส่งเมนูหลัก
+      await sendMainMenu(userId);
+
+    } else {
+      // เชื่อมโยงไม่สำเร็จ
+      let errorMessage = '❌ ไม่สามารถเชื่อมโยง LINE ID ได้\n\n';
+      
+      if (result.message.includes('ไม่พบรหัสเชื่อมโยง')) {
+        errorMessage += '🔍 ไม่พบรหัสเชื่อมโยงนี้ในระบบ\nกรุณาตรวจสอบรหัสอีกครั้ง';
+      } else if (result.message.includes('หมดอายุ')) {
+        errorMessage += '⏰ รหัสเชื่อมโยงหมดอายุแล้ว\nกรุณาขอรหัสใหม่จากคนขับรถ';
+      } else if (result.message.includes('ถูกใช้งานแล้ว')) {
+        errorMessage += '🔄 รหัสนี้ถูกใช้งานแล้ว\nกรุณาขอรหัสใหม่จากคนขับรถ';
+      } else if (result.message.includes('ถูกเชื่อมโยงกับบัญชีอื่น')) {
+        errorMessage += '👥 LINE ID นี้ถูกเชื่อมโยงกับบัญชีอื่นแล้ว\nกรุณาใช้ LINE ID อื่น';
+      } else {
+        errorMessage += result.message;
+      }
+
+      await replyLineMessage(replyToken, {
+        type: 'text',
+        text: errorMessage
+      });
+    }
+
+  } catch (error) {
+    console.error('Error in handleLinkCodeVerification:', error);
+    
+    await replyLineMessage(replyToken, {
+      type: 'text',
+      text: '❌ เกิดข้อผิดพลาดในการตรวจสอบรหัสเชื่อมโยง\nกรุณาลองใหม่อีกครั้งหรือติดต่อคนขับรถ'
+    });
+  }
 }

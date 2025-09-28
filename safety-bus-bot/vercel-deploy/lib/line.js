@@ -23,27 +23,29 @@ const lineClient = new Client(config);
  */
 export async function sendLineMessage(to, message) {
   try {
-    const response = await fetch('https://api.line.me/v2/bot/message/push', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
-      },
-      body: JSON.stringify({
-        to: to,
-        messages: Array.isArray(message) ? message : [message]
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('LINE API Error:', response.status, errorText);
-      throw new Error(`LINE API Error: ${response.status}`);
+    console.log(`🔄 Sending LINE message to: ${to}`);
+    console.log('📝 Message:', JSON.stringify(message, null, 2));
+    
+    // ตรวจสอบว่ามี LINE Channel Access Token หรือไม่
+    if (!process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+      throw new Error('LINE_CHANNEL_ACCESS_TOKEN is not set');
     }
 
-    return await response.json();
+    const messages = Array.isArray(message) ? message : [message];
+    
+    // ใช้ LINE Bot SDK แทน fetch
+    const result = await lineClient.pushMessage(to, messages);
+    
+    console.log(`✅ LINE message sent successfully to: ${to}`);
+    return result;
   } catch (error) {
-    console.error('Error sending LINE message:', error);
+    console.error(`❌ Error sending LINE message to ${to}:`, error);
+    
+    // Log error details สำหรับ debugging
+    if (error.response) {
+      console.error('LINE API Response:', error.response.status, error.response.data);
+    }
+    
     throw error;
   }
 }

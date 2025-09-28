@@ -16,7 +16,7 @@ import { useFocusEffect } from 'expo-router';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
 
-/* ======= ENHANCED THEME (Professional Minimal) ======= */
+/* ======= CLEAN WHITE/BLUE THEME ======= */
 const COLORS = {
   // Background & Surface
   bg: '#FAFBFC',
@@ -36,17 +36,19 @@ const COLORS = {
   borderLight: '#F1F5F9',
   divider: '#E2E8F0',
   
-  // Primary Brand (Blue)
-  primary: '#0a7ea4',
-  primaryDark: '#0369A1',
-  primaryLight: '#0EA5E9',
+  // Primary Brand (Resolution Blue & New Car Blue)
+  primary: '#021C8B',        // Resolution Blue
+  primaryDark: '#021C8B',    // Resolution Blue
+  primaryLight: '#1B52D7',   // New Car Blue
   primarySoft: '#EFF6FF',
-  primaryGradient: ['#0a7ea4', '#0369A1'],
+  primaryGradient: ['#021C8B', '#1B52D7'],
   
-  // Status Colors
-  success: '#059669',
-  successLight: '#ECFDF5',
-  successSoft: '#ECFDF5',
+  // Status Colors (Phone icons green - Beautiful & Modern)
+  success: '#059669',        // Emerald Green - สีเขียวมรกต สวยงาม
+  successLight: '#D1FAE5',   // Light Emerald - สีเขียวอ่อนนุ่มนวล
+  successSoft: '#ECFDF5',    // Soft Green Background
+  successDark: '#047857',    // Dark Emerald - สีเขียวเข้มสำหรับเงา
+  successBright: '#10B981',  // Bright Green - สีเขียวสดใส
   warning: '#D97706',
   warningSoft: '#FFFBEB',
   danger: '#DC2626',
@@ -60,7 +62,7 @@ const COLORS = {
   // Interactive States
   hover: '#F8FAFC',
   pressed: '#F1F5F9',
-  focus: '#0a7ea4',
+  focus: '#021C8B',
   
   // Shadows
   shadow: 'rgba(15, 23, 42, 0.08)',
@@ -667,7 +669,7 @@ window.addEventListener('message',e=>handle(e.data));
             onPress={handlePhoneButtonPress}
             activeOpacity={0.7}
           >
-            <Ionicons name="call" size={22} color={COLORS.primary} />
+            <Ionicons name="call" size={22} color={COLORS.successDark} />
           </TouchableOpacity>
         ) : (
           <View style={[styles.phoneIconButton, styles.phoneIconButtonDisabled]}>
@@ -944,14 +946,14 @@ window.addEventListener('message',e=>handle(e.data));
                   onPress={handleCallStudent}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.phoneContactIcon, { backgroundColor: COLORS.primaryLight }]}>
-                    <Ionicons name="person" size={24} color={COLORS.primary} />
+                  <View style={[styles.phoneContactIcon, { backgroundColor: COLORS.successLight }]}>
+                    <Ionicons name="person" size={24} color={COLORS.successDark} />
                   </View>
                   <View style={styles.phoneContactInfo}>
                     <Text style={styles.phoneContactLabel}>นักเรียน</Text>
                     <Text style={styles.phoneContactNumber}>{selectedForPhone.student_phone}</Text>
                   </View>
-                  <Ionicons name="call" size={20} color={COLORS.primary} />
+                  <Ionicons name="call" size={20} color={COLORS.successDark} />
                 </TouchableOpacity>
               ) : (
                 <View style={[styles.phoneContactOption, styles.phoneContactDisabled]}>
@@ -1311,8 +1313,13 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   parentPhoneButton: {
-    backgroundColor: COLORS.successLight,
-    borderColor: COLORS.success,
+    backgroundColor: COLORS.successLight,  // พื้นหลังสีเขียวอ่อนสวยงาม
+    borderColor: COLORS.success,          // เส้นขอบสีเขียวมรกต
+    shadowColor: COLORS.successDark,      // เงาสีเขียวเข้ม
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
   },
   phoneButtonDisabled: {
     backgroundColor: COLORS.surfaceDisabled,
@@ -1330,16 +1337,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: COLORS.successLight,  // สีเขียวอ่อนสวยงาม
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    borderColor: COLORS.success,          // เส้นขอบสีเขียวมรกต
+    shadowColor: COLORS.successDark,      // เงาสีเขียวเข้ม
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 5,
   },
   phoneIconButtonDisabled: {
     backgroundColor: COLORS.surfaceDisabled,
@@ -1490,8 +1497,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: COLORS.successLight,  // พื้นหลังสีเขียวอ่อน
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.success,          // เส้นขอบสีเขียวมรกต
+    shadowColor: COLORS.successDark,      // เงาสีเขียวเข้ม
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   phoneContactInfo: {
     flex: 1,

@@ -12,7 +12,7 @@ const COLORS = {
   textSecondary: '#475569',
   border: '#E2E8F0',
   borderLight: '#F1F5F9',
-  primary: '#0a7ea4',
+  primary: '#021C8B',
   shadow: 'rgba(15, 23, 42, 0.08)',
 };
 
@@ -33,7 +33,7 @@ export default function DriverInfoScreen() {
           style={styles.menuItem}
           onPress={() => router.push('/driver-info/bus-form')}
         >
-          <Ionicons name="bus" size={24} color="#007AFF" />
+          <Ionicons name="bus" size={24} color={COLORS.primary} />
           <Text style={styles.menuText}>ฟอร์มข้อมูลคนขับ</Text>
           <Ionicons name="chevron-forward" size={20} color="#999" />
         </TouchableOpacity>

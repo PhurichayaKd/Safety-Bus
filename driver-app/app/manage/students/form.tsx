@@ -35,12 +35,12 @@ const COLORS = {
   borderLight: '#F1F5F9',
   divider: '#E2E8F0',
   
-  // Primary Brand (Blue)
-  primary: '#0a7ea4',
-  primaryDark: '#0369A1',
-  primaryLight: '#0EA5E9',
+  // Primary Brand (Resolution Blue & New Car Blue)
+  primary: '#021C8B',        // Resolution Blue
+  primaryDark: '#021C8B',    // Resolution Blue
+  primaryLight: '#1B52D7',   // New Car Blue
   primarySoft: '#EFF6FF',
-  primaryGradient: ['#0a7ea4', '#0369A1'],
+  primaryGradient: ['#021C8B', '#1B52D7'],
   
   // Status Colors
   success: '#059669',
@@ -49,13 +49,13 @@ const COLORS = {
   warningSoft: '#FFFBEB',
   danger: '#DC2626',
   dangerSoft: '#FEF2F2',
-  info: '#2563EB',
+  info: '#021C8B',           // Resolution Blue for info
   infoSoft: '#EFF6FF',
   
   // Interactive States
   hover: '#F8FAFC',
   pressed: '#F1F5F9',
-  focus: '#0a7ea4',
+  focus: '#021C8B',          // Resolution Blue for focus
   
   // Shadows
   shadow: 'rgba(15, 23, 42, 0.08)',
@@ -1123,7 +1123,7 @@ export default function StudentFormScreen() {
                   </>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={save} disabled={saving}>
+              <TouchableOpacity style={[styles.btn, styles.btnSuccess]} onPress={save} disabled={saving}>
                 {saving ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
@@ -1135,7 +1135,7 @@ export default function StudentFormScreen() {
               </TouchableOpacity>
             </>
           ) : (
-            <TouchableOpacity style={[styles.btn, styles.btnPrimaryFull]} onPress={save} disabled={saving}>
+            <TouchableOpacity style={[styles.btn, styles.btnSuccess]} onPress={save} disabled={saving}>
               {saving ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -1308,6 +1308,7 @@ const styles = StyleSheet.create({
   },
   btnPrimary: { backgroundColor: COLORS.text },
   btnPrimaryFull: { backgroundColor: COLORS.primary },
+  btnSuccess: { backgroundColor: COLORS.success },
   btnDanger: { backgroundColor: COLORS.danger },
   btnTxt: { 
     color: '#fff', 

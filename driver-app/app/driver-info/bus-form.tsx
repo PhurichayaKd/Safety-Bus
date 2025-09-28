@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
   pickerWrapper: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, overflow: 'hidden', backgroundColor: '#fff' },
 
   mapBtn: {
-    backgroundColor: '#2563EB', flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#021C8B', flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 12, height: 40, borderRadius: 20, marginLeft: 8,
   },
   mapBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 13 },
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     flex: 1, height: 48, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
   },
-  btnPrimary: { backgroundColor: '#111827' },
+  btnPrimary: { backgroundColor: '#059669' },
   btnTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
 
   hint: { fontSize: 12, color: '#666', marginTop: 8 },

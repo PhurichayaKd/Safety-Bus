@@ -182,7 +182,7 @@ const IndividualView: React.FC = () => {
            schema: 'public',
            table: 'students'
          },
-         (payload) => {
+         (payload: any) => {
             console.log('Students table changed:', payload);
             setLastUpdate(new Date());
             setUpdateNotification('ข้อมูลนักเรียนได้รับการอัปเดต');
@@ -192,7 +192,7 @@ const IndividualView: React.FC = () => {
             setTimeout(() => setUpdateNotification(null), 3000);
           }
        )
-       .on('system', {}, (status) => {
+       .on('system', {}, (status: string) => {
          if (status === 'SUBSCRIBED') {
            setRealtimeConnected(true);
            console.log('Students realtime subscription active');
@@ -210,7 +210,7 @@ const IndividualView: React.FC = () => {
            schema: 'public',
            table: 'pickup_dropoff'
          },
-         (payload) => {
+         (payload: any) => {
             console.log('Pickup/Dropoff table changed:', payload);
             setLastUpdate(new Date());
             setUpdateNotification('ข้อมูลการขึ้น-ลงรถได้รับการอัปเดต');
@@ -234,7 +234,7 @@ const IndividualView: React.FC = () => {
            schema: 'public',
            table: 'emergency_logs'
          },
-         (payload) => {
+         (payload: any) => {
             console.log('Emergency logs table changed:', payload);
             setLastUpdate(new Date());
             setUpdateNotification('ข้อมูลเหตุการณ์ฉุกเฉินได้รับการอัปเดต');

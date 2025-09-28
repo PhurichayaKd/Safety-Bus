@@ -1,7 +1,7 @@
-import { Session } from '@supabase/supabase-js';
+import { Session, AuthChangeEvent } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../services/supabaseClient';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../src/services/supabaseClient';
 interface AuthContextType {
   session: Session | null;
   loading: boolean;
@@ -18,7 +18,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
     
     // ตรวจสอบ session ปัจจุบัน
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       if (mounted) {
         setSession(session);
         setLoading(false);
@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // ฟังการเปลี่ยนแปลงของ auth state
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (mounted) {
         setSession(session);
         setLoading(false);
@@ -42,7 +42,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      // ลบ session ใน local storage ก่อน
+      setSession(null);
+      setLoading(false);
+      
+      // ล้างข้อมูลใน AsyncStorage เมื่อ logout
+      await AsyncStorage.multiRemove([
+        'current_bus_status',
+        'trip_phase',
+        'last_trip_date',
+        'reset_today_flag'
+      ]);
+      
+      // พยายาม logout จาก Supabase แต่ไม่ให้ error หยุดการทำงาน
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.warn('Logout error (non-critical):', error);
+      // ไม่ throw error เพราะเราได้ clear session ใน local แล้ว
+    }
   };
 
   const value = {

@@ -1,19 +1,5 @@
 {
-  "version": 2,
-  "functions": {
-    "api/*.js": {
-      "maxDuration": 10
-    },
-    "api/*.mjs": {
-      "maxDuration": 10,
-      "memory": 1024
-    }
-  },
   "rewrites": [
-    {
-      "source": "/api/webhook",
-      "destination": "/api/webhook.mjs"
-    },
     {
       "source": "/",
       "destination": "/index.html"

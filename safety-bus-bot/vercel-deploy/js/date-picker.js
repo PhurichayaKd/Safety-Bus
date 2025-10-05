@@ -165,7 +165,7 @@ function getStudentInfo() {
                     student_id: studentId,
                     student_name: decodeURIComponent(studentName),
                     link_code: studentId,
-                    class: 'ไม่ระบุ' // Default class for URL fallback
+                    grade: 'ไม่ระบุ' // Default grade for URL fallback
                 };
                 console.log('Using fallback student info:', studentInfo);
                 showStudentInfoSection();
@@ -254,14 +254,14 @@ function showStudentInfoSection() {
             console.log('Set student code:', codeElement.textContent);
         }
         if (classElement) {
-            classElement.textContent = studentInfo.class || 'ไม่ระบุ';
+            classElement.textContent = studentInfo.grade || studentInfo.class || 'ไม่ระบุ';
             console.log('Set student class:', classElement.textContent);
         }
         
         console.log('Student info displayed:', {
             name: studentInfo.student_name || studentInfo.name,
             code: studentInfo.id || studentInfo.student_id,
-            class: studentInfo.class
+            grade: studentInfo.grade || studentInfo.class
         });
     } else {
         console.error('No student info available!');

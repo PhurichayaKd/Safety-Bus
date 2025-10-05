@@ -1,0 +1,25 @@
+{
+  "name": "safety-bus-liff-app",
+  "version": "1.0.0",
+  "description": "Safety Bus LIFF Application for Leave Requests",
+  "main": "index.html",
+  "scripts": {
+    "start": "node -e \"console.log('Static site - no start script needed')\"",
+    "build": "echo 'No build process required for static site'"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  },
+  "devDependencies": {},
+  "keywords": [
+    "liff",
+    "line",
+    "safety-bus",
+    "leave-request"
+  ],
+  "author": "Safety Bus Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

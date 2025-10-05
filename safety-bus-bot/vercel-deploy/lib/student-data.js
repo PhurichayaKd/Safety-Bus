@@ -14,6 +14,39 @@ import { supabase } from './db.js';
  */
 export async function getStudentByLineId(lineUserId) {
   try {
+    // ตรวจสอบการเชื่อมโยงจากตาราง student_line_links ก่อน
+    const { data: studentLink, error: studentError } = await supabase
+      .from('student_line_links')
+      .select(`
+        student_id,
+        students!inner(
+          student_id,
+          student_name,
+          grade,
+          parent_id
+        )
+      `)
+      .eq('line_user_id', lineUserId)
+      .eq('active', true)
+      .single();
+
+    if (studentError && studentError.code !== 'PGRST116') {
+      throw studentError;
+    }
+
+    if (studentLink && studentLink.students) {
+      return {
+        type: 'student',
+        student: {
+          student_id: studentLink.students.student_id,
+          student_name: studentLink.students.student_name,
+          name: studentLink.students.student_name,
+          class: studentLink.students.grade
+        },
+        parent_id: studentLink.students.parent_id
+      };
+    }
+
     // ตรวจสอบการเชื่อมโยงจากตาราง parent_line_links
     const { data: parentLink, error: parentError } = await supabase
       .from('parent_line_links')
@@ -46,39 +79,6 @@ export async function getStudentByLineId(lineUserId) {
           parent_id: parentLink.parent_id
         };
       }
-    }
-
-    // ตรวจสอบการเชื่อมโยงจากตาราง driver_line_links
-    const { data: driverLink, error: driverError } = await supabase
-      .from('driver_line_links')
-      .select(`
-        student_id,
-        driver_name,
-        students!inner(
-          student_id,
-          student_name,
-          grade
-        )
-      `)
-      .eq('line_user_id', lineUserId)
-      .eq('active', true)
-      .single();
-
-    if (driverError && driverError.code !== 'PGRST116') {
-      throw driverError;
-    }
-
-    if (driverLink && driverLink.students) {
-      return {
-        type: 'driver',
-        student: {
-          student_id: driverLink.students.student_id,
-          student_name: driverLink.students.student_name,
-          name: driverLink.students.student_name,
-          class: driverLink.students.grade
-        },
-        driver_name: driverLink.driver_name
-      };
     }
 
     return null;

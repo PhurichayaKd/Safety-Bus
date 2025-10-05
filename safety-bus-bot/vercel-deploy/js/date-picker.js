@@ -208,36 +208,66 @@ function showSection(sectionName) {
     console.log('Found sections:', sections.length);
     sections.forEach(section => {
         const element = document.getElementById(section);
+        console.log(`Section ${section}:`, element ? 'found' : 'NOT FOUND');
         if (element) {
             element.style.display = 'none';
+            console.log(`Hidden section: ${section}`);
         }
     });
     
     // Show target section
     const targetSection = document.getElementById(sectionName);
-    console.log('Target section found:', targetSection);
+    console.log('Target section found:', targetSection ? 'YES' : 'NO');
     if (targetSection) {
         targetSection.style.display = 'block';
         console.log('Section displayed successfully:', sectionName);
+        console.log('Target section display style:', targetSection.style.display);
     } else {
         console.error('Target section not found:', sectionName);
     }
     
     currentSection = sectionName.replace('-section', '').replace('-screen', '');
+    console.log('Current section set to:', currentSection);
 }
 
 function showStudentInfoSection() {
+    console.log('=== showStudentInfoSection called ===');
+    console.log('Student info:', studentInfo);
+    
     if (studentInfo) {
-        document.getElementById('student-name').textContent = studentInfo.student_name || studentInfo.name || '-';
-        document.getElementById('student-code').textContent = studentInfo.id || studentInfo.student_id || '-';
-        document.getElementById('student-class').textContent = studentInfo.class || 'ไม่ระบุ';
+        const nameElement = document.getElementById('student-name');
+        const codeElement = document.getElementById('student-code');
+        const classElement = document.getElementById('student-class');
+        
+        console.log('Form elements found:', {
+            nameElement: nameElement ? 'YES' : 'NO',
+            codeElement: codeElement ? 'YES' : 'NO',
+            classElement: classElement ? 'YES' : 'NO'
+        });
+        
+        if (nameElement) {
+            nameElement.textContent = studentInfo.student_name || studentInfo.name || '-';
+            console.log('Set student name:', nameElement.textContent);
+        }
+        if (codeElement) {
+            codeElement.textContent = studentInfo.id || studentInfo.student_id || '-';
+            console.log('Set student code:', codeElement.textContent);
+        }
+        if (classElement) {
+            classElement.textContent = studentInfo.class || 'ไม่ระบุ';
+            console.log('Set student class:', classElement.textContent);
+        }
         
         console.log('Student info displayed:', {
             name: studentInfo.student_name || studentInfo.name,
             code: studentInfo.id || studentInfo.student_id,
             class: studentInfo.class
         });
+    } else {
+        console.error('No student info available!');
     }
+    
+    console.log('Calling showSection with main-form...');
     showSection('main-form');
 }
 
@@ -750,9 +780,12 @@ function cancelLeave() {
 
 // Initialize app when page loads
 window.addEventListener('load', function() {
+    console.log('=== PAGE LOAD EVENT TRIGGERED ===');
+    console.log('Current URL:', window.location.href);
     console.log('Page loaded, checking URL parameters...');
     
     // Show loading screen initially
+    console.log('Showing loading screen...');
     showSection('loading-screen');
     
     // Check if student info is provided via URL parameters
@@ -760,16 +793,27 @@ window.addEventListener('load', function() {
     const studentId = urlParams.get('studentId');
     const studentName = urlParams.get('studentName');
     
+    console.log('URL Parameters:', {
+        studentId: studentId,
+        studentName: studentName,
+        allParams: Object.fromEntries(urlParams.entries())
+    });
+    
     if (studentId && studentName) {
+        console.log('=== USING URL PARAMETERS PATH ===');
         console.log('Using student info from URL parameters:', { studentId, studentName });
         
         // Add event listeners first
+        console.log('Setting up event listeners...');
         setupEventListeners();
         
         // Try to get complete student info including class from API
+        console.log('Updating loading message...');
         updateLoadingMessage('กำลังดึงข้อมูลชั้นเรียน...');
         
         const getStudentUrl = window.location.origin + '/api/get-student';
+        console.log('Making API call to:', getStudentUrl);
+        
         fetch(getStudentUrl, {
             method: 'POST',
             headers: {
@@ -779,20 +823,25 @@ window.addEventListener('load', function() {
                 studentId: studentId
             })
         }).then(response => {
+            console.log('API Response status:', response.status);
+            console.log('API Response ok:', response.ok);
             if (response.ok) {
                 return response.json();
             } else {
-                throw new Error('API call failed');
+                throw new Error('API call failed with status: ' + response.status);
             }
         }).then(data => {
+            console.log('API Response data:', data);
             if (data.success && data.student) {
                 studentInfo = data.student;
                 console.log('Complete student info loaded from API:', studentInfo);
             } else {
                 throw new Error('No student data in response');
             }
+            console.log('Calling showStudentInfoSection...');
             showStudentInfoSection();
         }).catch(error => {
+            console.log('=== API CALL FAILED, USING FALLBACK ===');
             console.log('Failed to get complete info from API, using URL parameters only:', error);
             // Fallback to URL parameters only
             studentInfo = {
@@ -801,9 +850,12 @@ window.addEventListener('load', function() {
                 link_code: studentId,
                 class: 'ไม่ระบุ' // Default class for URL fallback
             };
+            console.log('Fallback student info:', studentInfo);
+            console.log('Calling showStudentInfoSection (fallback)...');
             showStudentInfoSection();
         });
     } else {
+        console.log('=== USING LIFF PATH ===');
         // Fallback to LIFF if no URL parameters
         console.log('No URL parameters found, initializing LIFF...');
         waitForLIFF();

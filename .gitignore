@@ -43,6 +43,18 @@ coverage/
 .npmrc
 npmrc
 
+# Additional security files
+*.key
+*.pem
+*.p12
+*.p8
+*.mobileprovision
+*.cer
+config/secrets.json
+secrets/
+credentials/
+.secrets/
+
 # Supabase CLI temp
 .supabase/
 supabase/.temp/

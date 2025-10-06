@@ -2,15 +2,19 @@
   "name": "safety-bus-liff-app",
   "version": "1.0.0",
   "description": "Safety Bus LIFF Application for Leave Requests",
-  "main": "index.html",
+  "type": "module",
   "scripts": {
-    "start": "node -e \"console.log('Static site - no start script needed')\"",
-    "build": "echo 'No build process required for static site'"
+    "start": "node -e \"console.log('Vercel serverless functions ready')\"",
+    "build": "echo 'No build process required'"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0"
+    "@line/bot-sdk": "^8.0.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "axios": "^1.12.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0"
   },
-  "devDependencies": {},
   "keywords": [
     "liff",
     "line",

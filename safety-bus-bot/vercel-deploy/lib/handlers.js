@@ -338,7 +338,7 @@ export async function handleLocationRequest(event) {
 export async function handleContactRequest(event) {
   await replyLineMessage(event.replyToken, {
     type: 'text',
-    text: '📞 ติดต่อคนขับรถ\n\nโทร: 02-XXX-XXXX\nหรือติดต่อผ่านโรงเรียนโดยตรง\n\nเวลาทำการ: 07:00 - 17:00 น.'
+    text: '📞 ติดต่อคนขับรถ\n\nโทร: 02-XXX-XXXX\nหรือติดต่อผ่านโรงเรียนโดยตรง\n\nเวลาทำการ: 06:00 - 17:00 น.'
   });
 }
 
@@ -1241,9 +1241,41 @@ export async function handleLeaveRequestMenuPush(userId) {
  * @param {Object} event - LINE webhook event
  */
 export async function handleBusLocationRequest(event) {
+  const userId = event.source.userId;
+  
+  // ตรวจสอบการผูกบัญชี
+  const { linked, student } = await checkLinkStatus(userId);
+  
+  if (!linked) {
+    await replyLineMessage(event.replyToken, {
+      type: 'text',
+      text: 'กรุณาผูกบัญชีก่อนใช้งาน\nโดยพิมพ์รหัสนักเรียน 6 หลัก'
+    });
+    return;
+  }
+
+  // สร้าง URL สำหรับหน้าแผนที่ตำแหน่งรถ
+  const baseUrl = 'https://safety-bus-liff-v4-new.vercel.app';
+  const mapUrl = `${baseUrl}/bus-location.html`;
+
   await replyLineMessage(event.replyToken, {
-    type: 'text',
-    text: '🚌 ตำแหน่งรถบัส\n\n⚠️ ฟีเจอร์นี้อยู่ระหว่างการพัฒนา\nจะเปิดให้บริการในเร็วๆ นี้\n\nขออภัยในความไม่สะดวก 🙏'
+    type: 'template',
+    altText: '🚌 ตำแหน่งรถบัส - ดูแผนที่เรียลไทม์',
+    template: {
+      type: 'buttons',
+      thumbnailImageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=400&h=200&fit=crop',
+      imageAspectRatio: 'rectangle',
+      imageSize: 'cover',
+      title: '🚌 ตำแหน่งรถบัส',
+      text: 'ติดตามตำแหน่งรถโดยสารแบบเรียลไทม์\nดูเส้นทางและสถานะการเดินทาง',
+      actions: [
+        {
+          type: 'uri',
+          label: '🗺️ ดูแผนที่',
+          uri: mapUrl
+        }
+      ]
+    }
   });
 }
 
@@ -1252,9 +1284,44 @@ export async function handleBusLocationRequest(event) {
  * @param {string} userId - LINE User ID
  */
 export async function handleBusLocationRequestPush(userId) {
+  // ตรวจสอบการผูกบัญชี
+  const { linked, student } = await checkLinkStatus(userId);
+  
+  if (!linked) {
+    await sendLineMessage(userId, [{
+      type: 'text',
+      text: 'กรุณาผูกบัญชีก่อนใช้งาน\nโดยพิมพ์รหัสนักเรียน 6 หลัก'
+    }]);
+    return;
+  }
+
+  // สร้าง URL สำหรับหน้าแผนที่ตำแหน่งรถ
+  const baseUrl = 'https://safety-bus-liff-v4-new.vercel.app';
+  const mapUrl = `${baseUrl}/bus-location.html`;
+
   await sendLineMessage(userId, [{
-    type: 'text',
-    text: '🚌 ตำแหน่งรถบัส\n\n⚠️ ฟีเจอร์นี้อยู่ระหว่างการพัฒนา\nจะเปิดให้บริการในเร็วๆ นี้\n\nขออภัยในความไม่สะดวก 🙏'
+    type: 'template',
+    altText: '🚌 ตำแหน่งรถบัส - ดูแผนที่เรียลไทม์',
+    template: {
+      type: 'buttons',
+      thumbnailImageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=400&h=200&fit=crop',
+      imageAspectRatio: 'rectangle',
+      imageSize: 'cover',
+      title: '🚌 ตำแหน่งรถบัส',
+      text: 'ติดตามตำแหน่งรถโดยสารแบบเรียลไทม์\nดูเส้นทางและสถานะการเดินทาง',
+      actions: [
+        {
+          type: 'uri',
+          label: '🗺️ ดูแผนที่',
+          uri: mapUrl
+        },
+        {
+          type: 'postback',
+          label: '🔄 รีเฟรช',
+          data: 'action=location'
+        }
+      ]
+    }
   }]);
 }
 
@@ -1266,7 +1333,7 @@ export async function handleContactDriverRequest(event) {
   const messages = [
     {
       type: 'text',
-      text: '📞 ติดต่อคนขับรถ\n\n👨‍💼 สมชาย คนขับ\n📱 เบอร์โทร: 081-234-5678\n🚌 ป้ายทะเบียน: 1กก-1234\n\n⏰ เวลาทำการ: 07:00 - 17:00 น.'
+      text: '📞 ติดต่อคนขับรถ\n\n👨‍💼 สมชาย คนขับ\n📱 เบอร์โทร: 081-234-5678\n🚌 ป้ายทะเบียน: 1กก-1234\n\n⏰ เวลาทำการ: 06:00 - 17:00 น.'
     },
     {
       type: 'template',

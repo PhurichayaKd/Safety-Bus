@@ -1,4 +1,5 @@
 // Enhanced LIFF App JavaScript
+console.log('=== DATE-PICKER.JS LOADED ===');
 let liff;
 let selectedDates = [];
 let studentInfo = null;
@@ -161,11 +162,16 @@ function getStudentInfo() {
                 console.log('Failed to get complete info from API, using URL parameters only:', error);
                 console.log('Error details:', error);
                 // Fallback to URL parameters only
+                const urlParams = new URLSearchParams(window.location.search);
+                const classParam = urlParams.get('class') || urlParams.get('grade');
+                
                 studentInfo = {
+                    id: studentId,
                     student_id: studentId,
+                    name: decodeURIComponent(studentName),
                     student_name: decodeURIComponent(studentName),
-                    link_code: studentId,
-                    grade: 'ไม่ระบุ' // Default grade for URL fallback
+                    class: classParam ? decodeURIComponent(classParam) : 'ไม่ระบุ',
+                    grade: classParam ? decodeURIComponent(classParam) : 'ไม่ระบุ'
                 };
                 console.log('Using fallback student info:', studentInfo);
                 showStudentInfoSection();
@@ -254,8 +260,14 @@ function showStudentInfoSection() {
             console.log('Set student code:', codeElement.textContent);
         }
         if (classElement) {
-            classElement.textContent = studentInfo.grade || studentInfo.class || 'ไม่ระบุ';
-            console.log('Set student class:', classElement.textContent);
+            // ตรวจสอบ field ที่เป็นไปได้สำหรับข้อมูลชั้นเรียน
+            const classInfo = studentInfo.class || studentInfo.grade || studentInfo.student_class || 'ไม่ระบุ';
+            classElement.textContent = classInfo;
+            console.log('Set student class:', classInfo);
+            console.log('Available student fields:', Object.keys(studentInfo));
+            console.log('studentInfo.class:', studentInfo.class);
+            console.log('studentInfo.grade:', studentInfo.grade);
+            console.log('studentInfo.student_class:', studentInfo.student_class);
         }
         
         console.log('Student info displayed:', {
@@ -701,7 +713,26 @@ async function submitViaAPI(requestData) {
         console.log('API response status:', response.status);
         console.log('API response ok:', response.ok);
         
-        const result = await response.json();
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        console.log('Response content-type:', contentType);
+        
+        let result;
+        if (contentType && contentType.includes('application/json')) {
+            result = await response.json();
+        } else {
+            // Handle non-JSON response
+            const textResponse = await response.text();
+            console.log('Non-JSON response text:', textResponse);
+            
+            // Try to parse as JSON anyway (in case content-type is wrong)
+            try {
+                result = JSON.parse(textResponse);
+            } catch (parseError) {
+                console.error('Failed to parse response as JSON:', parseError);
+                throw new Error(`เซิร์ฟเวอร์ส่งข้อมูลกลับมาในรูปแบบที่ไม่ถูกต้อง (${response.status})`);
+            }
+        }
         console.log('API response data:', result);
         
         if (!response.ok) {
@@ -825,8 +856,22 @@ window.addEventListener('load', function() {
         }).then(response => {
             console.log('API Response status:', response.status);
             console.log('API Response ok:', response.ok);
+            console.log('API Response headers:', response.headers);
             if (response.ok) {
-                return response.json();
+                // Clone response to read text first for debugging
+                const responseClone = response.clone();
+                return responseClone.text().then(text => {
+                    console.log('Raw API response text:', text);
+                    try {
+                        const jsonData = JSON.parse(text);
+                        console.log('Successfully parsed JSON:', jsonData);
+                        return jsonData;
+                    } catch (parseError) {
+                        console.error('JSON Parse Error:', parseError);
+                        console.error('Failed to parse response text:', text);
+                        throw new Error('Invalid JSON response: ' + parseError.message);
+                    }
+                });
             } else {
                 throw new Error('API call failed with status: ' + response.status);
             }
@@ -835,6 +880,8 @@ window.addEventListener('load', function() {
             if (data.success && data.student) {
                 studentInfo = data.student;
                 console.log('Complete student info loaded from API:', studentInfo);
+                console.log('studentInfo.class value:', studentInfo.class);
+                console.log('typeof studentInfo.class:', typeof studentInfo.class);
             } else {
                 throw new Error('No student data in response');
             }
@@ -843,14 +890,29 @@ window.addEventListener('load', function() {
         }).catch(error => {
             console.log('=== API CALL FAILED, USING FALLBACK ===');
             console.log('Failed to get complete info from API, using URL parameters only:', error);
-            // Fallback to URL parameters only
+            
+            // Fallback: Try to get class info from mock data for known students
+            const mockStudents = {
+                '100006': { class: 'ม.6/1', name: 'กฤษฎา' },
+                '100007': { class: 'ม.5/2', name: 'สมชาย' },
+                '100011': { class: 'ป.4/5', name: 'ก ศรีสุข' }
+            };
+            
+            let classInfo = 'ไม่ระบุ';
+            let fallbackName = decodeURIComponent(studentName);
+            
+            if (mockStudents[studentId]) {
+                classInfo = mockStudents[studentId].class;
+                fallbackName = mockStudents[studentId].name;
+            }
+            
             studentInfo = {
                 student_id: studentId,
-                student_name: decodeURIComponent(studentName),
+                student_name: fallbackName,
                 link_code: studentId,
-                class: 'ไม่ระบุ' // Default class for URL fallback
+                class: classInfo  // Set class info from fallback data
             };
-            console.log('Fallback student info:', studentInfo);
+            console.log('Fallback student info with class:', studentInfo);
             console.log('Calling showStudentInfoSection (fallback)...');
             showStudentInfoSection();
         });

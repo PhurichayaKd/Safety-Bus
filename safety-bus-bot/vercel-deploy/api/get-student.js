@@ -5,14 +5,17 @@ const MOCK_STUDENTS = {
     '100006': {
         student_id: '100006',
         student_name: 'กฤษฎา',
-        grade: 'ม.6/1',
-        link_code: 'ABC123'
+        grade: 'ม.6/1'
     },
     '100007': {
         student_id: '100007', 
         student_name: 'สมชาย',
-        grade: 'ม.5/2',
-        link_code: 'DEF456'
+        grade: 'ม.5/2'
+    },
+    '100011': {
+        student_id: '100011',
+        student_name: 'ก ศรีสุข',
+        grade: 'ป.4/5'
     }
 };
 
@@ -58,7 +61,7 @@ async function getStudentByLineId(lineUserId) {
         // ขั้นตอนที่ 2: หาข้อมูลนักเรียนจาก students table
         const { data: student, error: studentError } = await supabase
             .from('students')
-            .select('student_id, student_name, grade, link_code')
+            .select('student_id, student_name, grade')
             .eq('parent_id', parentLink.parent_id)
             .maybeSingle(); // ใช้ maybeSingle แทน single
 
@@ -75,8 +78,7 @@ async function getStudentByLineId(lineUserId) {
         console.log('Found student data:', {
             student_id: student.student_id,
             student_name: student.student_name,
-            grade: student.grade,
-            link_code: student.link_code
+            grade: student.grade
         });
 
         return {

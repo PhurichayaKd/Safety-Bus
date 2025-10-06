@@ -1,11 +1,4 @@
 // api/webhook.mjs - Vercel Serverless Function
-import dotenv from 'dotenv';
-import { buffer } from 'micro';
-
-// Load .env.local for development
-if (process.env.NODE_ENV !== 'production') {
-  dotenv.config({ path: '.env.local' });
-}
 
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
@@ -110,8 +103,18 @@ export default async function handler(req, res) {
 
   try {
     // Get raw body for signature validation
-    const rawBody = await buffer(req);
-    const bodyString = rawBody.toString('utf8');
+    let bodyString = '';
+    if (req.body) {
+      bodyString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    } else {
+      // Read from stream if body is not parsed
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      const rawBody = Buffer.concat(chunks);
+      bodyString = rawBody.toString('utf8');
+    }
 
     console.log('🚀 Webhook received:', req.method);
     console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));

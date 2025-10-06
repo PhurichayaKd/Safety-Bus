@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบติดตามรถสำหรับนักเรียน</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #ffffff;
+            color: #2c3e50;
+            padding: 12px 20px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 1000;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .header h1 {
+            font-size: 16px;
+            font-weight: 500;
+            margin: 0;
+            color: #495057;
+        }
+
+        .container {
+            display: flex;
+            height: calc(100vh - 50px);
+        }
+
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: #ffffff;
+            border-left: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.05);
+        }
+
+        .refresh-section {
+            padding: 15px;
+            border-bottom: 1px solid #f1f3f4;
+            text-align: center;
+        }
+
+        .loading-text {
+            color: #6c757d;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e9ecef;
+            border-top: 2px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .legend-section {
+            padding: 15px;
+            flex: 1;
+        }
+
+        .legend-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .legend-items {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: #ffffff;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+
+        .legend-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .legend-icon.bus { background: #28a745; }
+        .legend-icon.home { background: #17a2b8; }
+        .legend-icon.school { background: #ffc107; color: #212529; }
+
+        .legend-text {
+            font-size: 12px;
+            color: #495057;
+            font-weight: 500;
+        }
+
+        .status-section {
+            padding: 15px;
+            border-top: 1px solid #f1f3f4;
+            background: #f8f9fa;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+        }
+
+        .status-label {
+            font-size: 11px;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .status-value {
+            font-size: 12px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        /* Error notification */
+        .error-notification {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px 16px;
+            border-radius: 6px;
+            border: 1px solid #f5c6cb;
+            font-size: 13px;
+            z-index: 1001;
+            max-width: 300px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .error-notification.show {
+            transform: translateX(0);
+        }
+
+        .error-notification .close-btn {
+            float: right;
+            background: none;
+            border: none;
+            color: #721c24;
+            font-size: 16px;
+            cursor: pointer;
+            margin-left: 10px;
+            padding: 0;
+        }
+
+        /* Custom marker styles */
+        .bus-marker {
+            background: #28a745;
+            color: white;
+            border: 2px solid white;
+            border-radius: 50%;
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            line-height: 28px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .home-marker {
+            background: #17a2b8;
+            color: white;
+            border: 2px solid white;
+            border-radius: 50%;
+            text-align: center;
+            font-weight: bold;
+            font-size: 10px;
+            line-height: 24px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .school-marker {
+            background: #ffc107;
+            color: #212529;
+            border: 2px solid white;
+            border-radius: 50%;
+            text-align: center;
+            font-weight: bold;
+            font-size: 10px;
+            line-height: 24px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 250px;
+            }
+            
+            .header h1 {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚌 ระบบติดตามรถสำหรับนักเรียน</h1>
+    </div>
+
+    <div class="container">
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+
+        <div class="sidebar">
+            <div class="refresh-section">
+                <div id="loadingText" class="loading-text" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    กำลังโหลดข้อมูล...
+                </div>
+            </div>
+
+            <div class="legend-section">
+                <div class="legend-title">🗺️ สัญลักษณ์</div>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-icon bus">🚌</div>
+                        <span class="legend-text">รถโดยสาร</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-icon home">🏠</div>
+                        <span class="legend-text">บ้าน</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-icon school">🏫</div>
+                        <span class="legend-text">โรงเรียน</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-section">
+                <div class="status-item">
+                    <span class="status-label">อัปเดตล่าสุด:</span>
+                    <span class="status-value" id="lastUpdate">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error notification -->
+    <div id="errorNotification" class="error-notification">
+        <button class="close-btn" onclick="hideError()">&times;</button>
+        <span id="errorMessage"></span>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map;
+        let busMarkers = [];
+        let homeMarkers = [];
+        let schoolMarkers = [];
+        let refreshInterval;
+
+        // Initialize map
+        function initMap() {
+            // Center map on Thailand (approximate center)
+            map = L.map('map').setView([13.7563, 100.5018], 10);
+
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+        }
+
+        // Create custom marker
+        function createCustomIcon(type, content) {
+            const className = type + '-marker';
+            return L.divIcon({
+                className: className,
+                html: content,
+                iconSize: type === 'bus' ? [32, 32] : [28, 28],
+                iconAnchor: type === 'bus' ? [16, 16] : [14, 14]
+            });
+        }
+
+        // Clear all markers
+        function clearMarkers() {
+            busMarkers.forEach(marker => map.removeLayer(marker));
+            homeMarkers.forEach(marker => map.removeLayer(marker));
+            schoolMarkers.forEach(marker => map.removeLayer(marker));
+            busMarkers = [];
+            homeMarkers = [];
+            schoolMarkers = [];
+        }
+
+        // Add bus markers
+        function addBusMarkers(buses) {
+            buses.forEach((bus, index) => {
+                if (bus.latitude && bus.longitude) {
+                    const icon = createCustomIcon('bus', '🚌');
+                    const marker = L.marker([bus.latitude, bus.longitude], { icon })
+                        .bindPopup(`
+                            <div style="text-align: center;">
+                                <h4>🚌 รถบัส #${bus.driver_id}</h4>
+                                <p><strong>สถานะ:</strong> ${bus.status || 'ไม่ทราบ'}</p>
+                                <p><strong>อัปเดต:</strong> ${new Date(bus.last_updated).toLocaleString('th-TH')}</p>
+                            </div>
+                        `)
+                        .addTo(map);
+                    busMarkers.push(marker);
+                }
+            });
+
+            // Auto-fit map to show all markers
+            if (busMarkers.length > 0 || homeMarkers.length > 0 || schoolMarkers.length > 0) {
+                const allMarkers = [...busMarkers, ...homeMarkers, ...schoolMarkers];
+                const group = new L.featureGroup(allMarkers);
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+
+        // Show error notification
+        function showError(message) {
+            const notification = document.getElementById('errorNotification');
+            const messageElement = document.getElementById('errorMessage');
+            messageElement.textContent = message;
+            notification.classList.add('show');
+            
+            // Auto hide after 5 seconds
+            setTimeout(() => {
+                hideError();
+            }, 5000);
+        }
+
+        // Hide error notification
+        function hideError() {
+            const notification = document.getElementById('errorNotification');
+            notification.classList.remove('show');
+        }
+
+        // Fetch bus locations
+        async function fetchBusLocations() {
+            const loadingText = document.getElementById('loadingText');
+
+            try {
+                loadingText.style.display = 'flex';
+
+                const response = await fetch('/api/get-bus-locations');
+                const data = await response.json();
+
+                if (data.success) {
+                    clearMarkers();
+                    addBusMarkers(data.data);
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('th-TH');
+                } else {
+                    console.error('Error:', data.error);
+                    showError('เกิดข้อผิดพลาดในการดึงข้อมูล: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                showError('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+            } finally {
+                loadingText.style.display = 'none';
+            }
+        }
+
+        // Start auto-refresh
+        function startAutoRefresh() {
+            // Refresh every 5 seconds
+            refreshInterval = setInterval(fetchBusLocations, 5000);
+        }
+
+        // Stop auto-refresh
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        }
+
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', function() {
+            initMap();
+            
+            // Initial load
+            fetchBusLocations();
+            
+            // Start auto-refresh
+            startAutoRefresh();
+            
+            // Stop auto-refresh when page is hidden
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    stopAutoRefresh();
+                } else {
+                    startAutoRefresh();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

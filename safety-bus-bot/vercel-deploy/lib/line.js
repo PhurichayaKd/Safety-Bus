@@ -1,9 +1,4 @@
-import dotenv from 'dotenv';
-
-// Load .env.local for development
-if (process.env.NODE_ENV !== 'production') {
-  dotenv.config({ path: '.env.local' });
-}
+// LINE Bot SDK utilities
 
 import { Client } from '@line/bot-sdk';
 

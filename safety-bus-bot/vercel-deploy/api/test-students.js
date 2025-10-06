@@ -34,7 +34,7 @@ export default async function handler(req, res) {
         // Get parent line links
         const { data: parentLinks, error: parentLinksError } = await supabase
             .from('parent_line_links')
-            .select('id, line_user_id, parent_id, active, created_at')
+            .select('line_user_id, parent_id, active')
             .limit(10);
 
         if (parentLinksError) {

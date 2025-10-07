@@ -33,10 +33,21 @@ function createSupabaseClient() {
 
 // Get student information by LINE ID
 async function getStudentByLineId(lineUserId) {
-    const supabase = createSupabaseClient();
-    
     try {
         console.log('Looking up student for LINE ID:', lineUserId);
+        
+        // Handle test mode
+        if (lineUserId === 'test-user-id') {
+            console.log('🧪 Test mode detected - returning mock data');
+            return {
+                id: 'TEST001',
+                name: 'นักเรียนทดสอบ',
+                class: 'ม.1/1',
+                line_user_id: lineUserId
+            };
+        }
+        
+        const supabase = createSupabaseClient();
         
         // ขั้นตอนที่ 1: ตรวจสอบการเชื่อมโยงจากตาราง parent_line_links
         const { data: parentLink, error: parentError } = await supabase

@@ -1259,7 +1259,7 @@ export async function handleBusLocationRequest(event) {
   }
 
   // สร้าง URL สำหรับหน้าแผนที่ตำแหน่งรถ
-  const baseUrl = 'https://safety-bus-liff-v4-new.vercel.app';
+  const baseUrl = config.liffAppUrl;
   const mapUrl = `${baseUrl}/bus-location.html`;
 
   await replyLineMessage(event.replyToken, {
@@ -1300,7 +1300,7 @@ export async function handleBusLocationRequestPush(userId) {
   }
 
   // สร้าง URL สำหรับหน้าแผนที่ตำแหน่งรถ
-  const baseUrl = 'https://safety-bus-liff-v4-new.vercel.app';
+  const baseUrl = config.liffAppUrl;
   const mapUrl = `${baseUrl}/bus-location.html`;
 
   await sendLineMessage(userId, [{

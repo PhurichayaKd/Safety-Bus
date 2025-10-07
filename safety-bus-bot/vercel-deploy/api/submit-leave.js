@@ -391,60 +391,91 @@ export default async function handler(req, res) {
       }
     }
     
-    // Insert leave requests into Supabase
-    const leaveRecords = leaveDates.map(date => ({
-      student_id: parseInt(studentId),
-      leave_date: date,
-      status: 'approved',
-      leave_type: leaveType || 'personal', // ใช้ leaveType จากฟอร์ม หรือ default เป็น 'personal'
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }));
-
-    console.log('💾 Inserting leave records:', leaveRecords);
-
+    // Validate student exists in database before inserting leave records
     let insertedData = null;
     if (supabase) {
+      console.log('📝 Validating student and inserting leave records...');
+      
+      // First, check if student exists in database
+      const studentIdInt = parseInt(studentId);
+      console.log('Checking for student_id:', studentIdInt);
+      
+      const { data: existingStudent, error: studentCheckError } = await supabase
+        .from('students')
+        .select('student_id, student_name, grade')
+        .eq('student_id', studentIdInt)
+        .maybeSingle();
+      
+      if (studentCheckError) {
+        console.error('Error checking student existence:', studentCheckError);
+        throw new Error(`ไม่สามารถตรวจสอบข้อมูลนักเรียนได้: ${studentCheckError.message}`);
+      }
+      
+      if (!existingStudent) {
+        console.log('Student not found in database, creating student record...');
+        
+        // Create student record if it doesn't exist
+        const newStudentData = {
+          student_id: studentIdInt,
+          student_name: studentName || 'นักเรียนทดสอบ',
+          grade: 'ม.1/1', // Default grade
+          start_date: '2024-01-01',
+          end_date: '2024-12-31',
+          is_active: true,
+          status: 'active'
+        };
+        
+        const { data: createdStudent, error: createError } = await supabase
+          .from('students')
+          .insert([newStudentData])
+          .select()
+          .single();
+        
+        if (createError) {
+          console.error('Error creating student record:', createError);
+          throw new Error(`ไม่สามารถสร้างข้อมูลนักเรียนได้: ${createError.message}`);
+        }
+        
+        console.log('✅ Created student record:', createdStudent);
+      } else {
+        console.log('✅ Student exists in database:', existingStudent);
+      }
+      
+      // Now insert leave records
+      const leaveRecords = leaveDates.map(date => ({
+        student_id: studentIdInt,
+        leave_date: date,
+        status: 'approved',
+        leave_type: leaveType || 'personal',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+      
+      console.log('💾 Inserting leave records:', leaveRecords);
+      
       const { data, error: insertError } = await supabase
         .from('leave_requests')
         .insert(leaveRecords)
         .select();
-
+      
       if (insertError) {
         console.error('❌ Supabase insert error:', insertError);
-        
-        // Check if it's a foreign key constraint error
-        if (insertError.code === '23503') {
-          // For demo/test purposes, create a mock response
-          if (parseInt(studentId) === 123456) {
-            console.log('🔧 Demo mode: Creating mock leave record');
-            const mockData = leaveRecords.map((record, index) => ({
-              ...record,
-              id: Math.floor(Math.random() * 1000) + index,
-              mock: true
-            }));
-            
-            return res.status(200).json({
-              ok: true,
-              message: 'แจ้งลาสำเร็จ (โหมดทดสอบ)',
-              data: mockData,
-              mock: true
-            });
-          }
-          
-          return res.status(400).json({
-            ok: false,
-            error: 'ไม่พบข้อมูลนักเรียนในระบบ กรุณาติดต่อผู้ดูแลระบบ'
-          });
-        }
-        
-        throw new Error(insertError.message);
-      } else {
-        console.log('✅ Successfully inserted leave records:', data);
-        insertedData = data;
+        throw new Error(`ไม่สามารถบันทึกข้อมูลการลาได้: ${insertError.message}`);
       }
+      
+      console.log('✅ Successfully inserted leave records:', data);
+      insertedData = data;
     } else {
       console.warn('⚠️ Supabase not available - using mock data');
+      const leaveRecords = leaveDates.map(date => ({
+        student_id: parseInt(studentId),
+        leave_date: date,
+        status: 'approved',
+        leave_type: leaveType || 'personal',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+      
       insertedData = leaveRecords.map((record, index) => ({
         ...record,
         id: Math.floor(Math.random() * 1000) + index,

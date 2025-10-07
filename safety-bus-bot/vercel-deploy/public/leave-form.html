@@ -14,7 +14,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f5f7fa;
             min-height: 100vh;
             padding: 20px;
         }
@@ -22,17 +22,19 @@
         .container {
             max-width: 500px;
             margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            border: 1px solid #e1e8ed;
             overflow: hidden;
         }
 
         .header {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
+            background: #ffffff;
+            color: #1a202c;
             padding: 30px 20px;
             text-align: center;
+            border-bottom: 1px solid #e1e8ed;
         }
 
         .header h1 {
@@ -73,11 +75,12 @@
         }
 
         .student-info {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 25px;
-            border-left: 5px solid #4facfe;
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 28px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         }
 
         .student-info h3 {
@@ -124,18 +127,20 @@
         .form-group textarea,
         .form-group select {
             width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
+            padding: 14px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
             font-size: 16px;
-            transition: border-color 0.3s ease;
+            transition: all 0.2s ease;
+            background: #ffffff;
         }
 
         .form-group input:focus,
         .form-group textarea:focus,
         .form-group select:focus {
             outline: none;
-            border-color: #4facfe;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
         .date-input-container {
@@ -149,23 +154,28 @@
         }
 
         .add-date-btn {
-            background: #28a745;
+            background: #059669;
             color: white;
             border: none;
             padding: 12px 20px;
-            border-radius: 10px;
+            border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
-            transition: background-color 0.3s ease;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
         }
 
         .add-date-btn:hover {
-            background: #218838;
+            background: #047857;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
         }
 
         .add-date-btn:disabled {
-            background: #6c757d;
+            background: #9ca3af;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .selected-dates {
@@ -196,25 +206,29 @@
 
         .submit-btn {
             width: 100%;
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background: #2563eb;
             color: white;
             border: none;
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 18px;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s ease;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
         }
 
         .submit-btn:hover {
-            transform: translateY(-2px);
+            background: #1d4ed8;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
         }
 
         .submit-btn:disabled {
-            background: #6c757d;
+            background: #9ca3af;
             cursor: not-allowed;
             transform: none;
+            box-shadow: none;
         }
 
         .error-message {
@@ -302,20 +316,14 @@
                         <span class="info-label">ชั้นเรียน:</span>
                         <span class="info-value" id="student-class">-</span>
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">เส้นทางรถ:</span>
-                        <span class="info-value" id="bus-route">-</span>
-                    </div>
                 </div>
 
                 <!-- Leave Form -->
                 <form id="leave-form">
-
-
                     <div class="form-group">
                         <label>วันที่ลา *</label>
                         <div class="date-input-container">
-                            <input type="date" id="leave-date" required>
+                            <input type="date" id="leave-date">
                             <button type="button" class="add-date-btn" onclick="addDate()">เพิ่ม</button>
                         </div>
                         <div class="selected-dates" id="selected-dates">
@@ -345,6 +353,36 @@
         let liff = null;
         let studentData = null;
         let selectedDates = [];
+
+        // Show/hide screens
+        function showLoading(show) {
+            document.getElementById('loading-screen').classList.toggle('hidden', !show);
+        }
+
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-screen').classList.remove('hidden');
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('main-form').classList.add('hidden');
+        }
+
+        function showMainForm(show) {
+            document.getElementById('main-form').classList.toggle('hidden', !show);
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('error-screen').classList.add('hidden');
+        }
+
+        function showSuccess() {
+            const successScreenEl = document.getElementById('success-screen');
+            const mainFormEl = document.getElementById('main-form');
+            const loadingScreenEl = document.getElementById('loading-screen');
+            const errorScreenEl = document.getElementById('error-screen');
+            
+            if (successScreenEl) successScreenEl.classList.remove('hidden');
+            if (mainFormEl) mainFormEl.classList.add('hidden');
+            if (loadingScreenEl) loadingScreenEl.classList.add('hidden');
+            if (errorScreenEl) errorScreenEl.classList.add('hidden');
+        }
 
         // Initialize LIFF and app
         async function initializeApp() {
@@ -399,19 +437,18 @@
                     console.log('⚠️ LIFF SDK not available');
                 }
                 
-                // Fallback: Try to identify user through other methods
-                console.log('⚠️ LIFF not available, trying alternative user identification...');
+                // Fallback: Try alternative user identification methods
                 await tryAlternativeUserIdentification();
                 
             } catch (error) {
-                console.error('❌ Error initializing app:', error);
+                console.error('❌ App initialization failed:', error);
                 showError('เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง');
             }
         }
 
-        // Load student data from API
+        // Load student data
         async function loadStudentData(lineUserId) {
-            console.log('📋 Loading student data for:', lineUserId);
+            console.log('📋 Loading student data for LINE User ID:', lineUserId);
             
             try {
                 const response = await fetch('/api/get-student', {
@@ -425,21 +462,6 @@
                 });
 
                 if (!response.ok) {
-                    console.error(`❌ HTTP error! status: ${response.status}`);
-                    
-                    // If it's a test user, use mock data
-                    if (lineUserId === 'test-user-id') {
-                        console.log('🧪 Using mock data for test mode');
-                        studentData = {
-                              student_id: 'TEST001',
-                              student_name: 'นักเรียนทดสอบ',
-                              class_name: 'ม.1/1',
-                              bus_route: 'เส้นทางทดสอบ'
-                          };
-                         displayStudentInfo();
-                        return;
-                    }
-                    
                     throw new Error(`เซิร์ฟเวอร์ตอบสนองด้วยสถานะ: ${response.status}`);
                 }
 
@@ -447,75 +469,34 @@
                 console.log('📋 Student data received:', data);
 
                 if (data.success && data.student) {
-                     // Map API response to expected format
-                     studentData = {
-                         student_id: data.student.id || data.student.student_id,
-                         student_name: data.student.name || data.student.student_name,
-                         class_name: data.student.class || data.student.class_name || 'ไม่ระบุ',
-                         bus_route: data.student.bus_route || 'ไม่ระบุ'
-                     };
-                     displayStudentInfo();
-                 } else {
-                    // If it's a test user and API fails, use mock data
-                    if (lineUserId === 'test-user-id') {
-                        console.log('🧪 API failed, using mock data for test mode');
-                        studentData = {
-                            student_id: 'TEST001',
-                            student_name: 'นักเรียนทดสอบ',
-                            class_name: 'ม.1/1',
-                            bus_route: 'เส้นทางทดสอบ'
-                        };
-                        displayStudentInfo();
-                        return;
-                    }
-                    
+                    studentData = {
+                        student_id: data.student.id || data.student.student_id,
+                        student_name: data.student.name || data.student.student_name,
+                        class_name: data.student.class || data.student.class_name || 'ไม่ระบุ',
+                        bus_route: data.student.bus_route || 'เส้นทางทดสอบ'
+                    };
+                    displayStudentInfo();
+                } else {
                     throw new Error(data.message || 'ไม่พบข้อมูลนักเรียน');
                 }
                 
             } catch (error) {
                 console.error('❌ Error loading student data:', error);
-                
-                // If it's a test user, use mock data as fallback
-                if (lineUserId === 'test-user-id') {
-                    console.log('🧪 Error occurred, using mock data for test mode');
-                    studentData = {
-                        student_id: 'TEST001',
-                        student_name: 'นักเรียนทดสอบ',
-                        class_name: 'ม.1/1',
-                        bus_route: 'เส้นทางทดสอบ'
-                    };
-                    displayStudentInfo();
-                    return;
-                }
-                
-                throw new Error('ไม่สามารถดึงข้อมูลนักเรียนได้ กรุณาตรวจสอบการเชื่อมโยงบัญชี LINE: ' + error.message);
+                throw new Error('ไม่สามารถดึงข้อมูลนักเรียนได้: ' + error.message);
             }
         }
 
         // Display student information
         function displayStudentInfo() {
-            if (!studentData) return;
-            
             document.getElementById('student-name').textContent = studentData.student_name || 'ไม่ระบุ';
             document.getElementById('student-id').textContent = studentData.student_id || 'ไม่ระบุ';
             document.getElementById('student-class').textContent = studentData.class_name || 'ไม่ระบุ';
-            document.getElementById('bus-route').textContent = studentData.bus_route || 'ไม่ระบุ';
             
             // Show test mode indicator if using test data
             if (studentData.student_id === 'TEST001') {
                 const testIndicator = document.createElement('div');
                 testIndicator.className = 'test-mode-indicator';
                 testIndicator.innerHTML = '🧪 โหมดทดสอบ - ข้อมูลจำลอง';
-                testIndicator.style.cssText = `
-                    background: #fff3cd;
-                    color: #856404;
-                    padding: 8px 12px;
-                    border-radius: 6px;
-                    margin: 10px 0;
-                    font-size: 14px;
-                    text-align: center;
-                    border: 1px solid #ffeaa7;
-                `;
                 
                 const studentInfo = document.querySelector('.student-info');
                 if (studentInfo && !studentInfo.querySelector('.test-mode-indicator')) {
@@ -609,9 +590,33 @@
 
         // Handle form submission
         async function handleSubmit(event) {
+            console.log('🚀 handleSubmit called!');
             event.preventDefault();
             
+            console.log('📊 Current state:', {
+                selectedDates: selectedDates,
+                studentData: studentData
+            });
+            
+            // Validate that dates are selected
+            if (selectedDates.length === 0) {
+                alert('กรุณาเลือกวันที่ลาอย่างน้อย 1 วัน');
+                return;
+            }
+            
+            // Validate that student data is loaded
+            if (!studentData) {
+                alert('ไม่พบข้อมูลนักเรียน กรุณาโหลดหน้าใหม่');
+                return;
+            }
+            
             const submitBtn = document.getElementById('submit-btn');
+            if (!submitBtn) {
+                console.error('❌ Submit button not found!');
+                alert('ไม่พบปุ่มส่งคำขอ กรุณาโหลดหน้าใหม่');
+                return;
+            }
+            
             const originalText = submitBtn.textContent;
             
             try {
@@ -620,9 +625,16 @@
                 
                 // Get user ID (LIFF or test mode)
                 let userId = 'test-user-id';
-                if (typeof liff !== 'undefined' && liff.isLoggedIn()) {
-                    const profile = await liff.getProfile();
-                    userId = profile.userId;
+                if (typeof liff !== 'undefined' && liff !== null && liff.isLoggedIn && liff.isLoggedIn()) {
+                    try {
+                        const profile = await liff.getProfile();
+                        userId = profile.userId;
+                        console.log('✅ Using LIFF user ID:', userId);
+                    } catch (liffError) {
+                        console.warn('⚠️ LIFF getProfile failed, using test user ID:', liffError);
+                    }
+                } else {
+                    console.log('ℹ️ LIFF not available, using test user ID');
                 }
                 
                 const formData = {
@@ -632,7 +644,7 @@
                         student_name: studentData.student_name
                     },
                     leaveDates: selectedDates,
-                    leaveType: 'personal', // ใช้ personal เสมอ
+                    leaveType: 'personal',
                     userId: userId,
                     source: 'direct'
                 };
@@ -648,7 +660,7 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    throw new Error(`เซิร์ฟเวอร์ตอบสนองด้วยสถานะ: ${response.status}`);
                 }
                 
                 const result = await response.json();
@@ -664,39 +676,16 @@
                 console.error('❌ Error submitting leave request:', error);
                 showError('เกิดข้อผิดพลาดในการส่งคำขอลา กรุณาลองใหม่อีกครั้ง');
             } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = originalText;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                }
             }
         }
 
-        // Show/hide screens
-        function showLoading(show) {
-            document.getElementById('loading-screen').classList.toggle('hidden', !show);
-        }
-
-        function showMainForm(show) {
-            document.getElementById('main-form').classList.toggle('hidden', !show);
-        }
-
-        function showError(message) {
-            document.getElementById('error-message-text').textContent = message;
-            document.getElementById('error-screen').classList.remove('hidden');
-            document.getElementById('loading-screen').classList.add('hidden');
-            document.getElementById('main-form').classList.add('hidden');
-            document.getElementById('success-screen').classList.add('hidden');
-        }
-
-        function showSuccess() {
-            document.getElementById('success-screen').classList.remove('hidden');
-            document.getElementById('main-form').classList.add('hidden');
-            document.getElementById('loading-screen').classList.add('hidden');
-            document.getElementById('error-screen').classList.add('hidden');
-        }
-
-        // Reset form for new submission
+        // Reset form
         function resetForm() {
             selectedDates = [];
-            document.getElementById('leave-form').reset();
             updateDatesList();
             updateSubmitButton();
             showMainForm(true);
@@ -747,7 +736,7 @@
                 
             } catch (error) {
                 console.error('❌ Error in alternative user identification:', error);
-                showError('เกิดข้อผิดพลาดในการระบุตัวตน กรุณาลองใหม่อีกครั้ง');
+                showError('เกิดข้อผิดพลาดในการระบุตัวตน...');
             }
         }
         
@@ -780,6 +769,7 @@
                         class_name: data.student.class || data.student.class_name || 'ไม่ระบุ',
                         bus_route: data.student.bus_route || 'ไม่ระบุ'
                     };
+                    console.log('✅ Student data loaded:', studentData);
                     displayStudentInfo();
                 } else {
                     throw new Error(data.message || 'ไม่พบข้อมูลนักเรียน');
@@ -798,54 +788,17 @@
             const content = document.querySelector('.content');
             content.innerHTML = `
                 <div class="user-identification">
-                    <h3>🔐 ระบุตัวตนเพื่อใช้งาน</h3>
-                    <p>กรุณาป้อนรหัสนักเรียนเพื่อเข้าใช้งานฟอร์มแจ้งลา</p>
+                    <h3>🔍 ระบุตัวตน</h3>
+                    <p>กรุณาป้อนรหัสนักเรียนเพื่อเข้าใช้งานระบบ</p>
                     
-                    <div class="form-group">
-                        <label for="manual-student-id">รหัสนักเรียน:</label>
-                        <input type="text" id="manual-student-id" placeholder="ป้อนรหัสนักเรียน" maxlength="20">
+                    <div class="manual-input-group">
+                        <input type="text" id="manual-student-id" placeholder="รหัสนักเรียน (เช่น 100001)" maxlength="10">
                     </div>
                     
-                    <button type="button" class="submit-btn" onclick="handleManualIdentification()">
+                    <button class="identify-btn" onclick="handleManualIdentification()">
                         ยืนยันตัวตน
                     </button>
-                    
-                    <div class="alternative-methods">
-                        <p><small>หรือ</small></p>
-                        <button type="button" class="retry-btn" onclick="location.reload()">
-                            ลองใหม่ผ่าน LINE
-                        </button>
-                    </div>
                 </div>
-                
-                <style>
-                .user-identification {
-                    text-align: center;
-                    padding: 20px;
-                }
-                
-                .user-identification h3 {
-                    color: #333;
-                    margin-bottom: 15px;
-                }
-                
-                .user-identification p {
-                    color: #666;
-                    margin-bottom: 25px;
-                    line-height: 1.5;
-                }
-                
-                .alternative-methods {
-                    margin-top: 20px;
-                    padding-top: 20px;
-                    border-top: 1px solid #e9ecef;
-                }
-                
-                .alternative-methods p {
-                    margin-bottom: 10px;
-                    color: #999;
-                }
-                </style>
             `;
         }
         
@@ -896,8 +849,6 @@
             
             // Form submission
             document.getElementById('leave-form').addEventListener('submit', handleSubmit);
-            
-
             
             // Wait a bit for LIFF SDK to load
             setTimeout(async () => {

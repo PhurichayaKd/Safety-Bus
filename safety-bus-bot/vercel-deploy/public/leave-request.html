@@ -411,9 +411,11 @@
                 });
 
                 if (!response.ok) {
-                    // If it's a test user, use mock data without showing error
+                    console.error(`❌ HTTP error! status: ${response.status}`);
+                    
+                    // If it's a test user, use mock data
                     if (lineUserId === 'test-user-id') {
-                        console.log('🧪 Using mock data for test mode (no parent link found)');
+                        console.log('🧪 Using mock data for test mode');
                         studentData = {
                               student_id: 'TEST001',
                               student_name: 'นักเรียนทดสอบ',
@@ -424,7 +426,6 @@
                         return;
                     }
                     
-                    console.error(`❌ HTTP error! status: ${response.status}`);
                     throw new Error(`เซิร์ฟเวอร์ตอบสนองด้วยสถานะ: ${response.status}`);
                 }
 
@@ -432,13 +433,7 @@
                 console.log('📋 Student data received:', data);
 
                 if (data.success && data.student) {
-                     // Map API response fields to expected format
-                     studentData = {
-                         student_id: data.student.id,
-                         student_name: data.student.name,
-                         class_name: data.student.class,
-                         bus_route: 'เส้นทางทดสอบ'
-                     };
+                     studentData = data.student;
                      displayStudentInfo();
                  } else {
                     // If it's a test user and API fails, use mock data

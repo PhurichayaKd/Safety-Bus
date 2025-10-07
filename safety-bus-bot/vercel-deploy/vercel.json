@@ -16,6 +16,10 @@
       "destination": "/leave-form.html"
     },
     {
+      "source": "/leave-request", 
+      "destination": "/leave-request.html"
+    },
+    {
       "source": "/bus-location",
       "destination": "/bus-location.html"
     }

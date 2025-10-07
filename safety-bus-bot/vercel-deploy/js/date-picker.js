@@ -1,7 +1,6 @@
 // Enhanced LIFF App JavaScript
 console.log('=== DATE-PICKER.JS LOADED ===');
 let liff;
-let selectedDates = [];
 let studentInfo = null;
 let currentSection = 'loading'; // loading, student-info, date-selection, confirmation, success, error
 

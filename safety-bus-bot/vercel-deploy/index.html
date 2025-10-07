@@ -48,55 +48,55 @@
             <!-- Date Selection Section -->
             <div class="date-selection-card">
                 <h3>📅 เลือกวันที่แจ้งลา</h3>
-                <p class="instruction">เลือกได้สูงสุด 3 วัน</p>
-                
-                <div class="date-input-wrapper">
-                    <label for="leave-date">เพิ่มวันที่ลา:</label>
-                    <div class="date-input-group">
-                        <input type="date" id="leave-date" name="leave-date">
-                        <button id="add-date-btn" class="add-date-button">+ เพิ่มวัน</button>
-                    </div>
+                <div class="date-input-group">
+                    <input type="date" id="leave-date" class="date-input">
+                    <button id="add-date-btn" class="add-date-button">➕ เพิ่มวันที่</button>
                 </div>
                 
-                <div id="selected-dates-list" class="selected-dates-list">
-                    <h4>วันที่เลือกแล้ว:</h4>
-                    <div id="dates-container" class="dates-container">
-                        <p class="no-dates">ยังไม่ได้เลือกวันที่</p>
-                    </div>
+                <!-- Selected Dates Display -->
+                <div id="dates-container" class="dates-container">
+                    <p class="no-dates">ยังไม่ได้เลือกวันที่</p>
                 </div>
                 
-                <div class="button-container">
-                    <button id="confirm-btn" class="confirm-button" disabled>
-                        ✅ ยืนยัน
-                    </button>
-                </div>
+                <!-- Submit Button -->
+                <button id="confirm-btn" class="submit-button" disabled>
+                    ส่งข้อมูลการลา
+                </button>
             </div>
         </div>
 
         <!-- Confirmation Section -->
         <div id="confirmation-section" class="confirmation-section" style="display: none;">
             <div class="confirmation-header">
-                <h3>📋 ตรวจสอบข้อมูลการลา</h3>
+                <h3>✅ ยืนยันข้อมูลการลา</h3>
             </div>
             
             <div class="confirmation-details">
                 <div class="student-summary">
-                    <p><strong>👤 นักเรียน:</strong> <span id="confirm-student-name">-</span></p>
-                    <p><strong>🆔 รหัส:</strong> <span id="confirm-student-code">-</span></p>
-                    <p><strong>🎓 ชั้นเรียน:</strong> <span id="confirm-student-class">-</span></p>
+                    <h4>👤 ข้อมูลนักเรียน</h4>
+                    <div class="info-row">
+                        <span class="label">ชื่อ:</span>
+                        <span id="confirm-student-name" class="value">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">รหัสนักเรียน:</span>
+                        <span id="confirm-student-code" class="value">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">ชั้นเรียน:</span>
+                        <span id="confirm-student-class" class="value">-</span>
+                    </div>
                 </div>
                 
                 <div class="dates-summary">
-                    <p><strong>📅 วันที่ลา:</strong></p>
-                    <div id="confirm-dates-list" class="confirm-dates-list"></div>
-                </div>
-                
-                <div class="reason-summary">
-                    <p><strong>📝 เหตุผล:</strong> ไม่ประสงค์ขึ้นรถบัสรับ-ส่งในวันดังกล่าว</p>
+                    <h4>📅 วันที่ลา</h4>
+                    <ul id="confirm-dates-list" class="dates-list">
+                        <!-- Dates will be populated here -->
+                    </ul>
                 </div>
             </div>
             
-            <div class="button-container">
+            <div class="confirmation-buttons">
                 <button id="final-confirm-btn" class="final-confirm-button">
                     ✅ ยืนยันส่งข้อมูล
                 </button>
@@ -125,7 +125,28 @@
         </div>
     </div>
     
-    <script src="/js/date-picker.js"></script>
+    <script>
+        console.log('🧪 INLINE SCRIPT EXECUTED');
+        console.log('🧪 Document ready state:', document.readyState);
+        console.log('🧪 LIFF SDK available:', typeof liff !== 'undefined');
+        
+        // Add global error handler for LIFF
+        window.addEventListener('error', function(e) {
+            console.error('🚨 Global error caught:', e.error);
+            if (e.error && e.error.message && e.error.message.includes('LIFF')) {
+                console.warn('⚠️ LIFF related error detected, continuing with fallback mode');
+            }
+        });
+        
+        // Add unhandled promise rejection handler
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('🚨 Unhandled promise rejection:', e.reason);
+            if (e.reason && e.reason.toString().includes('LIFF')) {
+                console.warn('⚠️ LIFF related promise rejection, continuing with fallback mode');
+                e.preventDefault(); // Prevent the error from being logged to console
+            }
+        });
+    </script>
     <script src="/js/leave-form.js"></script>
 </body>
 </html>

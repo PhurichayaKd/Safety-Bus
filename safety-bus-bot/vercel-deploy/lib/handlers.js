@@ -1143,7 +1143,7 @@ export async function handleLeaveRequestMenu(event) {
       `รหัส: ${studentData.student.student_id}\n` +
       `ชั้น: ${studentData.student.class || 'ไม่ระบุ'}\n\n` +
       `🔗 เปิดฟอร์มแจ้งลาหยุด:\n` +
-      `${config.liffAppUrl}/?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}&class=${encodeURIComponent(studentData.student.class || 'ไม่ระบุ')}`;
+      `${config.liffAppUrl}/leave-form?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}&class=${encodeURIComponent(studentData.student.class || 'ไม่ระบุ')}`;
 
     // ใช้ reply message เพื่อตอบสนองการกดเมนูเท่านั้น
     await replyLineMessage(event.replyToken, {
@@ -1224,7 +1224,7 @@ export async function handleLeaveRequestMenuPush(userId) {
       `รหัส: ${studentData.student.student_id}\n` +
       `ชั้น: ${studentData.student.class || 'ไม่ระบุ'}\n\n` +
       `🔗 เปิดฟอร์มแจ้งลาหยุด:\n` +
-      `${config.liffAppUrl}/?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}&class=${encodeURIComponent(studentData.student.class || 'ไม่ระบุ')}`;
+      `${config.liffAppUrl}/leave-form?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}&class=${encodeURIComponent(studentData.student.class || 'ไม่ระบุ')}`;
 
     await sendLineMessage(userId, {
       type: 'text',

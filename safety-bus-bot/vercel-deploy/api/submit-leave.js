@@ -104,6 +104,20 @@ async function getStudentByLineId(lineUserId) {
       };
     }
     
+    // Handle anonymous users (when LIFF fails and no URL parameters)
+    if (lineUserId === 'anonymous-user') {
+      console.log('🔄 Anonymous user detected - returning demo data');
+      return {
+        type: 'student',
+        student: {
+          student_id: 'DEMO001',
+          student_name: 'นักเรียนทดสอบระบบ',
+          name: 'นักเรียนทดสอบระบบ',
+          class: 'ทดสอบ'
+        }
+      };
+    }
+    
     if (!supabase) {
       console.warn('⚠️ Supabase not available - returning mock data');
       return {

@@ -35,46 +35,46 @@ async function initializeApp() {
         console.warn('⚠️ Main form element not found');
     }
     
-    try {
-        // Initialize LIFF
-        console.log('🔧 Initializing LIFF...');
-        const liffId = document.querySelector('meta[name="liff-id"]')?.getAttribute('content') || '2008065330-AXGy9xda';
-        console.log('🔧 Using LIFF ID:', liffId);
-        await window.liff.init({ liffId: liffId });
-        
-        if (window.liff.isLoggedIn()) {
-            console.log('✅ User is logged in to LIFF');
-            const profile = await window.liff.getProfile();
-            userId = profile.userId;
-            console.log('👤 User profile:', profile);
-        } else {
-            console.log('❌ User not logged in, redirecting to login...');
-            window.liff.login();
-            return;
-        }
-    } catch (liffError) {
-        console.error('❌ LIFF initialization failed:', liffError);
-        console.log('🧪 Using fallback mode...');
-        
-        // Fallback: try to get userId from URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const studentId = urlParams.get('studentId');
-        const studentName = urlParams.get('studentName');
-        
-        if (studentId && studentName) {
-            console.log('📋 Using URL parameters as fallback');
-            userId = `fallback-${studentId}`;
-            // Pre-populate student data from URL
-            studentData = {
-                student: {
-                    student_id: studentId,
-                    student_name: decodeURIComponent(studentName),
-                    name: decodeURIComponent(studentName),
-                    class: urlParams.get('class') ? decodeURIComponent(urlParams.get('class')) : 'ไม่ระบุ'
-                }
-            };
-        } else {
-            userId = 'test-user-123';
+    // Try to get userId from URL parameters first (for direct links)
+    const urlParams = new URLSearchParams(window.location.search);
+    const studentId = urlParams.get('studentId');
+    const studentName = urlParams.get('studentName');
+    
+    if (studentId && studentName) {
+        console.log('📋 Found URL parameters, using direct mode');
+        userId = `fallback-${studentId}`;
+        // Pre-populate student data from URL
+        studentData = {
+            student: {
+                student_id: studentId,
+                student_name: decodeURIComponent(studentName),
+                name: decodeURIComponent(studentName),
+                class: urlParams.get('class') ? decodeURIComponent(urlParams.get('class')) : 'ไม่ระบุ'
+            }
+        };
+        console.log('✅ Using URL parameters for student data:', studentData);
+    } else {
+        // Try LIFF only if no URL parameters
+        try {
+            console.log('🔧 No URL parameters found, trying LIFF...');
+            const liffId = document.querySelector('meta[name="liff-id"]')?.getAttribute('content') || '2008065330-AXGy9xda';
+            console.log('🔧 Using LIFF ID:', liffId);
+            await window.liff.init({ liffId: liffId });
+            
+            if (window.liff.isLoggedIn()) {
+                console.log('✅ User is logged in to LIFF');
+                const profile = await window.liff.getProfile();
+                userId = profile.userId;
+                console.log('👤 User profile:', profile);
+            } else {
+                console.log('❌ User not logged in to LIFF, using fallback mode...');
+                // Don't redirect to login, use fallback instead
+                userId = 'anonymous-user';
+            }
+        } catch (liffError) {
+            console.error('❌ LIFF initialization failed:', liffError);
+            console.log('🧪 Using fallback mode...');
+            userId = 'anonymous-user';
         }
     }
     

@@ -10,11 +10,10 @@
       "runtime": "@vercel/node@3.1.0"
     }
   },
-  "public": true,
   "rewrites": [
     {
       "source": "/leave-form",
-      "destination": "/index.html"
+      "destination": "/leave-form.html"
     },
     {
       "source": "/bus-location",

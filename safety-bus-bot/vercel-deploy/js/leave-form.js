@@ -141,15 +141,21 @@ async function loadStudentData(userId) {
         });
         
         console.log('📥 Response status:', response.status);
+        console.log('📥 Response headers:', response.headers);
         
         if (!response.ok) {
-            throw new Error(`HTTP Error: ${response.status}`);
+            const errorText = await response.text();
+            console.error('❌ HTTP Error response:', errorText);
+            throw new Error(`HTTP Error: ${response.status} - ${errorText}`);
         }
         
         const result = await response.json();
         console.log('📊 Student data result:', result);
+        console.log('📊 Result type:', typeof result);
+        console.log('📊 Result.type:', result.type);
+        console.log('📊 Result.student:', result.student);
         
-        if (result.type === 'student' && result.student) {
+        if (result && result.student) {
             studentData = result.student;
             console.log('✅ Student data loaded:', studentData);
             
@@ -157,6 +163,8 @@ async function loadStudentData(userId) {
             updateStudentInfo(studentData);
         } else {
             console.error('❌ Invalid student data response:', result);
+            console.error('❌ Expected format: { type: "student", student: {...} }');
+            console.error('❌ Received format:', JSON.stringify(result, null, 2));
             throw new Error('ไม่พบข้อมูลนักเรียน - ระบบตอบกลับข้อมูลไม่ถูกต้อง');
         }
         
@@ -165,7 +173,8 @@ async function loadStudentData(userId) {
         console.error('❌ Error details:', {
             message: error.message,
             stack: error.stack,
-            userId: userId
+            userId: userId,
+            name: error.name
         });
         
         // Re-throw with more context
@@ -173,6 +182,8 @@ async function loadStudentData(userId) {
             throw new Error('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ (' + error.message + ')');
         } else if (error.message.includes('Failed to fetch')) {
             throw new Error('ไม่สามารถเชื่อมต่อเครือข่ายได้');
+        } else if (error.name === 'SyntaxError') {
+            throw new Error('เซิร์ฟเวอร์ส่งข้อมูลกลับมาไม่ถูกต้อง (JSON Parse Error)');
         } else {
             throw error;
         }

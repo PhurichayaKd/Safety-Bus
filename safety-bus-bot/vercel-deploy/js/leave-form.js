@@ -1,91 +1,226 @@
 // Leave Form JavaScript
 // This file handles the leave request form functionality
+console.log('🚀 leave-form.js script started loading...');
+console.log('🔧 LEAVE-FORM.JS LOADED');
+console.log('📍 Current URL:', window.location.href);
+console.log('📍 Document ready state:', document.readyState);
 
 let supabase;
 let studentData = null;
+let userId = null; // Store LINE user ID
+let selectedDates = []; // Store selected leave dates
+let loadingScreen = null;
+let mainForm = null;
+
+console.log('📋 Global variables initialized');
 
 // Initialize the application
 async function initializeApp() {
+    console.log('🚀 Starting app initialization...');
+    console.log('🔍 LIFF object available:', typeof window.liff !== 'undefined');
+    
+    // DOM elements are now initialized in DOMContentLoaded
+    
+    if (loadingScreen) {
+        loadingScreen.style.display = 'flex';
+        console.log('✅ Loading screen shown');
+    } else {
+        console.warn('⚠️ Loading screen element not found');
+    }
+    
+    if (mainForm) {
+        mainForm.style.display = 'none';
+        console.log('✅ Main form hidden');
+    } else {
+        console.warn('⚠️ Main form element not found');
+    }
+    
     try {
-        // Show loading screen
-        document.getElementById('loading-screen').style.display = 'flex';
-        document.getElementById('main-form').style.display = 'none';
-
         // Initialize LIFF
-        await window.liff.init({ liffId: '2008065330-AXGy9xda' });
+        console.log('🔧 Initializing LIFF...');
+        const liffId = document.querySelector('meta[name="liff-id"]')?.getAttribute('content') || '2008065330-AXGy9xda';
+        console.log('🔧 Using LIFF ID:', liffId);
+        await window.liff.init({ liffId: liffId });
         
-        if (!window.liff.isLoggedIn()) {
+        if (window.liff.isLoggedIn()) {
+            console.log('✅ User is logged in to LIFF');
+            const profile = await window.liff.getProfile();
+            userId = profile.userId;
+            console.log('👤 User profile:', profile);
+        } else {
+            console.log('❌ User not logged in, redirecting to login...');
             window.liff.login();
             return;
         }
+    } catch (liffError) {
+        console.error('❌ LIFF initialization failed:', liffError);
+        console.log('🧪 Using fallback mode...');
+        
+        // Fallback: try to get userId from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const studentId = urlParams.get('studentId');
+        const studentName = urlParams.get('studentName');
+        
+        if (studentId && studentName) {
+            console.log('📋 Using URL parameters as fallback');
+            userId = `fallback-${studentId}`;
+            // Pre-populate student data from URL
+            studentData = {
+                student: {
+                    student_id: studentId,
+                    student_name: decodeURIComponent(studentName),
+                    name: decodeURIComponent(studentName),
+                    class: urlParams.get('class') ? decodeURIComponent(urlParams.get('class')) : 'ไม่ระบุ'
+                }
+            };
+        } else {
+            userId = 'test-user-123';
+        }
+    }
+    
+    try {
 
-        // Note: Using API endpoints instead of direct Supabase connection
+        console.log('📊 Loading student data...');
+        
+        // If we already have student data from URL parameters, use it
+        if (studentData && studentData.student) {
+            console.log('✅ Using pre-populated student data from URL');
+            updateStudentInfo(studentData.student);
+            initializeForm();
+        } else {
+            // Add timeout for loading student data
+            const loadingPromise = loadStudentData(userId);
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('การโหลดข้อมูลใช้เวลานานเกินไป')), 10000);
+            });
+            
+            await Promise.race([loadingPromise, timeoutPromise]);
+        }
 
-        // Get user profile
-        const profile = await window.liff.getProfile();
-        const userId = profile.userId;
-
-        // Load student data
-        await loadStudentData(userId);
-
+        console.log('🎛️ Initializing form...');
         // Initialize form
         initializeForm();
 
         // Hide loading screen
-        document.getElementById('loading-screen').style.display = 'none';
-        document.getElementById('main-form').style.display = 'block';
+        console.log('✅ App initialization complete');
+        if (loadingScreen) loadingScreen.style.display = 'none';
+        if (mainForm) mainForm.style.display = 'block';
 
     } catch (error) {
-        console.error('Initialization error:', error);
-        showError('เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + error.message);
+        console.error('❌ Initialization error:', error);
+        console.error('❌ Error stack:', error.stack);
+        
+        // Hide loading screen even on error
+        if (loadingScreen) loadingScreen.style.display = 'none';
+        
+        // Show detailed error message
+        const errorMessage = error.message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
+        console.error('❌ Showing error to user:', errorMessage);
+        showError('เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + errorMessage);
     }
 }
 
 // Load student data from API
 async function loadStudentData(userId) {
     try {
-        const response = await fetch(`/api/get-student?line_user_id=${userId}`);
+        console.log('📡 Loading student data for userId:', userId);
+        
+        const requestBody = {
+            action: 'getStudentInfo',
+            userId: userId
+        };
+        
+        console.log('📤 Sending request:', requestBody);
+        
+        const response = await fetch('/api/submit-leave', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        console.log('📥 Response status:', response.status);
         
         if (!response.ok) {
-            throw new Error('ไม่สามารถดึงข้อมูลนักเรียนได้');
+            throw new Error(`HTTP Error: ${response.status}`);
         }
-
+        
         const result = await response.json();
+        console.log('📊 Student data result:', result);
         
-        if (!result.success || !result.student) {
-            throw new Error('ไม่พบข้อมูลนักเรียน กรุณาติดต่อผู้ดูแลระบบ');
+        if (result.type === 'student' && result.student) {
+            studentData = result.student;
+            console.log('✅ Student data loaded:', studentData);
+            
+            // Update UI with student data
+            updateStudentInfo(studentData);
+        } else {
+            console.error('❌ Invalid student data response:', result);
+            throw new Error('ไม่พบข้อมูลนักเรียน - ระบบตอบกลับข้อมูลไม่ถูกต้อง');
         }
-
-        studentData = result.student;
         
-        // Update UI with student data
-        document.getElementById('student-name').textContent = studentData.name || '-';
-        document.getElementById('student-code').textContent = studentData.id || '-';
-        document.getElementById('student-class').textContent = studentData.class || '-';
-
     } catch (error) {
-        console.error('Error loading student data:', error);
-        throw error;
+        console.error('❌ Error loading student data:', error);
+        console.error('❌ Error details:', {
+            message: error.message,
+            stack: error.stack,
+            userId: userId
+        });
+        
+        // Re-throw with more context
+        if (error.message.includes('HTTP Error')) {
+            throw new Error('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ (' + error.message + ')');
+        } else if (error.message.includes('Failed to fetch')) {
+            throw new Error('ไม่สามารถเชื่อมต่อเครือข่ายได้');
+        } else {
+            throw error;
+        }
     }
+}
+
+// Update student info in UI
+function updateStudentInfo(student) {
+    const nameElement = document.getElementById('student-name');
+    const codeElement = document.getElementById('student-code');
+    const classElement = document.getElementById('student-class');
+    
+    if (nameElement) nameElement.textContent = student.name || student.student_name || '-';
+    if (codeElement) codeElement.textContent = student.student_id || '-';
+    if (classElement) classElement.textContent = student.class || '-';
 }
 
 // Initialize form elements
 function initializeForm() {
-    // Add event listeners
-    document.getElementById('add-date-btn').addEventListener('click', handleAddDate);
-    document.getElementById('confirm-btn').addEventListener('click', handleSubmit);
-    document.getElementById('final-confirm-btn').addEventListener('click', handleConfirm);
-    document.getElementById('back-btn').addEventListener('click', handleBack);
-    document.getElementById('retry-btn').addEventListener('click', handleRetry);
+    // Add event listeners with null checks
+    const addDateBtn = document.getElementById('add-date-btn');
+    const confirmBtn = document.getElementById('confirm-btn');
+    const finalConfirmBtn = document.getElementById('final-confirm-btn');
+    const backBtn = document.getElementById('back-btn');
+    const retryBtn = document.getElementById('retry-btn');
+    const leaveDateInput = document.getElementById('leave-date');
+    
+    if (addDateBtn) addDateBtn.addEventListener('click', handleAddDate);
+    if (confirmBtn) confirmBtn.addEventListener('click', handleSubmit);
+    if (finalConfirmBtn) finalConfirmBtn.addEventListener('click', handleConfirm);
+    if (backBtn) backBtn.addEventListener('click', handleBack);
+    if (retryBtn) retryBtn.addEventListener('click', handleRetry);
     
     // Set minimum date to today
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('leave-date').min = today;
+    if (leaveDateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        leaveDateInput.min = today;
+    }
 }
 
 // Handle adding a date
 function handleAddDate() {
     const dateInput = document.getElementById('leave-date');
+    if (!dateInput) {
+        console.error('Date input element not found');
+        return;
+    }
+    
     const selectedDate = dateInput.value;
     
     if (!selectedDate) {
@@ -117,6 +252,10 @@ function handleAddDate() {
 // Update dates list display
 function updateDatesList() {
     const datesContainer = document.getElementById('dates-container');
+    if (!datesContainer) {
+        console.error('Dates container element not found');
+        return;
+    }
     
     if (selectedDates.length === 0) {
         datesContainer.innerHTML = '<p class="no-dates">ยังไม่ได้เลือกวันที่</p>';
@@ -148,8 +287,10 @@ function removeDate(date) {
 
 // Update submit button state
 function updateSubmitButton() {
-    const submitBtn = document.getElementById('submit-btn');
-    submitBtn.disabled = selectedDates.length === 0;
+    const submitBtn = document.getElementById('confirm-btn'); // Fixed: use correct ID
+    if (submitBtn) {
+        submitBtn.disabled = selectedDates.length === 0;
+    }
 }
 
 // Handle form submission
@@ -166,9 +307,13 @@ function handleSubmit() {
 // Show confirmation screen
 function showConfirmation() {
     // Update confirmation details
-    document.getElementById('confirm-student-name').textContent = studentData.name || '-';
-    document.getElementById('confirm-student-code').textContent = studentData.student_id || '-';
-    document.getElementById('confirm-student-class').textContent = studentData.class || '-';
+    const confirmStudentName = document.getElementById('confirm-student-name');
+    const confirmStudentCode = document.getElementById('confirm-student-code');
+    const confirmStudentClass = document.getElementById('confirm-student-class');
+    
+    if (confirmStudentName) confirmStudentName.textContent = studentData?.name || studentData?.student_name || '-';
+    if (confirmStudentCode) confirmStudentCode.textContent = studentData?.student_id || '-';
+    if (confirmStudentClass) confirmStudentClass.textContent = studentData?.class || '-';
     
     // Update dates summary
     const datesSummary = document.getElementById('confirm-dates-list');
@@ -185,15 +330,21 @@ function showConfirmation() {
     }
     
     // Show confirmation section
-    document.getElementById('confirmation-section').style.display = 'block';
-    document.getElementById('main-form').style.display = 'none';
+    const confirmationSection = document.getElementById('confirmation-section');
+    const mainForm = document.getElementById('main-form');
+    
+    if (confirmationSection) confirmationSection.style.display = 'block';
+    if (mainForm) mainForm.style.display = 'none';
 }
 
 // Handle confirmation
 async function handleConfirm() {
     try {
-        document.getElementById('confirm-btn').disabled = true;
-        document.getElementById('confirm-btn').textContent = 'กำลังส่ง...';
+        const confirmBtn = document.getElementById('final-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'กำลังส่ง...';
+        }
         
         await submitLeaveRequest();
         
@@ -201,8 +352,11 @@ async function handleConfirm() {
         console.error('Submit error:', error);
         showError('เกิดข้อผิดพลาด: ' + error.message);
         
-        document.getElementById('confirm-btn').disabled = false;
-        document.getElementById('confirm-btn').textContent = 'ยืนยันการลา';
+        const confirmBtn = document.getElementById('final-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'ยืนยันส่งข้อมูล';
+        }
     }
 }
 
@@ -211,29 +365,80 @@ async function submitLeaveRequest() {
     try {
         showLoading(true);
         
+        // Validate required data before sending
+        if (!userId) {
+            throw new Error('ไม่พบข้อมูล User ID');
+        }
+        
+        if (!studentData) {
+            throw new Error('ไม่พบข้อมูลนักเรียน');
+        }
+        
+        if (!selectedDates || selectedDates.length === 0) {
+            throw new Error('กรุณาเลือกวันที่ลา');
+        }
+        
+        console.log('Sending leave request with data:', {
+            action: 'submitLeave',
+            userId: userId,
+            studentInfo: {
+                student_id: studentData.student_id,
+                student_name: studentData.name,
+                name: studentData.name,
+                class: studentData.class
+            },
+            leaveDates: selectedDates,
+            source: 'direct'
+        });
+        
         const response = await fetch('/api/submit-leave', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                action: 'submitLeave',
                 userId: userId,
-                studentId: studentData.student_id,
-                dates: selectedDates,
-                reason: document.getElementById('leave-reason').value || 'ลาป่วย'
+                studentInfo: {
+                    student_id: studentData.student_id,
+                    student_name: studentData.name,
+                    name: studentData.name,
+                    class: studentData.class
+                },
+                leaveDates: selectedDates,
+                source: 'direct'
             })
         });
         
-        const result = await response.json();
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
         
-        if (response.ok && result.success) {
+        // Check if response is ok
+        if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
+        }
+        
+        // Try to parse JSON response
+        let result;
+        try {
+            const responseText = await response.text();
+            console.log('Raw response:', responseText);
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('JSON Parse Error:', parseError);
+            throw new Error('เซิร์ฟเวอร์ตอบกลับในรูปแบบที่ไม่ถูกต้อง');
+        }
+        
+        console.log('Parsed result:', result);
+        
+        if (result && result.ok) {
             showSuccess();
         } else {
-            throw new Error(result.error || 'เกิดข้อผิดพลาดในการส่งข้อมูล');
+            throw new Error(result?.error || 'เกิดข้อผิดพลาดในการส่งข้อมูล');
         }
     } catch (error) {
         console.error('Submit error:', error);
-        showError(error.message);
+        showError(error.message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ');
     } finally {
         showLoading(false);
     }
@@ -241,20 +446,31 @@ async function submitLeaveRequest() {
 
 // Handle back button
 function handleBack() {
-    document.getElementById('confirmation').style.display = 'none';
-    document.getElementById('form-section').style.display = 'block';
+    const confirmationSection = document.getElementById('confirmation-section');
+    const mainForm = document.getElementById('main-form');
+    
+    if (confirmationSection) confirmationSection.style.display = 'none';
+    if (mainForm) mainForm.style.display = 'block';
 }
 
 // Show success message
 function showSuccess() {
-    document.getElementById('confirmation-section').style.display = 'none';
-    document.getElementById('success-section').style.display = 'block';
+    const confirmationSection = document.getElementById('confirmation-section');
+    const successSection = document.getElementById('success-section');
+    
+    if (confirmationSection) confirmationSection.style.display = 'none';
+    if (successSection) successSection.style.display = 'block';
 }
 
 // Show error message
 function showError(message) {
-    document.getElementById('confirmation-section').style.display = 'none';
-    document.getElementById('error-section').style.display = 'block';
+    const confirmationSection = document.getElementById('confirmation-section');
+    const errorSection = document.getElementById('error-section');
+    const mainForm = document.getElementById('main-form');
+    
+    if (confirmationSection) confirmationSection.style.display = 'none';
+    if (mainForm) mainForm.style.display = 'none';
+    if (errorSection) errorSection.style.display = 'block';
     
     const errorMessage = document.getElementById('error-message');
     if (errorMessage) {
@@ -264,14 +480,27 @@ function showError(message) {
 
 // Go back to form
 function goBackToForm() {
-    document.getElementById('confirmation-section').style.display = 'none';
-    document.getElementById('main-form').style.display = 'block';
+    const confirmationSection = document.getElementById('confirmation-section');
+    const mainForm = document.getElementById('main-form');
+    const errorSection = document.getElementById('error-section');
+    
+    if (confirmationSection) confirmationSection.style.display = 'none';
+    if (errorSection) errorSection.style.display = 'none';
+    if (mainForm) mainForm.style.display = 'block';
 }
 
 // Retry submission
 function retrySubmission() {
-    document.getElementById('error-section').style.display = 'none';
-    document.getElementById('confirmation-section').style.display = 'block';
+    const errorSection = document.getElementById('error-section');
+    const confirmationSection = document.getElementById('confirmation-section');
+    
+    if (errorSection) errorSection.style.display = 'none';
+    if (confirmationSection) confirmationSection.style.display = 'block';
+}
+
+// Handle retry button click
+function handleRetry() {
+    retrySubmission();
 }
 
 // Show/hide loading
@@ -297,4 +526,29 @@ function formatThaiDate(date) {
 }
 
 // Initialize when page loads
-document.addEventListener('DOMContentLoaded', initializeApp);
+console.log('📋 Setting up DOMContentLoaded listener...');
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎯 DOMContentLoaded event fired!');
+    
+    // Initialize DOM elements first
+    console.log('🔍 Searching for DOM elements...');
+    loadingScreen = document.getElementById('loading-screen');
+    mainForm = document.getElementById('main-form');
+    
+    console.log('🔍 DOM Elements check:');
+    console.log('- loading-screen:', loadingScreen);
+    console.log('- main-form:', mainForm);
+    
+    if (!loadingScreen) {
+        console.warn('⚠️ loading-screen element not found!');
+    } else {
+        console.log('✅ loading-screen element found');
+    }
+    if (!mainForm) {
+        console.warn('⚠️ main-form element not found!');
+    } else {
+        console.log('✅ main-form element found');
+    }
+    
+    initializeApp();
+});

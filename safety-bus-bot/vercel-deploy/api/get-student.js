@@ -170,7 +170,7 @@ async function getStudentByStudentId(studentId) {
 export default async function handler(req, res) {
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     
     // Handle preflight requests
@@ -178,12 +178,20 @@ export default async function handler(req, res) {
         return res.status(200).end();
     }
     
-    if (req.method !== 'POST') {
+    if (req.method !== 'POST' && req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
     
     try {
-        const { lineUserId, studentId } = req.body;
+        // Support both GET and POST methods
+        let lineUserId, studentId;
+        
+        if (req.method === 'POST') {
+            ({ lineUserId, studentId } = req.body);
+        } else if (req.method === 'GET') {
+            lineUserId = req.query.line_user_id;
+            studentId = req.query.student_id;
+        }
         
         if (!lineUserId && !studentId) {
             return res.status(400).json({

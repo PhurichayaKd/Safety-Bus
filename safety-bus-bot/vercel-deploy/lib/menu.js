@@ -176,14 +176,24 @@ export async function sendMessageWithQuickReply(userId, message, quickReply, rep
  * ส่งข้อความแจ้งให้ใช้ Rich Menu
  * @param {string} userId - LINE User ID
  * @param {string} replyToken - Reply token (optional)
+ * @param {Object} options - Additional options (optional)
  */
-export async function sendMainMenu(userId, replyToken) {
+export async function sendMainMenu(userId, replyToken, options = {}) {
   console.log(`sendMainMenu called for user: ${userId}, replyToken: ${replyToken}`);
+  
+  let menuText = '🚌 เมนูหลัก\n\n1. ประวัติ\n2. แจ้งลาหยุด\n3. ตำแหน่งรถ\n4. ติดต่อคนขับ\n\nเลือกเมนูโดยพิมพ์ หรือกดปุ่ม';
+  
+  // ถ้ามี welcomeText ให้แสดงก่อนเมนู
+  if (options.welcomeText) {
+    menuText = options.welcomeText + '\n\n' + menuText;
+  }
+  
   const menuMessage = {
     type: 'text',
-    text: '🚌 เมนูหลัก\n\n1. ประวัติ\n2. แจ้งลาหยุด\n3. ตำแหน่งรถ\n4. ติดต่อคนขับ\n\nเลือกเมนูโดยพิมพ์ หรือกดปุ่ม'
+    text: menuText
     // ...สามารถเพิ่ม quick reply หรือ rich menu ได้...
   };
+  
   try {
     if (replyToken) {
       await replyLineMessage(replyToken, menuMessage);

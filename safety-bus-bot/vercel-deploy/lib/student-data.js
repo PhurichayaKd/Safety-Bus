@@ -9,6 +9,8 @@ import { supabase } from './db.js';
  */
 export async function getStudentByLineId(lineUserId) {
   try {
+    console.log(`🔍 Getting student data for LINE ID: ${lineUserId}`);
+    
     // ตรวจสอบการเชื่อมโยงจากตาราง student_line_links ก่อน
     const { data: studentLink, error: studentError } = await supabase
       .from('student_line_links')
@@ -26,10 +28,12 @@ export async function getStudentByLineId(lineUserId) {
       .single();
 
     if (studentError && studentError.code !== 'PGRST116') {
-      throw studentError;
+      console.error('❌ Error querying student_line_links:', studentError);
+      // Don't throw, just log and continue to check parent links
     }
 
     if (studentLink && studentLink.students) {
+      console.log(`✅ Found student link for ${lineUserId}`);
       return {
         type: 'student',
         student: {
@@ -51,10 +55,13 @@ export async function getStudentByLineId(lineUserId) {
       .single();
 
     if (parentError && parentError.code !== 'PGRST116') {
-      throw parentError;
+      console.error('❌ Error querying parent_line_links:', parentError);
+      // Don't throw, just log and return null
+      return null;
     }
 
     if (parentLink) {
+      console.log(`✅ Found parent link for ${lineUserId}`);
       // หาข้อมูลนักเรียนจาก students table โดยตรง
       const { data: student, error: studentError } = await supabase
         .from('students')
@@ -63,6 +70,7 @@ export async function getStudentByLineId(lineUserId) {
         .single();
       
       if (student && !studentError) {
+        console.log(`✅ Found student data via parent link for ${lineUserId}`);
         return {
           type: 'parent',
           student: {
@@ -73,13 +81,17 @@ export async function getStudentByLineId(lineUserId) {
           },
           parent_id: parentLink.parent_id
         };
+      } else if (studentError) {
+        console.error('❌ Error querying students via parent:', studentError);
       }
     }
 
+    console.log(`❌ No link found for ${lineUserId}`);
     return null;
   } catch (error) {
-    console.error('Error getting student by LINE ID:', error);
-    throw error;
+    console.error('❌ Error getting student by LINE ID:', error);
+    // Return null instead of throwing to prevent crashes
+    return null;
   }
 }
 

@@ -72,8 +72,55 @@ app.post('/api/submit-leave', async (req, res) => {
   }
 });
 
+// GET route for get-student (used by leave form)
+app.get('/api/get-student', async (req, res) => {
+  console.log('🚀 Get Student API called (GET):', req.method, req.url);
+  console.log('📥 Query params:', req.query);
+  
+  try {
+    // Dynamic import to ensure environment variables are loaded
+    const { default: getStudentHandler } = await import('./api/get-student.js');
+    
+    // Create a mock request object that matches Vercel's format
+    const mockReq = {
+      method: 'GET',
+      query: req.query,
+      headers: req.headers
+    };
+    
+    // Create a mock response object
+    const mockRes = {
+      setHeader: (name, value) => {
+        res.setHeader(name, value);
+      },
+      status: (code) => ({
+        json: (data) => {
+          console.log('📤 Response status:', code);
+          console.log('📤 Response data:', JSON.stringify(data, null, 2));
+          res.status(code).json(data);
+        },
+        end: () => {
+          res.status(code).end();
+        }
+      }),
+      json: (data) => {
+        console.log('📤 Response data:', JSON.stringify(data, null, 2));
+        res.json(data);
+      }
+    };
+    
+    await getStudentHandler(mockReq, mockRes);
+  } catch (error) {
+    console.error('❌ Error in get-student API:', error);
+    res.status(500).json({ 
+      ok: false, 
+      error: error.message 
+    });
+  }
+});
+
 app.post('/api/get-student', async (req, res) => {
-  console.log('🚀 Get Student API called:', req.method, req.url);
+  console.log('🚀 Get Student API called (POST):', req.method, req.url);
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
   
   try {
@@ -200,7 +247,62 @@ app.get('/api/get-bus-locations', async (req, res) => {
   }
 });
 
-// Webhook handler for LINE Bot
+// Webhook handler for LINE Bot (correct route)
+app.all('/api/webhook', async (req, res) => {
+  console.log('🚀 Webhook called:', req.method, req.url);
+  console.log('📥 Request headers:', JSON.stringify(req.headers, null, 2));
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    // Dynamic import to ensure environment variables are loaded
+    const { default: webhookHandler } = await import('./api/webhook.js');
+    
+    // Create a mock request object that matches Vercel's format
+    const mockReq = {
+      method: req.method,
+      body: req.body,
+      headers: req.headers,
+      query: req.query
+    };
+    
+    // Create a mock response object
+    const mockRes = {
+      status: (code) => {
+        res.status(code);
+        return mockRes;
+      },
+      json: (data) => {
+        console.log('📤 Response:', JSON.stringify(data, null, 2));
+        res.json(data);
+        return mockRes;
+      },
+      send: (data) => {
+        console.log('📤 Response:', data);
+        res.send(data);
+        return mockRes;
+      },
+      setHeader: (name, value) => {
+        res.setHeader(name, value);
+        return mockRes;
+      },
+      end: () => {
+        res.end();
+        return mockRes;
+      }
+    };
+    
+    // Call the webhook handler
+    await webhookHandler(mockReq, mockRes);
+  } catch (error) {
+    console.error('❌ Webhook error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// Legacy webhook handler for LINE Bot
 app.post('/api/webhook.mjs', async (req, res) => {
   console.log('🚀 Webhook called:', req.method, req.url);
   console.log('📥 Request headers:', JSON.stringify(req.headers, null, 2));
@@ -208,7 +310,7 @@ app.post('/api/webhook.mjs', async (req, res) => {
   
   try {
     // Dynamic import to ensure environment variables are loaded
-    const { default: webhookHandler } = await import('./api/webhook.mjs');
+    const { default: webhookHandler } = await import('./api/webhook.js');
     
     // Create a mock request object that matches Vercel's format
     const mockReq = {
@@ -254,6 +356,48 @@ app.post('/api/webhook.mjs', async (req, res) => {
   }
 });
 
+app.get('/api/get-supabase-config', async (req, res) => {
+  console.log('🚀 Get Supabase Config API called:', req.method, req.url);
+  
+  try {
+    // Dynamic import to ensure environment variables are loaded
+    const { default: getSupabaseConfigHandler } = await import('./api/get-supabase-config.js');
+    
+    // Create a mock request object that matches Vercel's format
+    const mockReq = {
+      method: 'GET',
+      headers: req.headers
+    };
+    
+    // Create a mock response object
+    const mockRes = {
+      status: (code) => {
+        res.status(code);
+        return mockRes;
+      },
+      json: (data) => {
+        console.log('📤 Response:', JSON.stringify(data, null, 2));
+        res.json(data);
+        return mockRes;
+      },
+      setHeader: (name, value) => {
+        res.setHeader(name, value);
+        return mockRes;
+      }
+    };
+    
+    // Call the handler
+    await getSupabaseConfigHandler(mockReq, mockRes);
+  } catch (error) {
+    console.error('❌ Get Supabase Config API error:', error);
+    res.status(500).json({ 
+      ok: false, 
+      message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์',
+      error: error.message 
+    });
+  }
+});
+
 app.post('/api/webhook-api', async (req, res) => {
   console.log('🚀 Webhook called:', req.method, req.url);
   console.log('❌ Webhook handler not implemented in test server');
@@ -263,6 +407,10 @@ app.post('/api/webhook-api', async (req, res) => {
 // Serve static files
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/bus-location.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'bus-location.html'));
 });
 
 app.get('/health', (req, res) => {

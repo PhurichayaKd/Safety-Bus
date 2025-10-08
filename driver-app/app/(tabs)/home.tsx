@@ -9,6 +9,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import EmergencyNotificationIcon from '../components/EmergencyNotificationIcon';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -138,6 +139,46 @@ async function getTodayProgress() {
   };
 }
 
+// ฟังก์ชันสำหรับอัพเดตสถานะนักเรียนลงรถที่โรงเรียน
+async function updateSchoolDropoffStatus() {
+  try {
+    const driverId = await AsyncStorage.getItem('driverId');
+    if (!driverId) {
+      console.error('ไม่พบ driverId');
+      return;
+    }
+
+    const response = await fetch('https://safety-bus-liff-v4-new.vercel.app/api/update-school-dropoff', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        driverId: parseInt(driverId),
+      }),
+    });
+
+    const result = await response.json();
+    
+    if (response.ok) {
+      console.log('อัพเดตสถานะลงรถที่โรงเรียนสำเร็จ:', result.message);
+      if (result.updatedStudents > 0) {
+        Alert.alert(
+          'อัพเดตสถานะสำเร็จ',
+          `อัพเดตสถานะลงรถที่โรงเรียนสำหรับนักเรียน ${result.updatedStudents} คน`,
+          [{ text: 'ตกลง' }]
+        );
+      }
+    } else {
+      console.error('เกิดข้อผิดพลาดในการอัพเดตสถานะ:', result.error);
+      Alert.alert('เกิดข้อผิดพลาด', result.error || 'ไม่สามารถอัพเดตสถานะได้');
+    }
+  } catch (error) {
+    console.error('เกิดข้อผิดพลาดในการเชื่อมต่อ:', error);
+    Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
+  }
+}
+
 const HomePage = () => {
   const { signOut } = useAuth();
   const [status, setStatus] = useState<BusStatus | null>(null);
@@ -206,6 +247,9 @@ const HomePage = () => {
           Alert.alert('ยังเช็กไม่ครบ', `ยังมีนักเรียนที่ยังไม่ขึ้นรถเช้าอีก ${remain} คน`);
           return;
         }
+        
+        // เมื่อถึงโรงเรียน ให้อัพเดตสถานะนักเรียนลงรถที่โรงเรียนทุกคน
+        await updateSchoolDropoffStatus();
       }
 
       if (next === 'waiting_return') {
@@ -307,24 +351,22 @@ const HomePage = () => {
               <Text style={styles.appTitle}>SAFETY BUS</Text>
               <View style={styles.titleRow}>
                 <Text style={styles.subtitle}>แดชบอร์ดคนขับ</Text>
-                <View style={styles.statusBadge}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>ออนไลน์</Text>
-                </View>
               </View>
             </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.signOutButton}
-            onPress={handleSignOut}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="ออกจากระบบ"
-            accessibilityHint="แตะเพื่อออกจากระบบและกลับไปหน้าเข้าสู่ระบบ"
-          >
-            <Ionicons name="log-out-outline" size={16} color={COLORS.danger} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={handleSignOut}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="ออกจากระบบ"
+              accessibilityHint="แตะเพื่อออกจากระบบและกลับไปหน้าเข้าสู่ระบบ"
+            >
+              <Ionicons name="log-out-outline" size={16} color={COLORS.danger} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -443,6 +485,8 @@ const HomePage = () => {
             <MenuCard icon="document-text-outline" label="รายงาน"     to={PATHS.reports} />
           </View>
         </View>
+
+
       </ScrollView>
 
       {/* STATUS PICKER MODAL */}
@@ -609,6 +653,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.success,
     fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   signOutButton: {
     width: 36,

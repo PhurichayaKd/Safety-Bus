@@ -85,6 +85,7 @@ type Student = {
   primary_parent?: { parent_phone?: string | null } | null;
   home_latitude?: number | null;
   home_longitude?: number | null;
+  stop_order?: number;
 };
 
 type StudentWithGeo = Student & { lat: number; lng: number; dist: number };
@@ -185,25 +186,20 @@ export default function PassengerMapPage() {
   }, []);
 
   const studentsWithGeo: StudentWithGeo[] = useMemo(() => {
-    if (!bus) {
-      // If no bus location, show all students without distance sorting
-      return students.map(student => {
-        const lat = student.home_latitude;
-        const lng = student.home_longitude;
-        return { ...student, lat: lat || 0, lng: lng || 0, dist: 0 };
-      });
-    }
+    // Filter out absent students first and maintain stop_order sorting
+    const activeStudents = students.filter(student => !absentSet.has(student.student_id));
     
-    return students.map(student => {
+    return activeStudents.map((student, index) => {
       const lat = student.home_latitude;
       const lng = student.home_longitude;
-      if (lat == null || lng == null) {
-        // Include students without coordinates with distance 999 (will be sorted last)
-        return { ...student, lat: 0, lng: 0, dist: 999 };
-      }
-      return { ...student, lat, lng, dist: calculateDistance(bus, { lat, lng }) };
-    }).sort((a: any, b: any) => a.dist - b.dist) as StudentWithGeo[];
-  }, [students, bus, calculateDistance]);
+      return { 
+        ...student, 
+        lat: lat || 0, 
+        lng: lng || 0, 
+        dist: index + 1 // Use index as distance for display purposes (1, 2, 3...)
+      };
+    }) as StudentWithGeo[];
+  }, [students, absentSet]);
 
   // Map HTML
   const mapHTML = useMemo(() => {
@@ -225,10 +221,20 @@ const map = L.map('map').setView([${INIT.lat},${INIT.lng}], 15);
 L.tileLayer('${TILE_URL}', {maxZoom: 19, attribution: '&copy; OpenStreetMap'}).addTo(map);
 
 let busMarker = L.circleMarker([${INIT.lat},${INIT.lng}],{radius:10,color:'#059669',fillColor:'#059669',fill:true,fillOpacity:.9,weight:4}).addTo(map).bindPopup('🚌 ตำแหน่งรถ');
-let stuMarkers = []; let routeLine=null;
+let stuMarkers = []; let routeLine=null; let homeMarker=null; let schoolMarker=null;
 
 function clearStudents(){stuMarkers.forEach(m=>m.remove());stuMarkers=[]; if(routeLine){routeLine.remove();routeLine=null;}}
 function setBus(lat,lng){busMarker.setLatLng([lat,lng]);}
+function setHome(lat,lng){
+  if(homeMarker) homeMarker.remove();
+  const homeIcon = L.divIcon({html:'🏠', className:'', iconSize:[24,24], iconAnchor:[12,12]});
+  homeMarker = L.marker([lat,lng],{icon:homeIcon}).addTo(map).bindPopup('🏠 บ้านคนขับ');
+}
+function setSchool(lat,lng){
+  if(schoolMarker) schoolMarker.remove();
+  const schoolIcon = L.divIcon({html:'🏫', className:'', iconSize:[24,24], iconAnchor:[12,12]});
+  schoolMarker = L.marker([lat,lng],{icon:schoolIcon}).addTo(map).bindPopup('🏫 โรงเรียน');
+}
 function addStudents(items){
   clearStudents();
   items.forEach((s, i)=>{
@@ -241,6 +247,9 @@ function drawRoute(to){
   if(routeLine) {routeLine.remove();routeLine=null;}
   if(!to) return;
   routeLine = L.polyline([[to.bus.lat,to.bus.lng],[to.stu.lat,to.stu.lng]],{color:'#0a7ea4',weight:4,opacity:.8,dashArray:'10,5'}).addTo(map);
+  if(to.studentName) {
+    routeLine.bindPopup('🚌 ➡️ ' + to.studentName);
+  }
   map.fitBounds(L.latLngBounds([[to.bus.lat,to.bus.lng],[to.stu.lat,to.stu.lng]]),{padding:[30,30]});
 }
 
@@ -250,6 +259,8 @@ function handle(raw){
     if(m.type==='bus') setBus(m.lat,m.lng);
     if(m.type==='students') addStudents(m.items||[]);
     if(m.type==='route') drawRoute(m.to||null);
+    if(m.type==='home') setHome(m.lat,m.lng);
+    if(m.type==='school') setSchool(m.lat,m.lng);
   }catch(e){}
 }
 document.addEventListener('message',e=>handle(e.data));
@@ -301,6 +312,8 @@ window.addEventListener('message',e=>handle(e.data));
         const flag = await AsyncStorage.getItem(STORAGE_KEYS.resetFlag);
         if (flag) {
           softResetSets();
+          // Refresh student list to include all students (reset leave status)
+          await fetchStudents();
           await AsyncStorage.removeItem(STORAGE_KEYS.resetFlag);
         }
       })();
@@ -333,29 +346,90 @@ window.addEventListener('message',e=>handle(e.data));
     setAbsentSet(new Set());
   };
 
+  // Check today's leave requests
+  const fetchTodayLeaveRequests = useCallback(async () => {
+    const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+    
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .select('student_id')
+      .eq('leave_date', today)
+      .eq('status', 'approved');
+
+    if (error) {
+      console.error('Error fetching leave requests:', error);
+      return new Set<number>();
+    }
+
+    return new Set((data || []).map(item => item.student_id));
+  }, []);
+
   // Load students
   const fetchStudents = useCallback(async () => {
+    const driverId = await getMyDriverId();
+    if (!driverId) {
+      setStudents([]);
+      setLoading(false);
+      return;
+    }
+
+    // Get driver's route_id from driver_bus table
+    const { data: driverBusData } = await supabase
+      .from('driver_bus')
+      .select('route_id')
+      .eq('driver_id', driverId)
+      .single();
+
+    if (!driverBusData?.route_id) {
+      console.error('No route found for driver');
+      setStudents([]);
+      setLoading(false);
+      return;
+    }
+
+    // Fetch students ordered by stop_order from route_students
     const { data, error } = await supabase
-      .from('students')
+      .from('route_students')
       .select(`
-        student_id,
-        student_name,
-        grade,
-        status,
-        home_latitude,
-        home_longitude,
-        primary_parent:students_parent_id_fkey ( parent_phone )
+        stop_order,
+        students!inner (
+          student_id,
+          student_name,
+          grade,
+          student_phone,
+          status,
+          home_latitude,
+          home_longitude,
+          primary_parent:students_parent_id_fkey ( parent_phone )
+        )
       `)
-      .order('student_id', { ascending: true });
+      .eq('route_id', driverBusData.route_id)
+      .order('stop_order', { ascending: true });
 
     if (error) {
       console.error('Error fetching students:', error);
       setStudents([]);
     } else {
-      setStudents((data || []) as Student[]);
+      // Get today's leave requests
+      const leaveRequestsToday = await fetchTodayLeaveRequests();
+      
+      // Transform data and filter out students who are on leave today
+      const studentsData = (data || []).map((item: any) => ({
+        ...item.students,
+        stop_order: item.stop_order
+      }));
+      
+      const filteredStudents = studentsData.filter(student => 
+        !leaveRequestsToday.has(student.student_id)
+      );
+      
+      setStudents(filteredStudents as Student[]);
+      
+      // Update absent set with students on leave
+      setAbsentSet(leaveRequestsToday);
     }
     setLoading(false);
-  }, []);
+  }, [fetchTodayLeaveRequests, getMyDriverId]);
 
   // Load today's events
   const fetchTodayEvents = useCallback(async () => {
@@ -406,42 +480,133 @@ window.addEventListener('message',e=>handle(e.data));
     })();
   }, [fetchStudents, fetchTodayEvents]);
 
-  // Location tracking
+  // Real-time subscription for leave requests
   useEffect(() => {
-    let interval: any;
+    const today = new Date().toISOString().split('T')[0];
+    
+    const subscription = supabase
+      .channel('leave_requests_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'leave_requests',
+          filter: `leave_date=eq.${today}`
+        },
+        (payload) => {
+          console.log('New leave request:', payload);
+          // Refresh student list when new leave request is added for today
+          fetchStudents();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'leave_requests',
+          filter: `leave_date=eq.${today}`
+        },
+        (payload) => {
+          console.log('Leave request updated:', payload);
+          // Refresh student list when leave request status changes
+          fetchStudents();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchStudents]);
+
+  // Location tracking - now using live_driver_locations instead of GPS
+  useEffect(() => {
+    let subscription: any;
 
     const startLocationTracking = async () => {
-      if (locationPermission) {
-        const ping = async () => {
-          try {
-            const pos = await Location.getCurrentPositionAsync({accuracy: Location.Accuracy.Balanced});
-            const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            setBus(pt);
-            
-            // Persist location data
-            const driverId = await getMyDriverId();
-            if(driverId){
-              const nowISO = new Date().toISOString();
-              await supabase.from('driver_bus').update({
-                current_latitude: pt.lat, current_longitude: pt.lng, current_updated_at: nowISO
-              }).eq('driver_id', driverId);
-              await supabase.from('live_driver_locations').upsert({
-                driver_id: driverId, latitude: pt.lat, longitude: pt.lng, last_updated: nowISO
-              });
-            }
-          } catch (error) {
-            console.error('Error getting location:', error);
-          }
-        };
-        
-        await ping();
-        interval = setInterval(ping, UPDATE_MS);
+      const driverId = await getMyDriverId();
+      if (!driverId) return;
+
+      // Get initial position from live_driver_locations
+      const { data: initialLocation } = await supabase
+        .from('live_driver_locations')
+        .select('latitude, longitude')
+        .eq('driver_id', driverId)
+        .single();
+
+      if (initialLocation) {
+        const pt = { lat: initialLocation.latitude, lng: initialLocation.longitude };
+        setBus(pt);
       }
+
+      // Subscribe to real-time updates from live_driver_locations
+      subscription = supabase
+        .channel('live_driver_locations')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'live_driver_locations',
+            filter: `driver_id=eq.${driverId}`
+          },
+          (payload) => {
+            const newData = payload.new as any;
+            if (newData && newData.latitude && newData.longitude) {
+              const pt = { lat: newData.latitude, lng: newData.longitude };
+              setBus(pt);
+            }
+          }
+        )
+        .subscribe();
     };
 
     startLocationTracking();
-    return () => interval && clearInterval(interval);
-  }, [locationPermission, getMyDriverId]);
+    
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
+  }, [getMyDriverId]);
+
+  // Fetch home and school locations from driver_bus
+  useEffect(() => {
+    const fetchDriverBusData = async () => {
+      const driverId = await getMyDriverId();
+      if (!driverId) return;
+
+      const { data: driverBusData } = await supabase
+        .from('driver_bus')
+        .select('home_latitude, home_longitude, school_latitude, school_longitude')
+        .eq('driver_id', driverId)
+        .single();
+
+      if (driverBusData) {
+        // Send home location to map
+        if (driverBusData.home_latitude && driverBusData.home_longitude) {
+          sendToMap({
+            type: 'home',
+            lat: driverBusData.home_latitude,
+            lng: driverBusData.home_longitude
+          });
+        }
+
+        // Send school location to map
+        if (driverBusData.school_latitude && driverBusData.school_longitude) {
+          sendToMap({
+            type: 'school',
+            lat: driverBusData.school_latitude,
+            lng: driverBusData.school_longitude
+          });
+        }
+      }
+    };
+
+    fetchDriverBusData();
+  }, [getMyDriverId, sendToMap]);
 
   // Send data to map
   useEffect(() => { 
@@ -460,13 +625,63 @@ window.addEventListener('message',e=>handle(e.data));
     }); 
   }, [studentsWithGeo, sendToMap]);
   
+  // Dynamic route to next student
   useEffect(() => { 
-    if(bus && studentsWithGeo[0]) {
-      sendToMap({type:'route', to:{ bus, stu:{lat:studentsWithGeo[0].lat, lng:studentsWithGeo[0].lng} }});
-    } else {
+    if (!bus) {
       sendToMap({type:'route',to:null});
+      return;
     }
-  }, [bus, studentsWithGeo, sendToMap]);
+
+    // Find the next student who hasn't been picked up yet
+    const nextStudent = studentsWithGeo.find(student => {
+      const isPickedUp = phase === 'go' 
+        ? boardedGoSet.has(student.student_id)
+        : boardedReturnSet.has(student.student_id);
+      return !isPickedUp;
+    });
+
+    if (nextStudent) {
+      // Draw route to next student
+      sendToMap({
+        type:'route', 
+        to:{ 
+          bus, 
+          stu:{lat:nextStudent.lat, lng:nextStudent.lng},
+          studentName: nextStudent.student_name
+        }
+      });
+    } else {
+      // All students picked up, draw route to school (if in 'go' phase)
+      if (phase === 'go') {
+        // Get school location from driver_bus data
+        getMyDriverId().then(async (driverId) => {
+          if (driverId) {
+            const { data: driverBusData } = await supabase
+              .from('driver_bus')
+              .select('school_latitude, school_longitude')
+              .eq('driver_id', driverId)
+              .single();
+
+            if (driverBusData?.school_latitude && driverBusData?.school_longitude) {
+              sendToMap({
+                type:'route', 
+                to:{ 
+                  bus, 
+                  stu:{lat:driverBusData.school_latitude, lng:driverBusData.school_longitude},
+                  studentName: 'โรงเรียน'
+                }
+              });
+            } else {
+              sendToMap({type:'route',to:null});
+            }
+          }
+        });
+      } else {
+        // Return phase - no route needed when all students dropped off
+        sendToMap({type:'route',to:null});
+      }
+    }
+  }, [bus, studentsWithGeo, boardedGoSet, boardedReturnSet, phase, sendToMap, getMyDriverId]);
 
   // Event handlers
   const handleRefresh = useCallback(async () => {
@@ -564,21 +779,68 @@ window.addEventListener('message',e=>handle(e.data));
       const now = new Date().toISOString();
       const location = phase === 'go' ? 'go' : 'return';
       
-      // Insert into pickup_dropoff table
-      const { error } = await supabase
-        .from('pickup_dropoff')
-        .insert({
-          student_id: selected.student_id,
-          driver_id: driverId,
-          event_type: eventType,
-          event_time: now,
-          location: location,
-        });
+      if (eventType === 'absent') {
+        // For absent status, insert into leave_requests table
+        const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+        
+        const { error } = await supabase
+          .from('leave_requests')
+          .insert({
+            student_id: selected.student_id,
+            leave_date: today,
+            status: 'approved',
+            leave_type: 'กดโดยคนขับ',
+            created_at: now,
+            updated_at: now,
+          });
 
-      if (error) {
-        console.error('Error updating status:', error);
-        Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปเดตสถานะได้');
-        return;
+        if (error) {
+          console.error('Error creating leave request:', error);
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกการลาได้');
+          return;
+        }
+      } else {
+        // For pickup/dropoff, check if record exists first
+        const { data: existingRecord } = await supabase
+          .from('pickup_dropoff')
+          .select('id')
+          .eq('student_id', selected.student_id)
+          .eq('driver_id', driverId)
+          .eq('location_type', location)
+          .single();
+
+        let error;
+        if (existingRecord) {
+          // Update existing record
+          const { error: updateError } = await supabase
+            .from('pickup_dropoff')
+            .update({
+              event_type: eventType,
+              event_time: now,
+            })
+            .eq('student_id', selected.student_id)
+            .eq('driver_id', driverId)
+            .eq('location_type', location);
+          error = updateError;
+        } else {
+          // Insert new record
+          const { error: insertError } = await supabase
+            .from('pickup_dropoff')
+            .insert({
+              student_id: selected.student_id,
+              driver_id: driverId,
+              event_type: eventType,
+              event_time: now,
+              location_type: location,
+            });
+          error = insertError;
+        }
+
+        if (error) {
+          console.error('Error updating status:', error);
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปเดตสถานะได้');
+          return;
+        }
       }
 
       // Update local state
@@ -638,8 +900,8 @@ window.addEventListener('message',e=>handle(e.data));
         onPress={() => handleStudentPress(item)}
         activeOpacity={0.7}
       >
-        <View style={styles.studentNumber}>
-          <Text style={styles.studentNumberText}>{index + 1}</Text>
+        <View style={styles.studentNumberContainer}>
+          <Text style={styles.studentNumberText}>#{index + 1}</Text>
         </View>
         <TouchableOpacity 
           style={styles.studentInfoTouchable}
@@ -652,6 +914,10 @@ window.addEventListener('message',e=>handle(e.data));
               <View style={styles.detailRow}>
                 <Ionicons name="school-outline" size={14} color={COLORS.textSecondary} />
                 <Text style={styles.studentGrade}>ชั้น {item.grade}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Ionicons name="card-outline" size={14} color={COLORS.textSecondary} />
+                <Text style={styles.studentRfid}>รหัส: {item.student_id}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Ionicons name={statusInfo.icon as any} size={14} color={statusInfo.color} />
@@ -1229,18 +1495,20 @@ const styles = StyleSheet.create({
     gap: 12,
     ...shadow,
   },
-  studentNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+  studentNumberContainer: {
+    backgroundColor: COLORS.primarySoft,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    alignSelf: 'flex-start',
   },
   studentNumberText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
-    color: COLORS.card,
+    color: COLORS.primary,
+    letterSpacing: 0.5,
   },
   studentInfoTouchable: {
     flex: 1,
@@ -1263,6 +1531,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   studentGrade: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  studentRfid: {
     fontSize: 13,
     color: COLORS.textSecondary,
     fontWeight: '500',

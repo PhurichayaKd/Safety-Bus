@@ -645,7 +645,72 @@ async function validateAndUpdateLineId(userId, studentId, parentId) {
       };
     }
 
-    // ตรวจสอบใน student_line_links ก่อน
+    // ขั้นตอนที่ 1: ตรวจสอบใน student_line_links ด้วย line_display_id ก่อน
+    const { data: studentLineIdData, error: studentLineIdError } = await supabase
+      .from('student_line_links')
+      .select('*')
+      .eq('student_id', studentId)
+      .eq('line_display_id', userId)
+      .eq('active', true)
+      .single();
+
+    if (studentLineIdData && !studentLineIdError) {
+      // พบ line_display_id ที่ตรงกัน ให้อัปเดต line_user_id
+      const { error: updateError } = await supabase
+        .from('student_line_links')
+        .update({ 
+          line_user_id: userId,
+          linked_at: new Date().toISOString()
+        })
+        .eq('student_id', studentId)
+        .eq('line_display_id', userId)
+        .eq('active', true);
+
+      if (updateError) {
+        console.error('Error updating student LINE User ID:', updateError);
+        return {
+          isValid: false,
+          message: 'เกิดข้อผิดพลาดในการอัปเดต LINE ID กรุณาลองใหม่อีกครั้ง'
+        };
+      }
+
+      return { isValid: true, message: 'ตรวจสอบและอัปเดต LINE ID สำเร็จ (นักเรียน)' };
+    }
+
+    // ขั้นตอนที่ 2: ตรวจสอบใน parent_line_links ด้วย line_display_id
+    const { data: parentLineIdData, error: parentLineIdError } = await supabase
+      .from('parent_line_links')
+      .select('*')
+      .eq('parent_id', parentId)
+      .eq('line_display_id', userId)
+      .eq('active', true)
+      .single();
+
+    if (parentLineIdData && !parentLineIdError) {
+      // พบ line_display_id ที่ตรงกัน ให้อัปเดต line_user_id
+      const { error: updateError } = await supabase
+        .from('parent_line_links')
+        .update({ 
+          line_user_id: userId,
+          linked_at: new Date().toISOString()
+        })
+        .eq('parent_id', parentId)
+        .eq('line_display_id', userId)
+        .eq('active', true);
+
+      if (updateError) {
+        console.error('Error updating parent LINE User ID:', updateError);
+        return {
+          isValid: false,
+          message: 'เกิดข้อผิดพลาดในการอัปเดต LINE ID กรุณาลองใหม่อีกครั้ง'
+        };
+      }
+
+      return { isValid: true, message: 'ตรวจสอบและอัปเดต LINE ID สำเร็จ (ผู้ปกครอง)' };
+    }
+
+    // ขั้นตอนที่ 3: ถ้าไม่พบ line_display_id ให้ตรวจสอบ line_user_id ที่มีอยู่แล้ว
+    // ตรวจสอบใน student_line_links ด้วย line_user_id
     const { data: studentLineData, error: studentError } = await supabase
       .from('student_line_links')
       .select('*')
@@ -685,7 +750,7 @@ async function validateAndUpdateLineId(userId, studentId, parentId) {
       return { isValid: true, message: 'ตรวจสอบ LINE ID สำเร็จ (นักเรียน)' };
     }
 
-    // ตรวจสอบใน parent_line_links
+    // ขั้นตอนที่ 4: ตรวจสอบใน parent_line_links ด้วย line_user_id
     const { data: parentLineData, error: parentError } = await supabase
       .from('parent_line_links')
       .select('*')
@@ -723,71 +788,6 @@ async function validateAndUpdateLineId(userId, studentId, parentId) {
       }
 
       return { isValid: true, message: 'ตรวจสอบ LINE ID สำเร็จ (ผู้ปกครอง)' };
-    }
-
-    // ถ้าไม่พบข้อมูลในทั้งสองตาราง แต่ตรวจสอบว่ามี line_display_id ปกติที่ตรงกับ userId หรือไม่
-    // ตรวจสอบใน student_line_links ด้วย line_display_id
-    const { data: studentLineIdData, error: studentLineIdError } = await supabase
-      .from('student_line_links')
-      .select('*')
-      .eq('student_id', studentId)
-      .eq('line_display_id', userId)
-      .eq('active', true)
-      .single();
-
-    if (studentLineIdData && !studentLineIdError) {
-      // พบ line_display_id ที่ตรงกัน ให้อัปเดต line_user_id
-      const { error: updateError } = await supabase
-        .from('student_line_links')
-        .update({ 
-          line_user_id: userId,
-          linked_at: new Date().toISOString()
-        })
-        .eq('student_id', studentId)
-        .eq('line_display_id', userId)
-        .eq('active', true);
-
-      if (updateError) {
-        console.error('Error updating student LINE User ID:', updateError);
-        return {
-          isValid: false,
-          message: 'เกิดข้อผิดพลาดในการอัปเดต LINE ID กรุณาลองใหม่อีกครั้ง'
-        };
-      }
-
-      return { isValid: true, message: 'ตรวจสอบและอัปเดต LINE ID สำเร็จ (นักเรียน)' };
-    }
-
-    // ตรวจสอบใน parent_line_links ด้วย line_display_id
-    const { data: parentLineIdData, error: parentLineIdError } = await supabase
-      .from('parent_line_links')
-      .select('*')
-      .eq('parent_id', parentId)
-      .eq('line_display_id', userId)
-      .eq('active', true)
-      .single();
-
-    if (parentLineIdData && !parentLineIdError) {
-      // พบ line_display_id ที่ตรงกัน ให้อัปเดต line_user_id
-      const { error: updateError } = await supabase
-        .from('parent_line_links')
-        .update({ 
-          line_user_id: userId,
-          linked_at: new Date().toISOString()
-        })
-        .eq('parent_id', parentId)
-        .eq('line_display_id', userId)
-        .eq('active', true);
-
-      if (updateError) {
-        console.error('Error updating parent LINE User ID:', updateError);
-        return {
-          isValid: false,
-          message: 'เกิดข้อผิดพลาดในการอัปเดต LINE ID กรุณาลองใหม่อีกครั้ง'
-        };
-      }
-
-      return { isValid: true, message: 'ตรวจสอบและอัปเดต LINE ID สำเร็จ (ผู้ปกครอง)' };
     }
 
     // ถ้าไม่พบข้อมูลในทั้งสองตาราง

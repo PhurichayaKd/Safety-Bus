@@ -11,9 +11,22 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useColorScheme } from '../hooks/useColorScheme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import { EmergencyProvider, useEmergency } from '../src/contexts/EmergencyContext';
+import EmergencyModal from '../components/EmergencyModal';
 
 // กันไม่ให้ Splash หายก่อนโหลดฟอนต์เสร็จ
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function EmergencyWrapper({ children }: { children: React.ReactNode }) {
+  const { showEmergencyModal, dismissModal } = useEmergency();
+  
+  return (
+    <>
+      {children}
+      <EmergencyModal visible={showEmergencyModal} onClose={dismissModal} />
+    </>
+  );
+}
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
@@ -61,12 +74,20 @@ function RootLayoutNav() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Stack>
-        <Stack.Screen name="auth" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <EmergencyProvider>
+        <EmergencyWrapper>
+          <Stack>
+            <Stack.Screen name="auth" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen 
+              name="emergency-history" 
+              options={{ headerShown: false }} 
+            />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        </EmergencyWrapper>
+      </EmergencyProvider>
     </GestureHandlerRootView>
   );
 }

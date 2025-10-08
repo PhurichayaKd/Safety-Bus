@@ -32,7 +32,6 @@ interface Student {
   student_id: number;
   student_name: string;
   parent_phone: string;
-  pickup_location: string;
 }
 
 interface StudentActivity {
@@ -93,7 +92,6 @@ const IndividualView: React.FC = () => {
         .select(`
           student_id, 
           student_name, 
-          pickup_location,
           primary_parent:parents!students_parent_id_fkey ( parent_phone )
         `)
         .order('student_name');
@@ -104,7 +102,6 @@ const IndividualView: React.FC = () => {
       const formattedStudents = data?.map((student: any) => ({
         student_id: student.student_id,
         student_name: student.student_name,
-        pickup_location: student.pickup_location,
         parent_phone: student.primary_parent?.parent_phone || 'ไม่มีข้อมูล'
       })) || [];
       
@@ -270,8 +267,7 @@ const IndividualView: React.FC = () => {
   const getFilteredStudents = () => {
     if (!searchText) return students;
     return students.filter((student: Student) => 
-      student.student_name.toLowerCase().includes(searchText.toLowerCase()) ||
-      student.pickup_location.toLowerCase().includes(searchText.toLowerCase())
+      student.student_name.toLowerCase().includes(searchText.toLowerCase())
     );
   };
 
@@ -438,9 +434,6 @@ const IndividualView: React.FC = () => {
                 </View>
                 <View style={styles.studentDetails}>
                   <Text style={styles.studentDetail}>
-                    📍 {student.pickup_location}
-                  </Text>
-                  <Text style={styles.studentDetail}>
                     📞 {student.parent_phone}
                   </Text>
                 </View>
@@ -486,10 +479,7 @@ const IndividualView: React.FC = () => {
                   <Text style={styles.infoLabel}>ชื่อ:</Text>
                   <Text style={styles.infoValue}>{selectedStudent?.student_name}</Text>
                 </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>จุดรับ-ส่ง:</Text>
-                  <Text style={styles.infoValue}>{selectedStudent?.pickup_location}</Text>
-                </View>
+
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>เบอร์ผู้ปกครong:</Text>
                   <Text style={styles.infoValue}>{selectedStudent?.parent_phone}</Text>

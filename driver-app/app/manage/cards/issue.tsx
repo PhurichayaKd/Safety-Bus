@@ -272,7 +272,7 @@ export default function IssueCardScreen() {
     <View style={styles.screen}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/home')} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.topTitle}>ออกบัตร RFID</Text>

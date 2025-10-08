@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams, Href } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
+import RfidCardSelector from '../../components/RfidCardSelector';
 
 const COLORS = {
   // Background Colors
@@ -115,7 +116,7 @@ type StudentRow = {
   status: 'active' | 'inactive' | null;
 };
 
-type RfidCard = { card_id: number; rfid_code: string };
+
 
 const formatLocalDate = (d: Date | null) => {
   if (!d) return null;
@@ -165,9 +166,7 @@ export default function StudentFormScreen() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // บัตรว่าง
-  const [availableCards, setAvailableCards] = useState<RfidCard[]>([]);
-  const [loadingCards, setLoadingCards] = useState(false);
+  // บัตรว่าง - ไม่จำเป็นแล้วเนื่องจากใช้ RfidCardSelector
 
   /* -------------- helpers for readonly TextInput on Android -------------- */
   const ro = (enabled: boolean) =>
@@ -214,30 +213,7 @@ export default function StudentFormScreen() {
     }
   }, [qLat, qLng, field]);
 
-  // บัตรว่าง (เฉพาะโหมดเพิ่ม)
-  useEffect(() => {
-    if (isEdit) return;
-    let alive = true;
-    (async () => {
-      setLoadingCards(true);
-      const { data, error } = await supabase.from('v_available_rfid_cards').select('card_id, rfid_code');
-      if (!error && data) {
-        if (alive) setAvailableCards(data as any);
-      } else {
-        const { data: cards } = await supabase
-          .from('rfid_cards').select('card_id, rfid_code, status, is_active');
-        const { data: opens } = await supabase
-          .from('rfid_card_assignments').select('card_id').is('valid_to', null);
-        const busy = new Set((opens || []).map((r: any) => r.card_id));
-        const free = (cards || [])
-          .filter((c: any) => c.is_active && c.status === 'available' && !busy.has(c.card_id))
-          .map((c: any) => ({ card_id: c.card_id, rfid_code: c.rfid_code }));
-        if (alive) setAvailableCards(free);
-      }
-      setLoadingCards(false);
-    })();
-    return () => { alive = false; };
-  }, [isEdit]);
+  // บัตรว่าง - ไม่จำเป็นแล้วเนื่องจากใช้ RfidCardSelector ที่จัดการเอง
 
   // โหลดข้อมูล (โหมดแก้ไข)
   useEffect(() => {
@@ -305,7 +281,7 @@ export default function StudentFormScreen() {
             parents:parent_id(
               parent_name, 
               parent_phone,
-              parent_line_links(line_user_id, active)
+              parent_line_links(line_display_id, active)
             )
           `)
           .eq('student_id', Number(id));
@@ -322,7 +298,7 @@ export default function StudentFormScreen() {
               parent_id: row.parent_id,
               name: p?.parent_name ?? '',
               phone: p?.parent_phone ?? '',
-              line: activeLink?.line_user_id ?? '',
+              line: activeLink?.line_display_id ?? '',
               relationship: row.relationship ?? '',
               is_primary: !!row.is_primary,
             };
@@ -338,7 +314,7 @@ export default function StudentFormScreen() {
                 parent_name,
                 parent_phone,
                 parent_line_links!inner(
-                  line_user_id
+                  line_display_id
                 )
               `)
               .eq('parent_line_links.active', true)
@@ -348,7 +324,7 @@ export default function StudentFormScreen() {
               gList = gList.map(g => {
                 if (!g.name && g.parent_id && map.has(g.parent_id)) {
                   const p = map.get(g.parent_id);
-                  const lineId = p.parent_line_links?.[0]?.line_user_id ?? '';
+                  const lineId = p.parent_line_links?.[0]?.line_display_id ?? '';
                   return { ...g, name: p.parent_name ?? '', phone: p.parent_phone ?? '', line: lineId };
                 }
                 return g;
@@ -924,33 +900,16 @@ export default function StudentFormScreen() {
                   <Text style={{ color: '#111827' }}>{rfidCode || '—'}</Text>
                 </View>
               ) : (
-                <View style={[styles.input, { paddingVertical: 8 }]}>
-                  <Text style={{ color: '#6B7280', marginBottom: 4, fontSize: 12 }} numberOfLines={1}>
-                    {loadingCards ? 'กำลังโหลดบัตรที่ว่าง…' : 'เลือกบัตรว่าง'}
-                  </Text>
-                  <View style={styles.selectWrap}>
-                    {availableCards.length === 0 ? (
-                      <Text style={{ color: '#EF4444', fontSize: 12 }}>ไม่พบบัตรว่าง</Text>
-                    ) : (
-                      <ScrollView style={{ maxHeight: 160 }}>
-                        {availableCards.map((c) => (
-                          <TouchableOpacity
-                            key={c.card_id}
-                            style={[
-                              styles.optionRow,
-                              rfidCardId === c.card_id && { backgroundColor: '#EEF2FF' }
-                            ]}
-                            onPress={() => { setRfidCardId(c.card_id); setRfidCode(c.rfid_code); setDraft({ rfidCardId: c.card_id, rfidCode: c.rfid_code }); }}
-                          >
-                            <Text style={{ color: '#111827', fontWeight: rfidCardId === c.card_id ? '800' : '600' }}>
-                              {c.rfid_code}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    )}
-                  </View>
-                </View>
+                <RfidCardSelector
+                  onSelect={(card) => {
+                    setRfidCardId(card.card_id);
+                    setRfidCode(card.rfid_code);
+                    setDraft({ rfidCardId: card.card_id, rfidCode: card.rfid_code });
+                  }}
+                  selectedCardId={rfidCardId}
+                  placeholder="เลือกบัตร RFID"
+                  value={rfidCode || ""}
+                />
               )}
             </View>
           </View>

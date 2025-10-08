@@ -21,7 +21,7 @@ export default function DriverInfoScreen() {
     <SafeAreaView style={styles.screen}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/home')} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.title}>ข้อมูลคนขับ</Text>

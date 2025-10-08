@@ -19,13 +19,15 @@ import { router } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
 
 type Row = {
-  display_no: number;
   student_id: number;
   student_name: string;
   grade: string;
-  rfid_tag: string;
-  parent_name: string | null;
-  parent_phone: string | null;
+  rfid_tag: string | null;
+  student_phone: string | null;
+  parents: {
+    parent_name: string;
+    parent_phone: string;
+  } | null;
 };
 
 const COLORS = {
@@ -86,14 +88,21 @@ export default function ProfilePage() {
   const fetchList = async (keyword?: string) => {
     setLoading(true);
     const query = supabase
-      .from('v_students_list')
-      .select('display_no, student_id, student_name, grade, rfid_tag, parent_name, parent_phone')
+      .from('students')
+      .select(`
+        student_id, 
+        student_name, 
+        grade, 
+        rfid_tag, 
+        student_phone,
+        parents:parent_id(parent_name, parent_phone)
+      `)
       .order('student_id', { ascending: true });
 
     if (keyword && keyword.trim()) {
       const k = keyword.trim();
       query.or(
-        `student_name.ilike.%${k}%,grade.ilike.%${k}%,rfid_tag.ilike.%${k}%,parent_name.ilike.%${k}%,parent_phone.ilike.%${k}%`
+        `student_name.ilike.%${k}%,grade.ilike.%${k}%,rfid_tag.ilike.%${k}%,student_phone.ilike.%${k}%`
       );
     }
 
@@ -102,7 +111,7 @@ export default function ProfilePage() {
       Alert.alert('โหลดข้อมูลไม่สำเร็จ', error.message);
       setRows([]);
     } else {
-      setRows((data ?? []) as Row[]);
+      setRows((data ?? []) as unknown as Row[]);
     }
     setLoading(false);
   };
@@ -130,7 +139,7 @@ export default function ProfilePage() {
     >
       {/* left: no. badge */}
       <View style={styles.noBadge}>
-        <Text style={styles.noBadgeTxt}>{item.display_no}</Text>
+        <Text style={styles.noBadgeTxt}>{item.student_id}</Text>
       </View>
 
       {/* center: main content */}
@@ -150,9 +159,9 @@ export default function ProfilePage() {
           )}
         </View>
 
-        {item.parent_name && (
+        {item.parents && (
           <Text style={styles.parentLine} numberOfLines={1}>
-            ผู้ปกครอง: {item.parent_name} {item.parent_phone && `(${item.parent_phone})`}
+            ผู้ปกครอง: {item.parents.parent_name} {item.parents.parent_phone && `(${item.parents.parent_phone})`}
           </Text>
         )}
       </View>

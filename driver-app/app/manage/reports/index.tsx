@@ -136,7 +136,7 @@ export default function ReportsPage() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/(tabs)/home')}>
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.title}>รายงานสรุป</Text>
@@ -205,15 +205,6 @@ export default function ReportsPage() {
               <Ionicons name="bus" size={24} color={COLORS.success} />
               <Text style={styles.reportButtonTitle}>สถานะนักเรียน</Text>
               <Text style={styles.reportButtonSubtitle}>การขึ้น-ลงรถ</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.reportButton, { backgroundColor: COLORS.warningSoft }]}
-              onPress={() => router.push('/manage/reports/individual-view')}
-            >
-              <Ionicons name="person" size={24} color={COLORS.warning} />
-              <Text style={styles.reportButtonTitle}>ดูรายบุคคล</Text>
-              <Text style={styles.reportButtonSubtitle}>ประวัติรายละเอียด</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -216,7 +216,7 @@
                 อัปเดตล่าสุด: <span id="last-update-time">-</span>
             </div>
             <div class="auto-refresh-indicator">
-                รีเฟรชอัตโนมัติทุก 30 วินาที
+                รีเฟรชอัตโนมัติทุก 1 วินาที
             </div>
         </div>
     </div>
@@ -452,8 +452,8 @@
             }
         }
 
-        // Auto-refresh every 30 seconds
-        setInterval(loadBusLocations, 30000);
+        // Auto-refresh every 1 second
+        setInterval(loadBusLocations, 1000);
 
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', function() {

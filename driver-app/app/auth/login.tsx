@@ -1,7 +1,7 @@
 // app/login.tsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, Dimensions, Platform } from 'react-native';
-import { supabase } from '../../src/services/supabaseClient';
+import { supabase, authWithRetry } from '../../src/services/supabaseClient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -59,7 +59,7 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error } = await authWithRetry.signInWithPassword({
         email: username,
         password: password,
       });
@@ -67,6 +67,9 @@ export default function LoginScreen() {
         Alert.alert('เข้าสู่ระบบไม่สำเร็จ', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
       }
       // ลบ router.replace ออก ให้ AuthContext จัดการ navigation แทน
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('เข้าสู่ระบบไม่สำเร็จ', 'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง');
     } finally {
       setLoading(false);
     }

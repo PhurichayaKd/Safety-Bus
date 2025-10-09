@@ -1,7 +1,7 @@
 import { Session, AuthChangeEvent } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../../src/services/supabaseClient';
+import { supabase, authWithRetry } from '../../src/services/supabaseClient';
 interface AuthContextType {
   session: Session | null;
   loading: boolean;
@@ -17,10 +17,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
     
-    // ตรวจสอบ session ปัจจุบัน
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
+    // ตรวจสอบ session ปัจจุบันด้วย retry logic
+    authWithRetry.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       if (mounted) {
         setSession(session);
+        setLoading(false);
+      }
+    }).catch((error) => {
+      console.error('Failed to get session after retries:', error);
+      if (mounted) {
+        setSession(null);
         setLoading(false);
       }
     });
@@ -55,8 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         'reset_today_flag'
       ]);
       
-      // พยายาม logout จาก Supabase แต่ไม่ให้ error หยุดการทำงาน
-      await supabase.auth.signOut();
+      // พยายาม logout จาก Supabase ด้วย retry logic แต่ไม่ให้ error หยุดการทำงาน
+      await authWithRetry.signOut();
     } catch (error) {
       console.warn('Logout error (non-critical):', error);
       // ไม่ throw error เพราะเราได้ clear session ใน local แล้ว

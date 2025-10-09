@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EmergencyNotificationIcon from '../components/EmergencyNotificationIcon';
+import COLORS from '../colors';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -32,71 +33,7 @@ const STATUS_LABEL: Record<BusStatus, string> = {
   finished: 'จบการเดินทาง',
 };
 
-/* ======= CLEAN WHITE/BLUE THEME (Professional Driver App) ======= */
-const COLORS = {
-  // Primary background colors - Clean white/soft theme
-  bg: '#FAFBFC',              // Very light gray-white background
-  bgSecondary: '#F8FAFC',     // Slightly darker white
-  bgSoft: '#FFFFFF',          // Pure white for contrast
-  card: '#FFFFFF',            // Pure white for main cards
-  cardElevated: '#FFFFFF',    // Elevated card
-  
-  // Text colors with proper contrast ratios
-  text: '#1E293B',            // Dark slate for primary text
-  textSecondary: '#475569',   // Medium slate for secondary text
-  textTertiary: '#64748B',    // Light slate for tertiary text
-  textMuted: '#94A3B8',       // Very light slate for muted text
-  textLight: '#FFFFFF',       // White text for dark backgrounds
-  textOnPrimary: '#FFFFFF',   // White text on primary colors
-  textOnSecondary: '#FFFFFF', // White text on secondary colors
-  
-  // Border and divider colors - Very subtle
-  border: '#E2E8F0',          // Very light border
-  borderLight: '#F1F5F9',     // Ultra light border
-  borderSoft: '#E2E8F0',      // Soft borders
-  borderDark: '#CBD5E1',      // Slightly darker borders
-  divider: '#F1F5F9',
-  
-  // Primary brand colors - Resolution Blue
-  primary: '#021C8B',         // Resolution Blue - main brand color
-  primaryDark: '#010B1F',     // Darker shade for hover states
-  primaryLight: '#1E40AF',    // Lighter blue for hover states
-  primarySoft: '#EFF6FF',     // Very soft blue background
-  primaryGradient: ['#021C8B', '#1E40AF'],
-  
-  // Secondary colors - New Car Blue (เปลี่ยนจากเขียวเป็นน้ำเงิน)
-  secondary: '#1B52D7',       // New Car blue
-  secondaryDark: '#1E40AF',   // Darker blue
-  secondaryLight: '#3B82F6',  // Lighter blue
-  secondarySoft: '#EFF6FF',   // Soft blue background
-  
-  // Accent colors - Clean grays
-  accent: '#64748B',          // Clean slate gray
-  accentDark: '#475569',      // Darker gray
-  accentLight: '#94A3B8',     // Lighter gray
-  accentSoft: '#F8FAFC',      // Soft gray background
-  
-  // Status colors
-  success: '#10B981',         // Clean green for success
-  successSoft: '#ECFDF5',     // Light green background
-  warning: '#F59E0B',
-  warningSoft: '#FFFBEB',
-  danger: '#EF4444',
-  dangerSoft: '#FEF2F2',
-  info: '#021C8B',            // Resolution Blue for info
-  infoSoft: '#EFF6FF',        // Light blue background
-  
-  // Interactive states
-  hover: '#F8FAFC',
-  pressed: '#F1F5F9',
-  focus: '#021C8B',           // Resolution Blue for focus
-  
-  // Shadow colors - Very subtle
-  shadow: 'rgba(30, 41, 59, 0.04)',      // Very light shadow
-  shadowMedium: 'rgba(30, 41, 59, 0.08)', // Medium shadow
-  shadowDark: 'rgba(30, 41, 59, 0.12)',   // Darker shadow for elevation
-  shadowElevated: 'rgba(30, 41, 59, 0.16)', // Elevated shadow
-};
+
 
 function MenuCard({
   icon, label, to, disabled,
@@ -185,6 +122,12 @@ const HomePage = () => {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  
+  // เพิ่ม state สำหรับข้อมูลใหม่
+  const [studentCount, setStudentCount] = useState<number>(24);
+  const [distance, setDistance] = useState<number>(12.5);
+  const [estimatedTime, setEstimatedTime] = useState<string>('25 นาที');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -200,6 +143,32 @@ const HomePage = () => {
         setStatus(null);
       }
     })();
+  }, []);
+
+  // เพิ่ม useEffect สำหรับดึงข้อมูลจริง
+  useEffect(() => {
+    const loadRealData = async () => {
+      setLoading(true);
+      try {
+        // ดึงข้อมูลจำนวนเด็ก
+        const count = await getStudentCount();
+        setStudentCount(count);
+
+        // คำนวณระยะทาง
+        const dist = await calculateDistance();
+        setDistance(dist);
+
+        // คำนวณเวลาคาดการณ์
+        const time = calculateEstimatedTime(dist);
+        setEstimatedTime(time);
+      } catch (error) {
+        console.warn('เกิดข้อผิดพลาดในการโหลดข้อมูล:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadRealData();
   }, []);
 
   // Update date and time every second
@@ -453,15 +422,15 @@ const HomePage = () => {
               <View style={styles.statIconWrap}>
                 <Ionicons name="time" size={14} color={COLORS.primary} />
               </View>
-              <Text style={styles.statValue}>2.5 ชม.</Text>
-              <Text style={styles.statLabel}>เวลาขับรถ</Text>
+              <Text style={styles.statValue}>{loading ? '...' : estimatedTime}</Text>
+              <Text style={styles.statLabel}>เวลาคาดการณ์</Text>
             </View>
             
             <View style={styles.statCard}>
               <View style={styles.statIconWrap}>
                 <Ionicons name="speedometer" size={14} color={COLORS.success} />
               </View>
-              <Text style={styles.statValue}>45 กม.</Text>
+              <Text style={styles.statValue}>{loading ? '...' : `${distance} กม.`}</Text>
               <Text style={styles.statLabel}>ระยะทาง</Text>
             </View>
             
@@ -469,7 +438,7 @@ const HomePage = () => {
               <View style={styles.statIconWrap}>
                 <Ionicons name="people" size={14} color={COLORS.warning} />
               </View>
-              <Text style={styles.statValue}>24 คน</Text>
+              <Text style={styles.statValue}>{loading ? '...' : `${studentCount} คน`}</Text>
               <Text style={styles.statLabel}>นักเรียน</Text>
             </View>
           </View>
@@ -563,19 +532,19 @@ export default HomePage;
 const shadow = Platform.select({
   ios: {
     shadowColor: COLORS.shadow,
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
   android: { elevation: 3 },
 });
 
 const shadowElevated = Platform.select({
   ios: {
-    shadowColor: COLORS.shadowDark,
-    shadowOpacity: 1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   android: { elevation: 6 },
 });
@@ -802,7 +771,7 @@ const styles = StyleSheet.create({
     ...shadow,
   },
   updateText: {
-    color: COLORS.textOnPrimary,
+    color: COLORS.card,
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
@@ -946,7 +915,7 @@ const styles = StyleSheet.create({
   sheetIconContainer: {
     width: 36,
     height: 36,
-    backgroundColor: COLORS.bgSoft,
+    backgroundColor: COLORS.surface,
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
@@ -972,3 +941,78 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+// ฟังก์ชันสำหรับดึงจำนวนเด็กจริงจากฐานข้อมูล
+async function getStudentCount() {
+  try {
+    // Import supabase client
+    const { supabase } = await import('../../src/services/supabaseClient');
+    
+    // ดึงจำนวนนักเรียนทั้งหมดจากตาราง students
+    const { data, error, count } = await supabase
+      .from('students')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      console.warn('ไม่สามารถดึงข้อมูลจำนวนเด็กได้:', error);
+      return 24; // fallback
+    }
+
+    const studentCount = count || 0;
+    console.log('ดึงข้อมูลจำนวนนักเรียนสำเร็จ:', studentCount);
+    return studentCount;
+  } catch (error) {
+    console.warn('เกิดข้อผิดพลาดในการดึงข้อมูลจำนวนเด็ก:', error);
+    return 24; // fallback
+  }
+}
+
+// ฟังก์ชันสำหรับคำนวณระยะทางจากบ้านคนขับถึงโรงเรียน
+async function calculateDistance() {
+  try {
+    const driverId = await AsyncStorage.getItem('driverId');
+    if (!driverId) {
+      console.log('ไม่พบ driverId, ใช้ระยะทาง mock');
+      return 12.5; // ค่า default (กิโลเมตร)
+    }
+
+    // ดึงข้อมูลตำแหน่งบ้านคนขับและโรงเรียนจาก API
+    const response = await fetch('https://safety-bus-liff-v4-new.vercel.app/api/calculate-distance', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        driverId: parseInt(driverId),
+      }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      return result.distance || 12.5; // ระยะทางในกิโลเมตร
+    } else {
+      console.warn('ไม่สามารถคำนวณระยะทางได้, ใช้ข้อมูล mock');
+      return 12.5; // fallback
+    }
+  } catch (error) {
+    console.warn('เกิดข้อผิดพลาดในการคำนวณระยะทาง:', error);
+    return 12.5; // fallback
+  }
+}
+
+// ฟังก์ชันสำหรับคำนวณเวลาคาดการณ์
+function calculateEstimatedTime(distance: number) {
+  // คำนวณเวลาโดยประมาณ
+  // สมมติความเร็วเฉลี่ย 30 กม./ชม. ในเมือง และ 50 กม./ชม. นอกเมือง
+  const averageSpeed = distance > 20 ? 50 : 30; // กม./ชม.
+  const timeInHours = distance / averageSpeed;
+  const timeInMinutes = Math.round(timeInHours * 60);
+  
+  if (timeInMinutes < 60) {
+    return `${timeInMinutes} นาที`;
+  } else {
+    const hours = Math.floor(timeInMinutes / 60);
+    const minutes = timeInMinutes % 60;
+    return minutes > 0 ? `${hours}.${Math.round(minutes/6)} ชม.` : `${hours} ชม.`;
+  }
+}

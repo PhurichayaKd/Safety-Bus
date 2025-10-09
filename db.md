@@ -2,16 +2,18 @@
 -- Table order and constraints may not be valid for execution.
 
 CREATE TABLE public.card_history (
-  id integer NOT NULL DEFAULT nextval('card_history_id_seq'::regclass),
-  card_id integer NOT NULL,
-  student_id integer,
-  action character varying NOT NULL,
-  reason character varying,
-  performed_by integer,
-  performed_at timestamp with time zone DEFAULT now(),
-  notes text,
+  history_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  student_id integer NOT NULL,
+  action_type text NOT NULL CHECK (action_type = ANY (ARRAY['issue'::text, 'expire'::text, 'renew'::text, 'cancel'::text, 'suspend'::text, 'reactivate'::text])),
+  old_status text,
+  new_status text NOT NULL,
+  reason text,
+  performed_by uuid,
   created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT card_history_pkey PRIMARY KEY (id)
+  metadata jsonb DEFAULT '{}'::jsonb,
+  CONSTRAINT card_history_pkey PRIMARY KEY (history_id),
+  CONSTRAINT card_history_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id),
+  CONSTRAINT card_history_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.driver_bus (
   driver_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -63,6 +65,17 @@ CREATE TABLE public.live_driver_locations (
   last_updated timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT live_driver_locations_pkey PRIMARY KEY (driver_id),
   CONSTRAINT live_driver_locations_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.driver_bus(driver_id)
+);
+CREATE TABLE public.notification_logs (
+  id bigint NOT NULL DEFAULT nextval('notification_logs_id_seq'::regclass),
+  notification_type character varying NOT NULL,
+  recipient_id text NOT NULL,
+  message text NOT NULL,
+  status character varying NOT NULL,
+  error_details json,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notification_logs_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.parent_line_links (
   link_id bigint NOT NULL DEFAULT nextval('parent_line_links_link_id_seq'::regclass),
@@ -131,11 +144,26 @@ CREATE TABLE public.rfid_cards (
   last_seen_at timestamp with time zone,
   CONSTRAINT rfid_cards_pkey PRIMARY KEY (card_id)
 );
+CREATE TABLE public.rfid_scan_logs (
+  scan_id integer NOT NULL DEFAULT nextval('rfid_scan_logs_scan_id_seq'::regclass),
+  rfid_code character varying NOT NULL,
+  driver_id integer,
+  student_id integer,
+  scan_time timestamp with time zone DEFAULT now(),
+  latitude numeric,
+  longitude numeric,
+  location_type character varying CHECK (location_type::text = ANY (ARRAY['go'::character varying, 'back'::character varying]::text[])),
+  scan_result character varying DEFAULT 'success'::character varying,
+  error_message text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT rfid_scan_logs_pkey PRIMARY KEY (scan_id)
+);
 CREATE TABLE public.route_students (
   route_id integer NOT NULL,
   student_id integer NOT NULL,
   stop_order integer NOT NULL,
-  CONSTRAINT route_students_pkey PRIMARY KEY (student_id, route_id),
+  CONSTRAINT route_students_pkey PRIMARY KEY (route_id, student_id),
   CONSTRAINT route_students_route_id_fkey FOREIGN KEY (route_id) REFERENCES public.routes(route_id),
   CONSTRAINT fk_route_students_student_id FOREIGN KEY (student_id) REFERENCES public.students(student_id)
 );

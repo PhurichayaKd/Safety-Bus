@@ -13,6 +13,7 @@ import { useColorScheme } from '../hooks/useColorScheme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { EmergencyProvider, useEmergency } from '../src/contexts/EmergencyContext';
 import EmergencyModal from '../components/EmergencyModal';
+import NetworkStatusBar from '../src/components/NetworkStatusBar';
 
 // กันไม่ให้ Splash หายก่อนโหลดฟอนต์เสร็จ
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -22,6 +23,7 @@ function EmergencyWrapper({ children }: { children: React.ReactNode }) {
   
   return (
     <>
+      <NetworkStatusBar />
       {children}
       <EmergencyModal visible={showEmergencyModal} onClose={dismissModal} />
     </>

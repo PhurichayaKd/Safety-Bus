@@ -1,4 +1,4 @@
--- Supabase Function สำหรับบันทึกการสแกน RFID และส่งแจ้งเตือน LINE (อัปเดต)
+-- Supabase Function สำหรับบันทึกการสแกน RFID และส่งแจ้งเตือน LINE (ใช้ driver_bus)
 CREATE OR REPLACE FUNCTION record_rfid_scan(
   p_rfid_code VARCHAR,
   p_driver_id INTEGER,
@@ -19,6 +19,9 @@ DECLARE
   v_trip_phase TEXT;
   v_boarding_status TEXT;
   v_status_id BIGINT;
+  v_driver_trip_phase TEXT;
+  v_driver_status TEXT;
+  v_driver_is_active BOOLEAN;  -- เพิ่มตัวแปรใหม่สำหรับ is_active
   notification_message TEXT;
   line_result JSON;
   line_notified BOOLEAN := false;
@@ -34,6 +37,44 @@ BEGIN
     WHEN p_location_type IN ('return') THEN 'dropoff'  -- backward compatibility
     ELSE 'pickup'
   END;
+  
+  -- ตรวจสอบสถานะคนขับจากตาราง driver_bus (แก้ไขแล้ว)
+  SELECT 
+    driver_name, 
+    trip_phase, 
+    current_status,
+    is_active
+  INTO v_driver_name, v_driver_trip_phase, v_driver_status, v_driver_is_active
+  FROM driver_bus 
+  WHERE driver_id = p_driver_id;
+
+  -- ตรวจสอบว่าพบคนขับหรือไม่
+  IF v_driver_name IS NULL THEN
+    RETURN json_build_object(
+      'success', false, 
+      'error', 'ไม่พบข้อมูลคนขับ',
+      'driver_id', p_driver_id
+    );
+  END IF;
+
+  -- ตรวจสอบว่าคนขับอยู่ในสถานะที่ถูกต้องหรือไม่
+  IF v_driver_status != 'active' THEN
+    RETURN json_build_object(
+      'success', false, 
+      'error', 'คนขับไม่อยู่ในสถานะปฏิบัติงาน',
+      'driver_status', v_driver_status,
+      'is_active', v_driver_is_active
+    );
+  END IF;
+
+  -- อัปเดต trip_phase ของคนขับให้ตรงกับการสแกน
+  UPDATE driver_bus 
+  SET 
+    trip_phase = v_trip_phase,
+    current_latitude = COALESCE(p_latitude, current_latitude),
+    current_longitude = COALESCE(p_longitude, current_longitude),
+    current_updated_at = NOW() AT TIME ZONE 'Asia/Bangkok'
+  WHERE driver_id = p_driver_id;
   
   -- ค้นหา student_id จาก RFID code
   SELECT 
@@ -80,12 +121,6 @@ BEGIN
     );
   END IF;
 
-  -- ค้นหาชื่อคนขับ
-  SELECT driver_name 
-  INTO v_driver_name
-  FROM driver_bus 
-  WHERE driver_id = p_driver_id;
-
   -- บันทึกการสแกนในตาราง rfid_scan_logs
   INSERT INTO rfid_scan_logs (
     rfid_code,
@@ -123,7 +158,7 @@ BEGIN
   ) VALUES (
     v_student_id, 
     p_driver_id, 
-    'pickup', 
+    v_trip_phase, 
     p_latitude, 
     p_longitude,
     p_location_type, 
@@ -201,26 +236,14 @@ BEGIN
         
         -- บันทึก log สำเร็จ
         INSERT INTO notification_logs (
-          student_id, 
-          driver_id, 
           notification_type, 
+          recipient_id,
           message, 
-          line_user_id,
-          student_latitude, 
-          student_longitude, 
-          bus_latitude, 
-          bus_longitude,
           status
         ) VALUES (
-          v_student_id, 
-          p_driver_id, 
           'rfid_scan',
-          notification_message,
           v_line_user_id,
-          p_latitude, 
-          p_longitude, 
-          p_latitude, 
-          p_longitude,
+          notification_message,
           'sent'
         );
       ELSE
@@ -228,29 +251,17 @@ BEGIN
         
         -- บันทึก log ล้มเหลว
         INSERT INTO notification_logs (
-          student_id, 
-          driver_id, 
           notification_type, 
+          recipient_id,
           message, 
-          line_user_id,
-          student_latitude, 
-          student_longitude, 
-          bus_latitude, 
-          bus_longitude,
           status,
-          error_message
+          error_details
         ) VALUES (
-          v_student_id, 
-          p_driver_id, 
           'rfid_scan',
-          notification_message,
           v_line_user_id,
-          p_latitude, 
-          p_longitude, 
-          p_latitude, 
-          p_longitude,
+          notification_message,
           'failed',
-          line_result->>'error'
+          line_result
         );
       END IF;
     EXCEPTION
@@ -273,7 +284,8 @@ BEGIN
     'scan_time', NOW() AT TIME ZONE 'Asia/Bangkok',
     'location_type', p_location_type,
     'trip_phase', v_trip_phase,
-    'boarding_status', 'boarded'
+    'boarding_status', 'boarded',
+    'driver_trip_phase', v_trip_phase
   );
 
 EXCEPTION
@@ -288,6 +300,3 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ให้สิทธิ์ในการเรียกใช้ function
 GRANT EXECUTE ON FUNCTION record_rfid_scan TO anon, authenticated;
-
--- สร้าง RPC endpoint
--- ใช้ผ่าน: POST /rest/v1/rpc/record_rfid_scan

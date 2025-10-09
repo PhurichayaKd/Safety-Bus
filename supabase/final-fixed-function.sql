@@ -1,4 +1,9 @@
 -- ฟังก์ชัน record_rfid_scan ที่แก้ไขให้ตรงกับโครงสร้างตารางจริงใน db.md และเพิ่มการส่ง LINE notification
+-- บังคับลบฟังก์ชันเวอร์ชัน/ซิกเนเจอร์เก่าทั้งหมด เพื่อหลีกเลี่ยง RPC เรียกเวอร์ชันที่ไม่ถูกต้อง
+DROP FUNCTION IF EXISTS public.record_rfid_scan(varchar, integer, numeric, numeric, varchar);
+DROP FUNCTION IF EXISTS public.record_rfid_scan(varchar, integer, decimal, decimal, varchar);
+DROP FUNCTION IF EXISTS public.record_rfid_scan(varchar, integer, double precision, double precision, varchar);
+DROP FUNCTION IF EXISTS public.record_rfid_scan(varchar, integer, varchar, varchar, varchar);
 CREATE OR REPLACE FUNCTION record_rfid_scan(
     p_rfid_code VARCHAR,
     p_driver_id INTEGER,
@@ -246,3 +251,6 @@ EXCEPTION
         );
 END;
 $$;
+
+-- ให้สิทธิ์เรียกใช้กับ anon/authenticated ให้ RPC ใช้งานได้
+GRANT EXECUTE ON FUNCTION public.record_rfid_scan(varchar, integer, decimal, decimal, varchar) TO anon, authenticated;

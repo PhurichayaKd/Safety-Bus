@@ -1,3 +1,18 @@
+/*
+ * ===== RFID Bus System - Updated for driver_bus Table =====
+ * 
+ * การเปลี่ยนแปลงสำคัญ:
+ * 1. ใช้ตาราง driver_bus แทน driver_status
+ * 2. API endpoint: /rest/v1/rpc/get_driver_current_status
+ * 3. รองรับ trip_phase: 'pickup' และ 'dropoff'
+ * 4. ป้องกันการสแกนซ้ำในเส้นทางเดียวกันต่อวัน
+ * 
+ * ฟังก์ชันใหม่ที่ใช้:
+ * - get_driver_current_status(p_driver_id) - ดึงสถานะคนขับ
+ * - record_rfid_scan() - บันทึกการสแกน RFID (ปรับปรุงแล้ว)
+ * - update_driver_trip_phase() - อัปเดต trip_phase
+ */
+
 #include <SPI.h>
 #include <MFRC522.h>
 #include <WiFi.h>
@@ -16,10 +31,15 @@ const char* SUPABASE_ANON_KEY =
 
 /* ===== การตั้งค่าระบบ ===== */
 const int DRIVER_ID = 1;                    // รหัสคนขับ (ต้องตั้งค่าให้ถูกต้อง)
-const String LOCATION_TYPE = "go";          // "go" หรือ "return"
+String CURRENT_TRIP_PHASE = "pickup";       // "pickup" หรือ "dropoff" - จะอัปเดตจาก API
+                                             // pickup = เส้นทางรับนักเรียน (บ้าน -> โรงเรียน)
+                                             // dropoff = เส้นทางส่งนักเรียน (โรงเรียน -> บ้าน)
 const bool ENABLE_GPS = false;              // เปิด/ปิดการใช้ GPS
 const float DEFAULT_LAT = 13.7563;          // ตำแหน่งเริ่มต้น (กรุงเทพฯ)
 const float DEFAULT_LNG = 100.5018;
+
+/* ===== API URLs ===== */
+const String DRIVER_STATUS_API = "/rest/v1/rpc/get_driver_current_status";
 
 /* ===== ESP32 ↔ RC522 (3.3V only) =====
    GPIO5  -> SDA/SS
@@ -122,8 +142,78 @@ void ensureWifi() {
   }
 }
 
+/* ===== ตรวจสอบ trip_phase ปัจจุบันจาก API ===== */
+bool updateTripPhase() {
+  ensureWifi();
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[TRIP_PHASE] No WiFi connection");
+    return false;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient https;
+
+  String url = String(SUPABASE_URL) + DRIVER_STATUS_API;
+  Serial.printf("[TRIP_PHASE] POST %s\n", url.c_str());
+
+  if (!https.begin(client, url)) {
+    Serial.println("[TRIP_PHASE] HTTPS begin failed");
+    return false;
+  }
+
+  https.setTimeout(10000);
+  https.addHeader("Content-Type", "application/json");
+  https.addHeader("apikey", SUPABASE_ANON_KEY);
+  https.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+
+  // สร้าง JSON payload สำหรับ RPC function call
+  DynamicJsonDocument doc(256);
+  doc["p_driver_id"] = DRIVER_ID;
+  
+  String payload;
+  serializeJson(doc, payload);
+  Serial.printf("[TRIP_PHASE] Payload: %s\n", payload.c_str());
+
+  int code = https.POST(payload);
+  String response = https.getString();
+  https.end();
+
+  Serial.printf("[TRIP_PHASE] HTTP %d\n", code);
+  if (response.length() > 0) {
+    Serial.printf("[TRIP_PHASE] Response: %s\n", response.c_str());
+  }
+
+  if (code == 200) {
+    DynamicJsonDocument responseDoc(512);
+    DeserializationError error = deserializeJson(responseDoc, response);
+    
+    if (!error) {
+      bool success = responseDoc["success"] | false;
+      if (success) {
+        String tripPhase = responseDoc["trip_phase"] | "pickup";
+        String previousPhase = CURRENT_TRIP_PHASE;
+        CURRENT_TRIP_PHASE = tripPhase;
+        
+        Serial.printf("[TRIP_PHASE] ✅ Updated: %s -> %s\n", previousPhase.c_str(), CURRENT_TRIP_PHASE.c_str());
+        return true;
+      } else {
+        String errorMsg = responseDoc["error"] | "Unknown error";
+        Serial.printf("[TRIP_PHASE] ❌ Error: %s\n", errorMsg.c_str());
+        return false;
+      }
+    } else {
+      Serial.printf("[TRIP_PHASE] ❌ JSON Parse Error: %s\n", error.c_str());
+      return false;
+    }
+  } else {
+    Serial.printf("[TRIP_PHASE] ❌ HTTP Error: %d\n", code);
+    return false;
+  }
+}
+
 /* ===== ส่งข้อมูลการสแกนไป Supabase API ===== */
-bool sendScanToAPI(const String& uid, int driverId, float lat, float lng, const String& locationType) {
+bool sendScanToAPI(const String& uid, int driverId, float lat, float lng) {
   ensureWifi();
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("[API] No WiFi connection");
@@ -147,13 +237,13 @@ bool sendScanToAPI(const String& uid, int driverId, float lat, float lng, const 
   https.addHeader("apikey", SUPABASE_ANON_KEY);
   https.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
 
-  // สร้าง JSON payload
+  // สร้าง JSON payload โดยใช้ trip_phase ปัจจุบัน
   DynamicJsonDocument doc(512);
   doc["p_rfid_code"] = uid;
   doc["p_driver_id"] = driverId;
   doc["p_latitude"] = lat;
   doc["p_longitude"] = lng;
-  doc["p_location_type"] = locationType;
+  doc["p_location_type"] = CURRENT_TRIP_PHASE;
 
   String payload;
   serializeJson(doc, payload);
@@ -177,66 +267,56 @@ bool sendScanToAPI(const String& uid, int driverId, float lat, float lng, const 
       bool success = responseDoc["success"] | false;
       if (success) {
         String studentName = responseDoc["student_name"] | "Unknown";
-        bool lineNotified = responseDoc["line_notified"] | false;
+        String message = responseDoc["message"] | "บันทึกการสแกน RFID สำเร็จ";
         
-        Serial.printf("[API] ✅ Success: %s", studentName.c_str());
-        if (lineNotified) {
-          Serial.println(" (LINE notified)");
-        } else {
-          Serial.println(" (No LINE notification)");
-        }
+        Serial.printf("[API] ✅ Success: %s\n", studentName.c_str());
+        Serial.printf("[API] Message: %s\n", message.c_str());
         return true;
       } else {
-        String error = responseDoc["error"] | "Unknown error";
-        Serial.printf("[API] ❌ Error: %s\n", error.c_str());
-        return false;
+        String errorMsg = responseDoc["error"] | "Unknown error";
+        bool alreadyScanned = responseDoc["already_scanned"] | false;
+        String studentName = responseDoc["student_name"] | "";
+        
+        // ตรวจสอบว่าเป็น duplicate key error หรือไม่
+        if (errorMsg.indexOf("duplicate key") >= 0 || errorMsg.indexOf("uniq_daily_pickup_per_student_phase") >= 0) {
+          Serial.printf("[API] ⚠️  Already Scanned: %s\n", studentName.length() > 0 ? studentName.c_str() : "นักเรียนคนนี้");
+          Serial.println("[API] ℹ️  นักเรียนได้สแกนบัตรในเส้นทางนี้แล้ววันนี้");
+          return true; // ถือว่าสำเร็จเพราะนักเรียนได้ขึ้นรถแล้ว
+        } else if (alreadyScanned) {
+          Serial.printf("[API] ⚠️  Already Scanned: %s\n", studentName.c_str());
+          Serial.println("[API] ℹ️  นักเรียนได้สแกนบัตรในเส้นทางนี้แล้ววันนี้");
+          return true; // ถือว่าสำเร็จเพราะนักเรียนได้ขึ้นรถแล้ว
+        } else {
+          Serial.printf("[API] ❌ Error: %s\n", errorMsg.c_str());
+          return false;
+        }
       }
+    } else {
+      Serial.printf("[API] ❌ JSON Parse Error: %s\n", error.c_str());
+      return false;
     }
-  }
-
-  return false;
-}
-
-/* ===== ตรวจสิทธิ์ใน Supabase: ตาราง rfid_cards ฟิลด์ rfid_code (เก็บไว้เป็น backup) ===== */
-bool uidExistsInSupabase(const String& uid) {
-  ensureWifi();
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[Supabase] No WiFi; treat as NOT allowed.");
+  } else if (code == 400) {
+    Serial.printf("[API] ❌ Bad Request (400): Invalid parameters\n");
+    return false;
+  } else if (code == 401) {
+    Serial.printf("[API] ❌ Unauthorized (401): Check API key\n");
+    return false;
+  } else if (code == 404) {
+    Serial.printf("[API] ❌ Not Found (404): Function not found\n");
+    return false;
+  } else if (code == 500) {
+    Serial.printf("[API] ❌ Server Error (500): Database error\n");
+    return false;
+  } else if (code < 0) {
+    Serial.printf("[API] ❌ Connection Error: %d\n", code);
+    return false;
+  } else {
+    Serial.printf("[API] ❌ Unexpected HTTP Code: %d\n", code);
     return false;
   }
-
-  WiFiClientSecure client; client.setInsecure();
-  HTTPClient https;
-
-  String url = String(SUPABASE_URL) + "/rest/v1/rfid_cards"
-               "?select=rfid_code&rfid_code=eq." + uid + "&is_active=eq.true";
-  Serial.printf("[Supabase] GET %s\n", url.c_str());
-
-  if (!https.begin(client, url)) {
-    Serial.println("[Supabase] HTTP begin failed");
-    return false;
-  }
-
-  https.setTimeout(10000);
-  https.addHeader("Accept", "application/json");
-  https.addHeader("apikey", SUPABASE_ANON_KEY);
-  https.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
-
-  int code = https.GET();
-  String resp = https.getString();
-  https.end();
-
-  Serial.printf("[Supabase] HTTP %d\n", code);
-  if (resp.length()) Serial.printf("[Supabase] Resp: %s\n", resp.c_str());
-
-  if (code != 200) return false;
-
-  String trimmed = resp; trimmed.trim();
-  if (trimmed == "[]" || trimmed.length() < 5) return false;
-
-  // หา "rfid_code":"<uid>"
-  return (trimmed.indexOf(String("\"rfid_code\":\"") + uid + "\"") >= 0);
 }
+
+
 
 /* ===== UART helper: แจ้งให้ ESP8266 เปิดประตู ===== */
 void commBegin() {
@@ -268,14 +348,23 @@ void setup() {
   ensureWifi();
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("✅ System ready - WiFi connected");
+    
+    // ตรวจสอบ trip_phase ปัจจุบันจาก API
+    if (updateTripPhase()) {
+      Serial.printf("✅ Trip phase initialized: %s\n", CURRENT_TRIP_PHASE.c_str());
+    } else {
+      Serial.printf("⚠️  Using default trip phase: %s\n", CURRENT_TRIP_PHASE.c_str());
+    }
+    
     beep_ok();
   } else {
     Serial.println("⚠️  System ready - WiFi not connected (offline mode)");
+    Serial.printf("⚠️  Using default trip phase: %s\n", CURRENT_TRIP_PHASE.c_str());
     beep_error();
   }
 
   noteActivity();
-  Serial.printf("RC522 ready. Driver ID: %d, Location: %s\n", DRIVER_ID, LOCATION_TYPE.c_str());
+  Serial.printf("RC522 ready. Driver ID: %d, Trip Phase: %s\n", DRIVER_ID, CURRENT_TRIP_PHASE.c_str());
   Serial.println("Scan a card...");
 }
 
@@ -306,29 +395,23 @@ void loop() {
 
   Serial.println("=== RFID SCAN ===");
   Serial.println("UID: " + uid);
-  Serial.printf("Driver: %d, Location: %s\n", DRIVER_ID, LOCATION_TYPE.c_str());
+  
+  // ตรวจสอบ trip_phase ปัจจุบันก่อนส่งข้อมูล
+  updateTripPhase();
+  Serial.printf("Driver: %d, Trip Phase: %s\n", DRIVER_ID, CURRENT_TRIP_PHASE.c_str());
 
-  // ====== ส่งข้อมูลไป API (วิธีหลัก) ======
-  bool apiSuccess = sendScanToAPI(uid, DRIVER_ID, DEFAULT_LAT, DEFAULT_LNG, LOCATION_TYPE);
+  // ====== ส่งข้อมูลไป API ======
+  bool apiSuccess = sendScanToAPI(uid, DRIVER_ID, DEFAULT_LAT, DEFAULT_LNG);
   
   if (apiSuccess) {
     // สำเร็จ: ติ๊กยาว 1 ครั้ง + ส่งคำสั่งเปิดประตูไป ESP8266
     beep_ok();
     notifyDoorOpen(uid);
-    Serial.println("✅ ACCESS GRANTED - API confirmed");
+    Serial.println("✅ ACCESS GRANTED - Student verified");
   } else {
-    // ล้มเหลว: ลองตรวจสอบแบบเก่า (backup)
-    Serial.println("⚠️  API failed, trying backup verification...");
-    bool backupAllowed = uidExistsInSupabase(uid);
-    
-    if (backupAllowed) {
-      beep_ok();
-      notifyDoorOpen(uid);
-      Serial.println("✅ ACCESS GRANTED - Backup verification");
-    } else {
-      beep_denied();
-      Serial.println("❌ ACCESS DENIED - Card not found or not authorized");
-    }
+    // ล้มเหลว: ปฏิเสธการเข้าถึง
+    beep_denied();
+    Serial.println("❌ ACCESS DENIED - Verification failed");
   }
 
   // ปิดการติดต่อ + รอจนยกบัตรออก + รีเซ็ตพร้อมใบถัดไป

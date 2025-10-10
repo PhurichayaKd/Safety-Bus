@@ -137,7 +137,7 @@ const EmergencyTestPanel = () => {
 
       const testDriverInfo = {
         name: 'คนขับทดสอบ',
-        bus_number: 'BUS-001'
+        license_plate: 'BUS-001'
       };
 
       const notificationResult = await LineNotificationService.sendEmergencyNotification(

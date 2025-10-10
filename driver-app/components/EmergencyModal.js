@@ -14,7 +14,7 @@ import { useEmergency } from '../src/contexts/EmergencyContext';
 
 const { width } = Dimensions.get('window');
 
-const EmergencyModal = ({ visible, onClose }) => {
+const EmergencyModal = ({ visible = true, onClose = () => {} }) => {
   const { currentEmergency, handleEmergencyResponse, dismissModal } = useEmergency();
   const [isResponding, setIsResponding] = useState(false);
 

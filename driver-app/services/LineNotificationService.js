@@ -128,7 +128,7 @@ class LineNotificationService {
 
     const typeLabel = emergencyTypes[emergency.type] || '⚠️ เหตุฉุกเฉิน';
     const driverName = driverInfo?.name || 'ไม่ระบุ';
-    const busNumber = driverInfo?.bus_number || emergency.bus_id || 'ไม่ระบุ';
+    const busNumber = driverInfo?.license_plate || emergency.bus_id || 'ไม่ระบุ';
     
     const time = new Date(emergency.created_at).toLocaleString('th-TH', {
       timeZone: 'Asia/Bangkok',
@@ -174,7 +174,7 @@ class LineNotificationService {
 
     const responseLabel = responseTypes[response] || response;
     const driverName = driverInfo?.name || 'ไม่ระบุ';
-    const busNumber = driverInfo?.bus_number || emergency.bus_id || 'ไม่ระบุ';
+    const busNumber = driverInfo?.license_plate || emergency.bus_id || 'ไม่ระบุ';
     
     const time = new Date().toLocaleString('th-TH', {
       timeZone: 'Asia/Bangkok',

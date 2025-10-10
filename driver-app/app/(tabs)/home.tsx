@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useEmergency } from '../../src/contexts/EmergencyContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -45,7 +46,6 @@ function MenuCard({
   };
   return (
     <TouchableOpacity
-      accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={`แตะเพื่อเข้าสู่${label}`}
       accessibilityState={{ disabled: !!disabled }}
@@ -118,6 +118,7 @@ async function updateSchoolDropoffStatus() {
 
 const HomePage = () => {
   const { signOut } = useAuth();
+  const { createEmergency } = useEmergency();
   const [status, setStatus] = useState<BusStatus | null>(null);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -277,6 +278,46 @@ const HomePage = () => {
     }
   };
 
+  const handleEmergency = async () => {
+    Alert.alert(
+      'ยืนยันสถานการณ์ฉุกเฉิน',
+      'คุณต้องการแจ้งสถานการณ์ฉุกเฉินใช่หรือไม่? ระบบจะแจ้งเตือนไปยังผู้ปกครองและเจ้าหน้าที่ทันที',
+      [
+        {
+          text: 'ยกเลิก',
+          style: 'cancel'
+        },
+        {
+          text: 'ยืนยัน',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              await createEmergency({
+                event_type: 'PANIC_BUTTON',
+                triggered_by: 'driver',
+                description: 'คนขับกดปุ่มฉุกเฉินจากแอพ',
+                location: 'ตำแหน่งปัจจุบัน'
+              });
+              Alert.alert(
+                'แจ้งเตือนสำเร็จ',
+                'ระบบได้ส่งการแจ้งเตือนฉุกเฉินไปยังผู้เกี่ยวข้องแล้ว',
+                [{ text: 'ตกลง' }]
+              );
+            } catch (error) {
+              console.error('Error creating emergency:', error);
+              Alert.alert(
+                'เกิดข้อผิดพลาด',
+                'ไม่สามารถส่งการแจ้งเตือนฉุกเฉินได้ กรุณาลองใหม่อีกครั้ง',
+                [{ text: 'ตกลง' }]
+              );
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const steps: BusStatus[] = ['enroute','arrived_school','waiting_return','finished'];
   const activeIndex = status && status !== 'waiting_departure' ? steps.findIndex(k => k === status) : -1;
 
@@ -329,7 +370,6 @@ const HomePage = () => {
               style={styles.signOutButton}
               onPress={handleSignOut}
               activeOpacity={0.8}
-              accessibilityRole="button"
               accessibilityLabel="ออกจากระบบ"
               accessibilityHint="แตะเพื่อออกจากระบบและกลับไปหน้าเข้าสู่ระบบ"
             >
@@ -396,7 +436,6 @@ const HomePage = () => {
             activeOpacity={0.8}
             onPress={() => setPickerVisible(true)}
             disabled={updating}
-            accessibilityRole="button"
             accessibilityLabel={updating ? 'กำลังอัปเดตสถานะ' : (status ? 'อัปเดตสถานะรถ' : 'เลือกสถานะรถ')}
             accessibilityHint="แตะเพื่อเลือกสถานะสำหรับรถบัส"
             accessibilityState={{ disabled: updating }}
@@ -452,6 +491,20 @@ const HomePage = () => {
             <MenuCard icon="car-outline"        label="ข้อมูลคนขับ"   to="/driver-info" />
             <MenuCard icon="card-outline"       label="ออกบัตรใหม่"   to={PATHS.issueCard} />
             <MenuCard icon="document-text-outline" label="รายงาน"     to={PATHS.reports} />
+            <MenuCard icon="warning-outline"    label="รายงานฉุกเฉิน" to="/manage/reports/emergency" />
+          </View>
+          
+          {/* Emergency Button */}
+          <View style={styles.emergencyContainer}>
+            <TouchableOpacity
+              style={styles.emergencyButton}
+              onPress={handleEmergency}
+              accessibilityLabel="ปุ่มฉุกเฉิน"
+              accessibilityHint="แตะเพื่อแจ้งสถานการณ์ฉุกเฉิน"
+            >
+              <Ionicons name="warning" size={32} color="#FFFFFF" />
+              <Text style={styles.emergencyButtonText}>ฉุกเฉิน</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -863,6 +916,33 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     textAlign: 'center',
     lineHeight: 14,
+  },
+
+  // Emergency Button Styles
+  emergencyContainer: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  emergencyButton: {
+    backgroundColor: '#EF4444',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    minWidth: 160,
+  },
+  emergencyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 
   // Modal Styles

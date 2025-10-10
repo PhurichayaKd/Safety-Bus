@@ -22,8 +22,8 @@
 #include <ArduinoJson.h>      // สำหรับจัดการ JSON
 
 /* ===== Wi-Fi & Supabase ===== */
-const char* WIFI_SSID = "Phuri";
-const char* WIFI_PASS = "11111111";
+const char* WIFI_SSID = "Popp";
+const char* WIFI_PASS = "Akkasit1";
 
 const char* SUPABASE_URL = "https://ugkxolufzlnvjsvtpxhp.supabase.co";
 const char* SUPABASE_ANON_KEY =
@@ -243,7 +243,7 @@ bool sendScanToAPI(const String& uid, int driverId, float lat, float lng) {
   doc["p_driver_id"] = driverId;
   doc["p_latitude"] = lat;
   doc["p_longitude"] = lng;
-  doc["p_location_type"] = CURRENT_TRIP_PHASE;
+  doc["p_location_type"] = CURRENT_TRIP_PHASE;  // เพิ่มพารามิเตอร์ที่ขาดหาย
 
   String payload;
   serializeJson(doc, payload);
@@ -277,14 +277,10 @@ bool sendScanToAPI(const String& uid, int driverId, float lat, float lng) {
         bool alreadyScanned = responseDoc["already_scanned"] | false;
         String studentName = responseDoc["student_name"] | "";
         
-        // ตรวจสอบว่าเป็น duplicate key error หรือไม่
-        if (errorMsg.indexOf("duplicate key") >= 0 || errorMsg.indexOf("uniq_daily_pickup_per_student_phase") >= 0) {
+        // ตรวจสอบว่าเป็น duplicate scan หรือไม่
+        if (alreadyScanned || errorMsg.indexOf("duplicate key") >= 0 || errorMsg.indexOf("uniq_daily_pickup_per_student_phase") >= 0) {
           Serial.printf("[API] ⚠️  Already Scanned: %s\n", studentName.length() > 0 ? studentName.c_str() : "นักเรียนคนนี้");
-          Serial.println("[API] ℹ️  นักเรียนได้สแกนบัตรในเส้นทางนี้แล้ววันนี้");
-          return true; // ถือว่าสำเร็จเพราะนักเรียนได้ขึ้นรถแล้ว
-        } else if (alreadyScanned) {
-          Serial.printf("[API] ⚠️  Already Scanned: %s\n", studentName.c_str());
-          Serial.println("[API] ℹ️  นักเรียนได้สแกนบัตรในเส้นทางนี้แล้ววันนี้");
+          Serial.printf("[API] ℹ️  นักเรียนได้สแกนบัตรในเส้นทาง %s แล้ววันนี้\n", CURRENT_TRIP_PHASE.c_str());
           return true; // ถือว่าสำเร็จเพราะนักเรียนได้ขึ้นรถแล้ว
         } else {
           Serial.printf("[API] ❌ Error: %s\n", errorMsg.c_str());

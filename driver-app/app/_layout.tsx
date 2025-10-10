@@ -19,13 +19,11 @@ import NetworkStatusBar from '../src/components/NetworkStatusBar';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function EmergencyWrapper({ children }: { children: React.ReactNode }) {
-  const { showEmergencyModal, dismissModal } = useEmergency();
-  
   return (
     <>
       <NetworkStatusBar />
       {children}
-      <EmergencyModal visible={showEmergencyModal} onClose={dismissModal} />
+      <EmergencyModal />
     </>
   );
 }

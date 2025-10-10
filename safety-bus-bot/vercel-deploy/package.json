@@ -4,8 +4,10 @@
   "description": "Safety Bus LIFF Application for Leave Requests",
   "type": "module",
   "scripts": {
-    "start": "node -e \"console.log('Vercel serverless functions ready')\"",
-    "build": "echo 'No build process required'"
+    "start": "node index.mjs",
+    "dev": "node server.js",
+    "build": "echo 'Static files ready for deployment'",
+    "vercel-build": "echo 'Vercel build completed'"
   },
   "dependencies": {
     "@line/bot-sdk": "^8.0.0",

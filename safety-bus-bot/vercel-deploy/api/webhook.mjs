@@ -16,7 +16,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // LINE configuration
 const lineConfig = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
+  channelSecret: process.env.LINE_CHANNEL_SECRET?.trim(),
 };
 
 // Send LINE message
@@ -51,11 +51,16 @@ function validateLineSignature(body, signature, secret) {
     console.log('🔐 Validating signature...');
     console.log('- Received signature:', signature);
     console.log('- Channel secret exists:', !!secret);
+    console.log('- Body length:', body.length);
+    console.log('- Body first 100 chars:', body.substring(0, 100));
 
     if (!signature || !secret) {
       console.log('❌ Missing signature or secret');
       return false;
     }
+
+    // Remove 'sha256=' prefix if present (some implementations include it)
+    const cleanSignature = signature.startsWith('sha256=') ? signature.substring(7) : signature;
 
     const hash = crypto
       .createHmac('SHA256', secret)
@@ -63,12 +68,55 @@ function validateLineSignature(body, signature, secret) {
       .digest('base64');
 
     console.log('- Generated hash:', hash);
-    console.log('- Signatures match:', hash === signature);
+    console.log('- Clean signature:', cleanSignature);
+    console.log('- Signatures match:', hash === cleanSignature);
 
-    return hash === signature;
+    // Try both with and without sha256= prefix
+    const match1 = hash === cleanSignature;
+    const match2 = hash === signature;
+    
+    console.log('- Match without prefix:', match1);
+    console.log('- Match with prefix:', match2);
+
+    return match1 || match2;
   } catch (error) {
     console.error('❌ Signature validation error:', error);
     return false;
+  }
+}
+
+// Process events asynchronously
+async function processEventsAsync(events) {
+  for (const event of events) {
+    console.log('📨 Processing event:', event.type);
+
+    try {
+      switch (event.type) {
+        case 'message':
+          if (event.message.type === 'text') {
+            await handleTextMessage(event);
+          }
+          break;
+
+        case 'postback':
+          await handlePostback(event);
+          break;
+
+        case 'follow':
+          await handleFollow(event);
+          break;
+
+        case 'unfollow':
+          console.log(`User ${event.source.userId} unfollowed the bot`);
+          break;
+
+        default:
+          console.log(`Unhandled event type: ${event.type}`);
+      }
+    } catch (eventError) {
+      console.error(`Error handling event ${event.type}:`, eventError);
+      // Continue processing other events even if one fails
+    }
   }
 }
 
@@ -104,28 +152,28 @@ export default async function handler(req, res) {
   try {
     // Get raw body for signature validation
     let bodyString = '';
-    if (req.body) {
-      bodyString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    } else {
-      // Read from stream if body is not parsed
-      const chunks = [];
-      for await (const chunk of req) {
-        chunks.push(chunk);
-      }
-      const rawBody = Buffer.concat(chunks);
-      bodyString = rawBody.toString('utf8');
+    let rawBody = null;
+
+    // Since bodyParser is disabled, we need to read from the stream
+    const chunks = [];
+    for await (const chunk of req) {
+      chunks.push(chunk);
     }
+    rawBody = Buffer.concat(chunks);
+    bodyString = rawBody.toString('utf8');
 
     console.log('🚀 Webhook received:', req.method);
     console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
     console.log('📦 Raw body length:', bodyString.length);
+    console.log('📦 Body content preview:', bodyString.substring(0, 100));
 
     const signature = req.headers['x-line-signature'];
 
     console.log('🔍 Debug info:');
-    console.log('- Body preview:', bodyString.substring(0, 100) + '...');
+    console.log('- Body preview:', bodyString.substring(0, 200) + '...');
     console.log('- Signature:', signature);
     console.log('- Channel secret exists:', !!lineConfig.channelSecret);
+    console.log('- Channel secret length:', lineConfig.channelSecret ? lineConfig.channelSecret.length : 0);
 
     // Validate signature
     if (!validateLineSignature(bodyString, signature, lineConfig.channelSecret)) {
@@ -139,43 +187,16 @@ export default async function handler(req, res) {
     const body = JSON.parse(bodyString);
     const { events } = body;
 
-    if (!events || events.length === 0) {
-      return res.status(200).json({ message: 'No events to process' });
+    // Send response immediately to prevent timeout
+    res.status(200).json({ message: 'OK' });
+
+    // Process events asynchronously after sending response
+    if (events && events.length > 0) {
+      // Don't await this - let it run in background
+      processEventsAsync(events);
     }
 
-    for (const event of events) {
-      console.log('📨 Processing event:', event.type);
-
-      try {
-        switch (event.type) {
-          case 'message':
-            if (event.message.type === 'text') {
-              await handleTextMessage(event);
-            }
-            break;
-
-          case 'postback':
-            await handlePostback(event);
-            break;
-
-          case 'follow':
-            await handleFollow(event);
-            break;
-
-          case 'unfollow':
-            console.log(`User ${event.source.userId} unfollowed the bot`);
-            break;
-
-          default:
-            console.log(`Unhandled event type: ${event.type}`);
-        }
-      } catch (eventError) {
-        console.error(`Error handling event ${event.type}:`, eventError);
-        // Continue processing other events even if one fails
-      }
-    }
-
-    return res.status(200).json({ message: 'OK' });
+    return;
   } catch (error) {
     console.error('❌ Webhook error:', error);
     return res.status(500).json({ error: 'Internal server error' });

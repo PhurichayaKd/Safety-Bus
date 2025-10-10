@@ -55,11 +55,5 @@
       "source": "/bus-location",
       "destination": "/bus-location.html"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/expire-cards",
-      "schedule": "0 6 * * *"
-    }
   ]
 }

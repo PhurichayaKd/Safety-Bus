@@ -5,7 +5,7 @@ export interface BoardingStatus {
   status: 'waiting' | 'boarded' | 'dropped' | 'absent';
   phase: 'go' | 'return';
   timestamp: string;
-  rfid_tag?: string;
+  rfid_code?: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
 }
 
 export interface RFIDScanEvent {
@@ -13,7 +13,7 @@ export interface RFIDScanEvent {
   boarding_status: 'onboard' | 'offboard';
   phase: 'go' | 'return';
   scan_time: string;
-  rfid_tag: string;
+  rfid_code: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
   // Additional properties for compatibility
   status: 'onboard' | 'offboard';
   timestamp: string;
@@ -285,7 +285,7 @@ class BoardingStatusService {
           status: status.boarding_status,
           phase: status.trip_phase,
           timestamp: status.updated_at,
-          rfid_tag: undefined
+          rfid_code: undefined
         });
       });
 
@@ -311,7 +311,7 @@ class BoardingStatusService {
             boarding_status: scanData.location_type === 'pickup' ? 'onboard' : 'offboard',
             phase: scanData.trip_phase,
             scan_time: scanData.scan_timestamp,
-            rfid_tag: scanData.rfid_code,
+            rfid_code: scanData.rfid_code,
             // Additional properties for compatibility
             status: scanData.location_type === 'pickup' ? 'onboard' : 'offboard',
             timestamp: scanData.scan_timestamp

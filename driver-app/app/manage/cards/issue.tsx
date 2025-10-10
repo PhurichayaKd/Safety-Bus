@@ -20,7 +20,7 @@ type StudentLite = {
   student_id: number;
   student_name: string;
   grade: string;
-  rfid_tag: string | null; // ถ้าคุณลบคอลัมน์นี้ออกแล้ว ไม่เป็นไร ใช้แค่โชว์ใน picker
+  // ลบ rfid_tag ออกแล้วเนื่องจากข้อมูล RFID ถูกเก็บในตาราง rfid_card_assignments และ rfid_cards
 };
 
 type CurrentAssign = {
@@ -91,7 +91,7 @@ export default function IssueCardScreen() {
     (async () => {
       const { data, error } = await supabase
         .from('students')
-        .select('student_id, student_name, grade, rfid_tag')
+        .select('student_id, student_name, grade')
         .order('student_id', { ascending: true });
 
       if (error) {
@@ -394,7 +394,7 @@ export default function IssueCardScreen() {
                       {item.student_name}
                     </Text>
                     <Text style={{ color: '#6B7280', marginTop: 2 }} numberOfLines={1}>
-                      {item.grade}  {item.rfid_tag ? `• RFID ปัจจุบัน: ${item.rfid_tag}` : ''}
+                      {item.grade}
                     </Text>
                   </View>
                 </TouchableOpacity>

@@ -4,7 +4,7 @@ export interface StudentWithStatus {
   student_id: string;
   student_name: string;
   grade: string;
-  rfid_tag: string;
+  rfid_code?: string; // จาก rfid_card_assignments และ rfid_cards
   home_latitude: number;
   home_longitude: number;
   student_phone: string;
@@ -33,14 +33,19 @@ export async function getActiveStudents(): Promise<StudentWithStatus[]> {
         student_id,
         student_name,
         grade,
-        rfid_tag,
         home_latitude,
         home_longitude,
         student_phone,
         is_active,
-        status
+        status,
+        rfid_card_assignments!inner (
+          rfid_cards!inner (
+            rfid_code
+          )
+        )
       `)
       .eq('is_active', true)
+      .is('rfid_card_assignments.valid_to', null)
       .order('student_name');
 
     if (error) {
@@ -116,12 +121,16 @@ export async function getStudentById(studentId: string): Promise<StudentWithStat
         student_id,
         student_name,
         grade,
-        rfid_tag,
         home_latitude,
         home_longitude,
         student_phone,
         is_active,
-        status
+        status,
+        rfid_card_assignments (
+          rfid_cards (
+            rfid_code
+          )
+        )
       `)
       .eq('student_id', studentId)
       .single();

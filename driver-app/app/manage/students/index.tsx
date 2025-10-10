@@ -21,24 +21,32 @@ interface Student {
   student_id: number;
   student_name: string;
   grade: string;
-  rfid_tag: string | null;
   student_phone: string | null;
   parents: {
     parent_name: string;
     parent_phone: string;
   } | null;
+  rfid_card_assignments: {
+    rfid_cards: {
+      rfid_code: string;
+    } | null;
+  }[] | null;
 }
 
 type Row = {
   student_id: number;
   student_name: string;
   grade: string;
-  rfid_tag: string;
   student_phone: string | null;
   parents: {
     parent_name: string;
     parent_phone: string;
   } | null;
+  rfid_card_assignments: {
+    rfid_cards: {
+      rfid_code: string;
+    } | null;
+  }[] | null;
 };
 
 const COLORS = {
@@ -104,16 +112,16 @@ export default function StudentsTablePage() {
         student_id, 
         student_name, 
         grade, 
-        rfid_tag, 
         student_phone,
-        parents:parent_id(parent_name, parent_phone)
+        parents:parent_id(parent_name, parent_phone),
+        rfid_card_assignments(rfid_cards(rfid_code))
       `)
       .order('student_id', { ascending: true });
 
     if (keyword && keyword.trim()) {
       const k = keyword.trim();
       query.or(
-        `student_name.ilike.%${k}%,grade.ilike.%${k}%,rfid_tag.ilike.%${k}%,student_phone.ilike.%${k}%`
+        `student_name.ilike.%${k}%,grade.ilike.%${k}%,student_phone.ilike.%${k}%`
       );
     }
 
@@ -162,10 +170,12 @@ export default function StudentsTablePage() {
             <Ionicons name="school-outline" size={12} color={COLORS.textSecondary} />
             <Text style={styles.pillTxt}>{item.grade || '-'}</Text>
           </View>
-          <View style={styles.pill}>
-            <Ionicons name="card-outline" size={12} color={COLORS.textSecondary} />
-            <Text style={styles.pillTxt}>{(item.rfid_tag || '').toUpperCase()}</Text>
-          </View>
+          {item.rfid_card_assignments && item.rfid_card_assignments.length > 0 && item.rfid_card_assignments[0].rfid_cards?.rfid_code && (
+            <View style={styles.pill}>
+              <Ionicons name="card-outline" size={12} color={COLORS.textSecondary} />
+              <Text style={styles.pillTxt}>{item.rfid_card_assignments[0].rfid_cards.rfid_code.toUpperCase()}</Text>
+            </View>
+          )}
         </View>
 
         <View style={{ marginTop: 6 }}>

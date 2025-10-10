@@ -37,14 +37,14 @@ export default function BusForm() {
   const [capacity, setCapacity] = useState('');
   const [routeId, setRouteId] = useState<number | null>(null);
 
-  // จุดเริ่ม/จุดสิ้นสุด (เก็บใน routes)
+  // จุดเริ่ม/จุดสิ้นสุด (เก็บใน driver_bus)
   const [startLabel, setStartLabel] = useState('บ้านคนขับ');
-  const [startLat, setStartLat] = useState<number | null>(null);
-  const [startLng, setStartLng] = useState<number | null>(null);
+  const [homeLat, setHomeLat] = useState<number | null>(null);
+  const [homeLng, setHomeLng] = useState<number | null>(null);
 
   const [endLabel, setEndLabel] = useState('โรงเรียน');
-  const [endLat, setEndLat] = useState<number | null>(null);
-  const [endLng, setEndLng] = useState<number | null>(null);
+  const [schoolLat, setSchoolLat] = useState<number | null>(null);
+  const [schoolLng, setSchoolLng] = useState<number | null>(null);
 
   // รับค่าพิกัดกลับจาก /map
   useEffect(() => {
@@ -54,8 +54,8 @@ export default function BusForm() {
     const nLat = Number(latStr); const nLng = Number(lngStr);
     if (Number.isNaN(nLat) || Number.isNaN(nLng)) return;
 
-    if (target === 'start') { setStartLat(nLat); setStartLng(nLng); }
-    if (target === 'end')   { setEndLat(nLat);  setEndLng(nLng);  }
+    if (target === 'start') { setHomeLat(nLat); setHomeLng(nLng); }
+    if (target === 'end')   { setSchoolLat(nLat);  setSchoolLng(nLng);  }
   }, [target, qLat, qLng]);
 
   // โหลด routes + user + ข้อมูล bus ของผู้ใช้
@@ -75,11 +75,11 @@ export default function BusForm() {
         setRoutes(routeData ?? []);
         setEmail(userRes.user?.email ?? '');
 
-        // Prefill จาก driver_bus (ไม่มีคอลัมน์ start_* / end_* แล้ว)
+        // Prefill จาก driver_bus
         if (userRes.user) {
           const { data: bus, error: busErr } = await supabase
             .from('driver_bus')
-            .select('driver_name, phone_number, license_plate, capacity, route_id')
+            .select('driver_name, phone_number, license_plate, capacity, route_id, home_latitude, home_longitude, school_latitude, school_longitude')
             .eq('auth_user_id', userRes.user.id)
             .maybeSingle();
 
@@ -90,17 +90,29 @@ export default function BusForm() {
             setLicensePlate(bus.license_plate ?? '');
             setCapacity(bus.capacity ? String(bus.capacity) : '');
             setRouteId(bus.route_id ?? null);
+            
+            // ใช้พิกัดจาก driver_bus
+            setHomeLat(bus.home_latitude ?? null);
+            setHomeLng(bus.home_longitude ?? null);
+            setSchoolLat(bus.school_latitude ?? null);
+            setSchoolLng(bus.school_longitude ?? null);
 
-            // เติมพิกัด/ป้ายจาก routes ถ้ามี route_id
+            // เติมพิกัด/ป้ายจาก routes ถ้ามี route_id และยังไม่มีพิกัดใน driver_bus
             if (bus.route_id) {
               const r = (routeData ?? []).find(x => x.route_id === bus.route_id);
               if (r) {
                 setStartLabel(r.start_point || 'บ้านคนขับ');
-                setStartLat(r.start_latitude ?? null);
-                setStartLng(r.start_longitude ?? null);
                 setEndLabel(r.end_point || 'โรงเรียน');
-                setEndLat(r.end_latitude ?? null);
-                setEndLng(r.end_longitude ?? null);
+                
+                // ใช้พิกัดจาก routes เฉพาะเมื่อยังไม่มีใน driver_bus
+                if (!bus.home_latitude || !bus.home_longitude) {
+                  setHomeLat(r.start_latitude ?? null);
+                  setHomeLng(r.start_longitude ?? null);
+                }
+                if (!bus.school_latitude || !bus.school_longitude) {
+                  setSchoolLat(r.end_latitude ?? null);
+                  setSchoolLng(r.end_longitude ?? null);
+                }
               }
             }
           }
@@ -120,17 +132,17 @@ export default function BusForm() {
     if (!r) return;
 
     // เติมปลายทางเสมอ
-    setEndLat(r.end_latitude ?? null);
-    setEndLng(r.end_longitude ?? null);
+    setSchoolLat(r.end_latitude ?? null);
+    setSchoolLng(r.end_longitude ?? null);
     if (!endLabel) setEndLabel(r.end_point || 'โรงเรียน');
 
     // ต้นทาง: ถ้าในฟอร์มยังว่างให้เติม
-    if (startLat == null || startLng == null) {
-      setStartLat(r.start_latitude ?? null);
-      setStartLng(r.start_longitude ?? null);
+    if (homeLat == null || homeLng == null) {
+      setHomeLat(r.start_latitude ?? null);
+      setHomeLng(r.start_longitude ?? null);
     }
     if (!startLabel) setStartLabel(r.start_point || 'บ้านคนขับ');
-  }, [routeId, routes]);
+  }, [routeId, routes, homeLat, homeLng, endLabel, startLabel]);
 
   const validate = () => {
     if (!driverName.trim()) return 'กรอกชื่อคนขับ';
@@ -140,13 +152,13 @@ export default function BusForm() {
     if (!licensePlate.trim()) return 'กรอกทะเบียนรถ';
     if (!capacity || isNaN(Number(capacity)) || Number(capacity) <= 0) return 'ความจุต้องเป็นตัวเลขมากกว่า 0';
     // แนะนำให้มีอย่างน้อยจุดเริ่ม (ใช้คำนวณ/จัดเรียง)
-    if (startLat == null || startLng == null) return 'กรุณาปักหมุด "จุดเริ่มต้น (บ้านคนขับ)"';
+    if (homeLat == null || homeLng == null) return 'กรุณาปักหมุด "จุดเริ่มต้น (บ้านคนขับ)"';
     return null;
   };
 
   const openMapPick = (which: 'start' | 'end') => {
-    const lat = which === 'start' ? startLat : endLat;
-    const lng = which === 'start' ? startLng : endLng;
+    const lat = which === 'start' ? homeLat : schoolLat;
+    const lng = which === 'start' ? homeLng : schoolLng;
     let href = `/map?returnTo=/bus-form&target=${which}`;
     if (lat != null && lng != null) href += `&lat=${lat}&lng=${lng}`;
     router.push(href as Href);
@@ -164,7 +176,7 @@ export default function BusForm() {
       const user = userRes.user;
       if (!user) throw new Error('ยังไม่ได้ล็อกอิน');
 
-      // 1) อัปเซิร์ต driver_bus (เฉพาะคอลัมน์ที่มีจริง)
+      // 1) อัปเซิร์ต driver_bus (รวมฟิลด์ใหม่)
       const payload: any = {
         auth_user_id: user.id,
         driver_name: driverName.trim(),
@@ -173,6 +185,10 @@ export default function BusForm() {
         license_plate: licensePlate.trim().toUpperCase(),
         capacity: Number(capacity),
         route_id: routeId, // null = ไม่เลือก
+        home_latitude: homeLat,
+        home_longitude: homeLng,
+        school_latitude: schoolLat,
+        school_longitude: schoolLng,
       };
 
       const { error: upErr } = await supabase
@@ -186,19 +202,6 @@ export default function BusForm() {
           Alert.alert('บันทึกไม่สำเร็จ', upErr.message);
         }
         return;
-      }
-
-      // 2) ถ้ามี route_id → อัปเดตพิกัด/ป้ายใน routes (เป็นแหล่งเก็บจริง)
-      if (routeId) {
-        const routePatch: Partial<RouteRow> = {};
-        if (startLabel) routePatch.start_point = startLabel.trim() as any;
-        if (endLabel) routePatch.end_point = endLabel.trim() as any;
-        routePatch.start_latitude = startLat;
-        routePatch.start_longitude = startLng;
-        routePatch.end_latitude = endLat;
-        routePatch.end_longitude = endLng;
-
-        await supabase.from('routes').update(routePatch as any).eq('route_id', routeId);
       }
 
       Alert.alert('สำเร็จ', 'บันทึกข้อมูลรถบัสเรียบร้อย');
@@ -274,6 +277,8 @@ export default function BusForm() {
               />
             </View>
           </View>
+
+
         </View>
 
         {/* การ์ด: เส้นทาง */}
@@ -313,12 +318,12 @@ export default function BusForm() {
             />
             <TouchableOpacity style={styles.mapBtn} onPress={() => openMapPick('start')}>
               <Ionicons name="location" size={16} color="#fff" />
-              <Text style={styles.mapBtnTxt}>{startLat != null && startLng != null ? 'แก้ไขตำแหน่ง' : 'ปักหมุดแผนที่'}</Text>
+              <Text style={styles.mapBtnTxt}>{homeLat != null && homeLng != null ? 'แก้ไขตำแหน่ง' : 'ปักหมุดแผนที่'}</Text>
             </TouchableOpacity>
           </View>
           <Text style={styles.coordTxt}>
-            {startLat != null && startLng != null
-              ? `เลือกแล้ว: ${startLat.toFixed(6)}, ${startLng.toFixed(6)}`
+            {homeLat != null && homeLng != null
+              ? `เลือกแล้ว: ${homeLat.toFixed(6)}, ${homeLng.toFixed(6)}`
               : 'ยังไม่ได้ปักหมุด'}
           </Text>
 
@@ -333,12 +338,12 @@ export default function BusForm() {
             />
             <TouchableOpacity style={styles.mapBtn} onPress={() => openMapPick('end')}>
               <Ionicons name="location" size={16} color="#fff" />
-              <Text style={styles.mapBtnTxt}>{endLat != null && endLng != null ? 'แก้ไขตำแหน่ง' : 'ปักหมุดแผนที่'}</Text>
+              <Text style={styles.mapBtnTxt}>{schoolLat != null && schoolLng != null ? 'แก้ไขตำแหน่ง' : 'ปักหมุดแผนที่'}</Text>
             </TouchableOpacity>
           </View>
           <Text style={styles.coordTxt}>
-            {endLat != null && endLng != null
-              ? `เลือกแล้ว: ${endLat.toFixed(6)}, ${endLng.toFixed(6)}`
+            {schoolLat != null && schoolLng != null
+              ? `เลือกแล้ว: ${schoolLat.toFixed(6)}, ${schoolLng.toFixed(6)}`
               : 'ยังไม่ได้ปักหมุด'}
           </Text>
         </View>

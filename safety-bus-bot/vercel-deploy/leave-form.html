@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safety Bus - ฟอร์มแจ้งลาหยุด</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 24px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .form-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            flex: 1;
+        }
+
+        .student-info {
+            background: #f8f9ff;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .student-info h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .info-value {
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .date-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .submit-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-top: 10px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-message,
+        .error-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+            display: none;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .success-message.show,
+        .error-message.show {
+            display: block;
+        }
+
+        .required {
+            color: #e74c3c;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header,
+            .form-container {
+                padding: 20px;
+            }
+            
+            .date-inputs {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📝 ฟอร์มแจ้งลาหยุด</h1>
+            <p>ระบบ Safety Bus - แจ้งลาหยุดเรียน</p>
+        </div>
+
+        <div class="form-container">
+            <div class="success-message" id="successMessage"></div>
+            <div class="error-message" id="errorMessage"></div>
+
+            <div class="student-info">
+                <h3>📋 ข้อมูลนักเรียน</h3>
+                <div class="info-row">
+                    <span class="info-label">ชื่อ:</span>
+                    <span class="info-value" id="studentName">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">รหัสนักเรียน:</span>
+                    <span class="info-value" id="studentId">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">ชั้น:</span>
+                    <span class="info-value" id="studentClass">-</span>
+                </div>
+            </div>
+
+            <form id="leaveForm">
+                <div class="form-group">
+                    <label for="leaveType">ประเภทการลา <span class="required">*</span></label>
+                    <select id="leaveType" name="leaveType" required>
+                        <option value="">เลือกประเภทการลา</option>
+                        <option value="sick">ลาป่วย</option>
+                        <option value="personal">ลากิจ</option>
+                        <option value="emergency">ลาฉุกเฉิน</option>
+                        <option value="other">อื่นๆ</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>วันที่ลา <span class="required">*</span></label>
+                    <div class="date-inputs">
+                        <div>
+                            <label for="startDate" style="font-size: 12px; margin-bottom: 5px;">วันที่เริ่มต้น</label>
+                            <input type="date" id="startDate" name="startDate" required>
+                        </div>
+                        <div>
+                            <label for="endDate" style="font-size: 12px; margin-bottom: 5px;">วันที่สิ้นสุด</label>
+                            <input type="date" id="endDate" name="endDate" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="reason">เหตุผลการลา <span class="required">*</span></label>
+                    <textarea id="reason" name="reason" placeholder="กรุณาระบุเหตุผลการลา..." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="contactNumber">เบอร์โทรติดต่อ</label>
+                    <input type="tel" id="contactNumber" name="contactNumber" placeholder="เบอร์โทรติดต่อ (ไม่บังคับ)">
+                </div>
+
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    📤 ส่งใบลา
+                </button>
+            </form>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <div>กำลังส่งใบลา...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let liffInitialized = false;
+        let studentData = {};
+
+        // Initialize LIFF
+        async function initializeLiff() {
+            try {
+                await liff.init({ liffId: '2008065330-AXGy9xda' });
+                liffInitialized = true;
+                console.log('LIFF initialized successfully');
+                
+                // Check if user is logged in
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+                
+                // Get user profile
+                const profile = await liff.getProfile();
+                console.log('User profile:', profile);
+                
+            } catch (error) {
+                console.error('LIFF initialization failed:', error);
+                showError('ไม่สามารถเชื่อมต่อกับ LINE ได้');
+            }
+        }
+
+        // Get URL parameters
+        function getUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return {
+                studentId: urlParams.get('studentId'),
+                studentName: urlParams.get('studentName'),
+                class: urlParams.get('class')
+            };
+        }
+
+        // Load student data
+        function loadStudentData() {
+            const params = getUrlParams();
+            
+            if (params.studentId && params.studentName) {
+                studentData = {
+                    studentId: params.studentId,
+                    studentName: decodeURIComponent(params.studentName),
+                    class: params.class ? decodeURIComponent(params.class) : 'ไม่ระบุ'
+                };
+                
+                // Update UI
+                document.getElementById('studentId').textContent = studentData.studentId;
+                document.getElementById('studentName').textContent = studentData.studentName;
+                document.getElementById('studentClass').textContent = studentData.class;
+            } else {
+                showError('ไม่พบข้อมูลนักเรียน กรุณาเข้าใช้งานผ่าน LINE Bot');
+            }
+        }
+
+        // Set default dates
+        function setDefaultDates() {
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            
+            document.getElementById('startDate').value = todayStr;
+            document.getElementById('endDate').value = todayStr;
+            
+            // Set minimum date to today
+            document.getElementById('startDate').min = todayStr;
+            document.getElementById('endDate').min = todayStr;
+        }
+
+        // Handle date changes
+        function setupDateHandlers() {
+            const startDate = document.getElementById('startDate');
+            const endDate = document.getElementById('endDate');
+            
+            startDate.addEventListener('change', function() {
+                endDate.min = this.value;
+                if (endDate.value < this.value) {
+                    endDate.value = this.value;
+                }
+            });
+        }
+
+        // Show success message
+        function showSuccess(message) {
+            const successEl = document.getElementById('successMessage');
+            successEl.textContent = message;
+            successEl.classList.add('show');
+            
+            // Hide error message
+            document.getElementById('errorMessage').classList.remove('show');
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+            
+            // Hide success message
+            document.getElementById('successMessage').classList.remove('show');
+        }
+
+        // Show/hide loading
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            if (show) {
+                loading.classList.add('show');
+                submitBtn.disabled = true;
+            } else {
+                loading.classList.remove('show');
+                submitBtn.disabled = false;
+            }
+        }
+
+        // Submit leave form
+        async function submitLeaveForm(formData) {
+            try {
+                showLoading(true);
+                
+                const response = await fetch('/api/submit-leave-request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        studentId: studentData.studentId,
+                        studentName: studentData.studentName,
+                        class: studentData.class,
+                        leaveType: formData.leaveType,
+                        startDate: formData.startDate,
+                        endDate: formData.endDate,
+                        reason: formData.reason,
+                        contactNumber: formData.contactNumber,
+                        submittedAt: new Date().toISOString()
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess('ส่งใบลาเรียบร้อยแล้ว! ระบบจะแจ้งให้คนขับทราบ');
+                    
+                    // Reset form
+                    document.getElementById('leaveForm').reset();
+                    setDefaultDates();
+                    
+                    // Close LIFF after 3 seconds
+                    setTimeout(() => {
+                        if (liffInitialized) {
+                            liff.closeWindow();
+                        }
+                    }, 3000);
+                } else {
+                    throw new Error(result.error || 'เกิดข้อผิดพลาดในการส่งใบลา');
+                }
+
+            } catch (error) {
+                console.error('Error submitting leave form:', error);
+                showError('เกิดข้อผิดพลาด: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('leaveForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (!studentData.studentId) {
+                showError('ไม่พบข้อมูลนักเรียน กรุณาเข้าใช้งานผ่าน LINE Bot');
+                return;
+            }
+            
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+            
+            // Validate dates
+            if (new Date(data.endDate) < new Date(data.startDate)) {
+                showError('วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มต้น');
+                return;
+            }
+            
+            submitLeaveForm(data);
+        });
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStudentData();
+            setDefaultDates();
+            setupDateHandlers();
+            initializeLiff();
+        });
+    </script>
+</body>
+</html>

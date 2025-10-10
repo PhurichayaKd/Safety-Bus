@@ -3,7 +3,7 @@ import { supabase } from '../../src/services/supabaseClient';
 export interface BoardingStatus {
   id: string;
   student_id: string;
-  rfid_tag: string;
+  rfid_code?: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
   status: 'boarded' | 'not_boarded' | 'absent';
   timestamp: string;
   route_id?: string;
@@ -11,7 +11,7 @@ export interface BoardingStatus {
 }
 
 export interface RFIDScanEvent {
-  rfid_tag: string;
+  rfid_code: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
   student_id: string;
   timestamp: string;
   status: 'boarded' | 'not_boarded';
@@ -20,7 +20,7 @@ export interface RFIDScanEvent {
 export interface StudentInfo {
   id: string;
   name: string;
-  rfid_tag: string;
+  rfid_code?: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
   route_id: string;
   pickup_location: string;
   parent_phone?: string;

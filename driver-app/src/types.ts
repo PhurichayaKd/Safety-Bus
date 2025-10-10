@@ -3,7 +3,7 @@ export interface Student {
   id: number;
   name: string;
   grade?: string;
-  rfid_tag?: string;
+  // rfid_tag ถูกย้ายไปเก็บใน rfid_card_assignments และ rfid_cards แล้ว
   parent_phone?: string;
   student_phone?: string;
   pickup_location?: {
@@ -45,7 +45,7 @@ export interface BoardingStatus {
   status: 'waiting' | 'boarded' | 'dropped' | 'absent' | 'onboard' | 'offboard';
   phase: 'go' | 'return';
   timestamp: string;
-  rfid_tag?: string;
+  rfid_code?: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
 }
 
 export interface BoardingStatusWithStudent extends BoardingStatus {
@@ -86,7 +86,7 @@ export interface RFIDScanEvent {
   boarding_status: 'onboard' | 'offboard';
   phase: 'go' | 'return';
   scan_time: string;
-  rfid_tag: string;
+  rfid_code: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
   // Additional properties used in the code
   status: 'onboard' | 'offboard';
   timestamp: string;
@@ -248,7 +248,7 @@ export interface RouteStatistics extends StudentStatistics {
 export interface StudentFormData {
   name: string;
   grade?: string;
-  rfid_tag?: string;
+  rfid_code?: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
   parent_phone?: string;
   student_phone?: string;
   pickup_address?: string;

@@ -109,6 +109,65 @@ app.post('/api/student-status-notification', async (req, res) => {
     }
 });
 
+// API routes
+app.get('/api/get-bus-locations', (req, res) => {
+    try {
+        // Set CORS headers
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+        // Mock bus data for testing
+        const mockBusData = [
+            {
+                id: 1,
+                bus_number: "MSU-001",
+                driver_name: "นายสมชาย ใจดี",
+                route_name: "เส้นทาง A - หอพักมหาวิทยาลัย",
+                capacity: 30,
+                status: "active",
+                has_location: true,
+                current_latitude: 16.2498137,
+                current_longitude: 103.2557912,
+                home_latitude: 16.2450000,
+                home_longitude: 103.2500000,
+                school_latitude: 16.2550000,
+                school_longitude: 103.2600000,
+                last_seen: new Date().toISOString()
+            },
+            {
+                id: 2,
+                bus_number: "MSU-002",
+                driver_name: "นายวิชัย รักษ์ดี",
+                route_name: "เส้นทาง B - ตัวเมือง",
+                capacity: 25,
+                status: "active",
+                has_location: true,
+                current_latitude: 16.2520000,
+                current_longitude: 103.2580000,
+                home_latitude: 16.2470000,
+                home_longitude: 103.2520000,
+                school_latitude: 16.2550000,
+                school_longitude: 103.2600000,
+                last_seen: new Date(Date.now() - 30000).toISOString()
+            }
+        ];
+
+        const filteredData = mockBusData.filter(bus => bus.status === 'active' && bus.has_location);
+
+        res.json({
+            success: true,
+            data: filteredData,
+            total_buses: mockBusData.length,
+            buses_with_location: filteredData.length,
+            last_updated: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error in bus locations API:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Serve static files
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
@@ -120,6 +179,10 @@ app.get('/leave-form.html', (req, res) => {
 
 app.get('/leave-request.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'leave-request.html'));
+});
+
+app.get('/bus-location.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'bus-location.html'));
 });
 
 // Start server

@@ -11,7 +11,7 @@ export interface StudentWithStatus {
   student_id: string;
   student_name: string;
   grade: string;
-  rfid_tag: string;
+  rfid_code?: string; // จาก rfid_card_assignments และ rfid_cards
   student_phone: string;
   home_latitude: number;
   home_longitude: number;
@@ -27,7 +27,7 @@ export interface RFIDScanEvent {
   boarding_status: 'onboard' | 'offboard';
   phase: 'go' | 'return';
   scan_time: string;
-  rfid_tag: string;
+  rfid_code?: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
   status: 'onboard' | 'offboard';
   timestamp: string;
 }
@@ -68,12 +68,16 @@ class ModernBoardingService {
           student_id,
           student_name,
           grade,
-          rfid_tag,
           student_phone,
           home_latitude,
           home_longitude,
           is_active,
-          status
+          status,
+          rfid_card_assignments (
+            rfid_cards (
+              rfid_code
+            )
+          )
         `)
         .eq('is_active', true)
         .order('student_name');
@@ -114,7 +118,7 @@ class ModernBoardingService {
   subscribeToRFIDScans(callback: (event: RFIDScanEvent) => void): () => void {
     this.subscriptions.push(callback);
     
-    // ในอนาคตอาจจะเพิ่ม real-time subscription ที่นี่
+    // ในอนาคตอาจะเพิ่ม real-time subscription ที่นี่
     
     return () => {
       const index = this.subscriptions.indexOf(callback);
@@ -130,7 +134,7 @@ class ModernBoardingService {
     phase: 'pickup' | 'dropoff'
   ): Promise<void> {
     try {
-      // ในอนาคตอาจจะมีการอัปเดตสถานะที่นี่
+      // ในอนาคตอาจะมีการอัปเดตสถานะที่นี่
       console.log('Update student status:', { studentId, status, phase });
       
       // Notify subscribers
@@ -139,7 +143,7 @@ class ModernBoardingService {
         boarding_status: status as 'onboard' | 'offboard',
         phase: phase === 'pickup' ? 'go' : 'return',
         scan_time: new Date().toISOString(),
-        rfid_tag: '',
+        rfid_code: '',
         status: status as 'onboard' | 'offboard',
         timestamp: new Date().toISOString()
       };

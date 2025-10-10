@@ -84,6 +84,8 @@ type Draft = {
   lat: number | null;
   lng: number | null;
   guardians: GuardianDraft[];
+  isActive: boolean;
+  status: 'active' | 'inactive';
 };
 let __draft: Draft | null = null;
 const getDraft = () => __draft;
@@ -94,6 +96,7 @@ const setDraft = (patch: Partial<Draft>) => {
       rfidCardId: null, rfidCode: '',
       startDate: null, endDate: null, lat: null, lng: null,
       guardians: [{ name: '', phone: '', line: '', relationship: '', is_primary: true }],
+      isActive: true, status: 'active' as 'active' | 'inactive',
     }),
     ...patch
   };
@@ -113,7 +116,8 @@ type StudentRow = {
   end_date: string | null;
   home_latitude: number | string | null;
   home_longitude: number | string | null;
-  status: 'active' | 'inactive' | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 
@@ -162,7 +166,10 @@ export default function StudentFormScreen() {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
 
-  // สถานะ
+  // สถานะนักเรียน
+
+
+  // สถานะการทำงาน
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -226,7 +233,7 @@ export default function StudentFormScreen() {
           .from('students')
           .select(`
             *,
-            student_line_links(line_user_id, active)
+            student_line_links(line_display_id, active)
           `)
           .eq('student_id', Number(id))
           .maybeSingle();
@@ -239,14 +246,14 @@ export default function StudentFormScreen() {
         setStudentPhone(s.student_phone ?? '');
         const lineLinks = (s as any).student_line_links;
         // หา LINE ID ที่ active = true
-        let lineUserId = '';
+        let lineDisplayId = '';
         if (Array.isArray(lineLinks)) {
           const activeLink = lineLinks.find((link: any) => link.active === true);
-          lineUserId = activeLink?.line_user_id ?? '';
+          lineDisplayId = activeLink?.line_display_id ?? '';
         } else if (lineLinks?.active === true) {
-          lineUserId = lineLinks.line_user_id ?? '';
+          lineDisplayId = lineLinks.line_display_id ?? '';
         }
-        setStudentLine(lineUserId);
+        setStudentLine(lineDisplayId);
         setStartDate(s.start_date ? new Date(s.start_date) : null);
         setEndDate(s.end_date ? new Date(s.end_date) : null);
         setLat(toNumberOrNull(s.home_latitude));
@@ -266,6 +273,7 @@ export default function StudentFormScreen() {
           const nest: any = (asg as any).rfid_cards;
           resolvedRfidCode = (Array.isArray(nest) ? nest?.[0]?.rfid_code : nest?.rfid_code) ?? '';
         } else {
+          // fallback ไปใช้ rfid_tag เก่าถ้ายังไม่มีการ assign บัตรใหม่
           resolvedRfidCode = (s as any).rfid_tag ?? '';
         }
         setRfidCardId(resolvedRfidCardId);
@@ -345,7 +353,7 @@ export default function StudentFormScreen() {
           studentName: s.student_name ?? '',
           grade: s.grade ?? '',
           studentPhone: s.student_phone ?? '',
-          studentLine: lineUserId,
+          studentLine: lineDisplayId,
           rfidCardId: resolvedRfidCardId,
           rfidCode: resolvedRfidCode,
           startDate: s.start_date ?? null,
@@ -431,7 +439,7 @@ export default function StudentFormScreen() {
           .from('parent_line_links')
           .insert({
             parent_id: data.parent_id,
-            line_user_id: line,
+            line_display_id: line,
             active: true
           });
         if (linkError) throw linkError;
@@ -472,7 +480,7 @@ export default function StudentFormScreen() {
             .from('parent_line_links')
             .upsert({
               parent_id: g.parent_id,
-              line_user_id: line,
+              line_display_id: line,
               active: true
             });
           if (linkError) throw linkError;
@@ -503,7 +511,7 @@ export default function StudentFormScreen() {
             .from('parent_line_links')
             .insert({
               parent_id: data.parent_id,
-              line_user_id: line,
+              line_display_id: line,
               active: true
             });
           if (linkError) throw linkError;
@@ -515,20 +523,58 @@ export default function StudentFormScreen() {
     return ids;
   };
 
-  // อัปเดตเฉพาะโทรของ parent เดิม + อัปเดต primary ในตาราง link
+  // อัปเดตข้อมูลผู้ปกครองเดิม: ชื่อ, เบอร์, LINE ID, ความสัมพันธ์ + อัปเดต primary ในตาราง link
   const updateExistingGuardians = async (studentId: number, items: GuardianDraft[]) => {
     for (const g of items.filter(x => !!x.parent_id)) {
+      const name = g.name?.trim();
       const phone = g.phone?.trim();
+      const line = g.line?.trim();
+      const relationship = g.relationship?.trim();
+      
       if (!phone) throw new Error('กรอกเบอร์ผู้ปกครองให้ครบ');
+      
+      // อัปเดตข้อมูลผู้ปกครองในตาราง parents
       const { error: pErr } = await supabase
         .from('parents')
-        .update({ parent_phone: phone })
+        .update({ 
+          parent_name: name || 'ไม่ระบุชื่อ',
+          parent_phone: phone 
+        })
         .eq('parent_id', g.parent_id!);
       if (pErr) throw pErr;
 
+      // จัดการ LINE ID ในตาราง parent_line_links
+      if (line) {
+        // ปิดการใช้งาน link เก่าทั้งหมด
+        await supabase
+          .from('parent_line_links')
+          .update({ active: false })
+          .eq('parent_id', g.parent_id!);
+        
+        // เพิ่ม/อัปเดต link ใหม่
+        const { error: linkError } = await supabase
+          .from('parent_line_links')
+          .upsert({
+            parent_id: g.parent_id!,
+            line_user_id: line,
+            active: true
+          });
+        if (linkError) throw linkError;
+      } else {
+        // ถ้าไม่มี LINE ID ให้ปิดการใช้งาน link ทั้งหมด
+        await supabase
+          .from('parent_line_links')
+          .update({ active: false })
+          .eq('parent_id', g.parent_id!);
+      }
+
+      // อัปเดตความสัมพันธ์และสถานะ primary ในตาราง student_guardians
       const { error: linkErr } = await supabase
         .from('student_guardians')
-        .update({ is_primary: !!g.is_primary })
+        .update({ 
+          relationship: relationship || null,
+          is_primary: !!g.is_primary 
+        })
         .eq('student_id', studentId)
         .eq('parent_id', g.parent_id!);
       if (linkErr) throw linkErr;
@@ -658,20 +704,44 @@ export default function StudentFormScreen() {
 
         // จัดการ LINE ID ของนักเรียนแยกต่างหาก
         if (studentLine?.trim()) {
-          // ลบ link เก่า
-          await supabase
+          // ตรวจสอบว่ามี active link อยู่แล้วหรือไม่
+          const { data: existingLinks } = await supabase
             .from('student_line_links')
-            .update({ active: false })
-            .eq('student_id', studentId);
-          
-          // เพิ่ม link ใหม่
-          await supabase
-            .from('student_line_links')
-            .insert({
-              student_id: studentId,
-              line_user_id: studentLine.trim(),
-              active: true
-            });
+            .select('link_id, line_display_id')
+            .eq('student_id', studentId)
+            .eq('active', true);
+
+          if (existingLinks && existingLinks.length > 0) {
+            // มี link เก่าอยู่ - อัปเดต link แรกและลบที่เหลือ
+            const firstLink = existingLinks[0];
+            
+            // อัปเดต link แรก
+            await supabase
+              .from('student_line_links')
+              .update({ 
+                line_display_id: studentLine.trim(),
+                linked_at: new Date().toISOString()
+              })
+              .eq('link_id', firstLink.link_id);
+
+            // ลบ link ที่เหลือ (ถ้ามี)
+            if (existingLinks.length > 1) {
+              const otherLinkIds = existingLinks.slice(1).map(link => link.link_id);
+              await supabase
+                .from('student_line_links')
+                .update({ active: false })
+                .in('link_id', otherLinkIds);
+            }
+          } else {
+            // ไม่มี active link - สร้างใหม่
+            await supabase
+              .from('student_line_links')
+              .insert({
+                student_id: studentId,
+                line_display_id: studentLine.trim(),
+                active: true
+              });
+          }
         } else {
           // ถ้าไม่มี LINE ID ให้ลบ link เก่าทั้งหมด
           await supabase
@@ -683,8 +753,8 @@ export default function StudentFormScreen() {
         // ผู้ปกครองเดิม: อัปเดตเฉพาะเบอร์ + is_primary
         await updateExistingGuardians(studentId, guardians);
 
-        // ผู้ปกครองใหม่: insert parent + link
-        await insertNewGuardianLinks(studentId, guardians);
+        // หมายเหตุ: ในโหมดแก้ไข ไม่ควรมีการ insert ผู้ปกครองใหม่
+        // ผู้ปกครองทั้งหมดควรเป็นข้อมูลเดิมที่อัปเดตเท่านั้น
 
         // อัปเดต students.parent_id ให้ตรง primary
         let primary = guardians.find(g => g.is_primary);
@@ -723,7 +793,7 @@ export default function StudentFormScreen() {
             .from('student_line_links')
             .insert({
               student_id: studentId,
-              line_user_id: studentLine.trim(),
+              line_display_id: studentLine.trim(),
               active: true
             });
         }
@@ -731,23 +801,8 @@ export default function StudentFormScreen() {
         // ผูก RFID
         if (rfidCardId) await callAssignRfid(studentId, rfidCardId);
 
-        const parentIds = await upsertParentsForGuardians(guardians);
-        const linkRows = guardians
-          .map((g, i) => ({
-            student_id: studentId,
-            parent_id: parentIds[i],
-            relationship: g.relationship?.trim() || null,
-            is_primary: !!g.is_primary,
-          }))
-          .filter(r => r.parent_id && r.parent_id > 0);
-        if (linkRows.length) {
-          const { error } = await supabase.from('student_guardians')
-            .upsert(linkRows, { onConflict: 'student_id,parent_id' });
-          if (error) throw error;
-        }
-        const primaryIdx = guardians.findIndex(g => g.is_primary);
-        const primaryParentId = primaryIdx >= 0 ? parentIds[primaryIdx] : null;
-        await supabase.from('students').update({ parent_id: primaryParentId }).eq('student_id', studentId);
+        // สำหรับโหมดเพิ่มใหม่: ใช้ insert เท่านั้น
+        await insertNewGuardianLinks(studentId, guardians);
       }
 
       Alert.alert('สำเร็จ', isEdit ? 'บันทึกการแก้ไขแล้ว' : 'เพิ่มนักเรียนแล้ว', [
@@ -890,6 +945,9 @@ export default function StudentFormScreen() {
               />
             </View>
           </View>
+
+          {/* สถานะนักเรียน */}
+
 
           {/* RFID (ให้กว้างและไม่ห่อคำ) */}
           <View style={styles.row}>

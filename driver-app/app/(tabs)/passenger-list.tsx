@@ -95,6 +95,7 @@ type Student = {
   home_latitude?: number | null;
   home_longitude?: number | null;
   stop_order?: number;
+  rfid_code?: string | null;
 };
 
 type StudentWithGeo = Student & { lat: number; lng: number; dist: number };
@@ -408,7 +409,7 @@ window.addEventListener('message',e=>handle(e.data));
       return;
     }
 
-    // Fetch ALL students from students table with their route information
+    // Fetch ALL students from students table with their route information and RFID
     const { data, error } = await supabase
       .from('students')
       .select(`
@@ -423,9 +424,16 @@ window.addEventListener('message',e=>handle(e.data));
         route_students!left (
           stop_order,
           route_id
+        ),
+        rfid_card_assignments!left (
+          rfid_cards (
+            rfid_code
+          )
         )
       `)
       .eq('is_active', true)
+      .eq('rfid_card_assignments.is_active', true)
+      .is('rfid_card_assignments.valid_to', null)
       .order('student_id', { ascending: true });
 
     if (error) {
@@ -440,6 +448,9 @@ window.addEventListener('message',e=>handle(e.data));
         // Find route assignment for this driver's route
         const routeAssignment = student.route_students?.find((rs: any) => rs.route_id === driverBusData.route_id);
         
+        // Get RFID code from assignments
+        const rfidCode = student.rfid_card_assignments?.[0]?.rfid_cards?.rfid_code || null;
+        
         return {
           student_id: student.student_id,
           student_name: student.student_name,
@@ -449,6 +460,7 @@ window.addEventListener('message',e=>handle(e.data));
           home_latitude: student.home_latitude,
           home_longitude: student.home_longitude,
           primary_parent: student.primary_parent,
+          rfid_code: rfidCode,
           stop_order: routeAssignment?.stop_order || (index + 1) // Use route stop_order or default sequential order
         };
       });
@@ -801,11 +813,11 @@ window.addEventListener('message',e=>handle(e.data));
     if (phase === 'go') {
       if (droppedGoSet.has(sid)) return { status: 'dropped', color: COLORS.success, icon: 'checkmark-circle', label: 'ส่งแล้ว' };
       if (boardedGoSet.has(sid)) return { status: 'boarded', color: COLORS.warning, icon: 'car', label: 'ขึ้นรถ' };
-      return { status: 'waiting', color: COLORS.textTertiary, icon: 'time-outline', label: 'รอรับ' };
+      return { status: 'waiting', color: COLORS.info, icon: 'hourglass-outline', label: 'รอรับ' };
     } else {
       if (droppedReturnSet.has(sid)) return { status: 'dropped', color: COLORS.success, icon: 'checkmark-circle', label: 'ส่งแล้ว' };
       if (boardedReturnSet.has(sid)) return { status: 'boarded', color: COLORS.warning, icon: 'car', label: 'ขึ้นรถ' };
-      return { status: 'waiting', color: COLORS.textTertiary, icon: 'time-outline', label: 'รอรับ' };
+      return { status: 'waiting', color: COLORS.info, icon: 'hourglass-outline', label: 'รอรับ' };
     }
   };
 
@@ -818,8 +830,20 @@ window.addEventListener('message',e=>handle(e.data));
   };
 
   const handlePhonePress = (student: Student) => {
-    setSelectedForPhone(student);
-    setPhonePopupVisible(true);
+    const hasStudentPhone = student.student_phone && student.student_phone.trim() !== '';
+    const hasParentPhone = student.primary_parent?.parent_phone && student.primary_parent?.parent_phone.trim() !== '';
+    
+    // ถ้ามีเบอร์เดียว ให้โทรตรง
+    if (hasStudentPhone && !hasParentPhone) {
+      Linking.openURL(`tel:${student.student_phone}`);
+    } else if (!hasStudentPhone && hasParentPhone) {
+      Linking.openURL(`tel:${student.primary_parent?.parent_phone}`);
+    } else if (hasStudentPhone && hasParentPhone) {
+      // ถ้ามีทั้งสองเบอร์ ให้แสดงหน้าต่างเลือก
+      setSelectedForPhone(student);
+      setPhonePopupVisible(true);
+    }
+    // ถ้าไม่มีเบอร์เลย ไม่ทำอะไร
   };
 
   const handleCallStudent = () => {
@@ -831,7 +855,7 @@ window.addEventListener('message',e=>handle(e.data));
 
   const handleCallParent = () => {
     if (selectedForPhone?.primary_parent?.parent_phone) {
-      Linking.openURL(`tel:${selectedForPhone.primary_parent.parent_phone}`);
+      Linking.openURL(`tel:${selectedForPhone.primary_parent?.parent_phone}`);
     }
     setPhonePopupVisible(false);
   };
@@ -983,7 +1007,7 @@ window.addEventListener('message',e=>handle(e.data));
               </View>
               <View style={styles.detailRow}>
                 <Ionicons name="card-outline" size={14} color={COLORS.textSecondary} />
-                <Text style={styles.studentRfid}>รหัส: {item.student_id}</Text>
+                <Text style={styles.studentRfid}>RFID: {item.rfid_code || 'ไม่มี'}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Ionicons name={statusInfo.icon as any} size={14} color={statusInfo.color} />
@@ -1305,7 +1329,7 @@ window.addEventListener('message',e=>handle(e.data));
                   </View>
                   <View style={styles.phoneContactInfo}>
                     <Text style={styles.phoneContactLabel}>ผู้ปกครอง</Text>
-                    <Text style={styles.phoneContactNumber}>{selectedForPhone.primary_parent.parent_phone}</Text>
+                    <Text style={styles.phoneContactNumber}>{selectedForPhone.primary_parent?.parent_phone}</Text>
                   </View>
                   <Ionicons name="call" size={20} color={COLORS.success} />
                 </TouchableOpacity>
@@ -1612,9 +1636,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.card,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     gap: 12,
-    ...shadow,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   studentNumberContainer: {
     backgroundColor: COLORS.primarySoft,
@@ -1833,17 +1864,19 @@ const styles = StyleSheet.create({
   // Phone Popup Styles
   phonePopupContainer: {
     backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    marginHorizontal: 16,
-    marginVertical: 40,
-    maxWidth: screenWidth - 32,
-    width: '100%',
+    borderRadius: 24,
+    marginHorizontal: 20,
+    marginVertical: 60,
+    maxWidth: 400,
+    width: screenWidth - 40,
     alignSelf: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 15,
   },
   phonePopupHeader: {
     flexDirection: 'row',
@@ -1875,14 +1908,19 @@ const styles = StyleSheet.create({
   phoneContactOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 18,
     paddingHorizontal: 20,
     backgroundColor: COLORS.bg,
     borderRadius: 16,
     gap: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    minHeight: 80,
+    minHeight: 76,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   phoneContactDisabled: {
     opacity: 0.6,

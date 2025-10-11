@@ -12,7 +12,7 @@ const COLORS = {
   textSecondary: '#475569',
   border: '#E2E8F0',
   borderLight: '#F1F5F9',
-  primary: '#021C8B',
+  primary: '#059669',
   shadow: 'rgba(15, 23, 42, 0.08)',
 };
 

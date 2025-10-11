@@ -471,7 +471,7 @@ const COLORS = {
   borderLight: '#F1F5F9',
   
   // Primary colors
-  primary: '#021C8B',
+  primary: '#3B82F6',
   primarySoft: '#EFF6FF',
   
   // Status colors

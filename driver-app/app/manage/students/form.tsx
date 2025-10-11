@@ -37,12 +37,12 @@ const COLORS = {
   borderLight: '#F1F5F9',
   divider: '#E2E8F0',
   
-  // Primary Brand (Resolution Blue & New Car Blue)
-  primary: '#021C8B',        // Resolution Blue
-  primaryDark: '#021C8B',    // Resolution Blue
-  primaryLight: '#1B52D7',   // New Car Blue
-  primarySoft: '#EFF6FF',
-  primaryGradient: ['#021C8B', '#1B52D7'],
+  // Primary Brand (Blue theme matching home page)
+  primary: '#3B82F6',        // Blue matching home page
+  primaryDark: '#2563EB',    // Darker blue
+  primaryLight: '#60A5FA',   // Lighter blue
+  primarySoft: '#EBF4FF',
+  primaryGradient: ['#3B82F6', '#60A5FA'],
   
   // Status Colors
   success: '#059669',
@@ -697,6 +697,7 @@ export default function StudentFormScreen() {
           end_date: formatLocalDate(endDate),
           home_latitude: lat,
           home_longitude: lng,
+          status: 'active', // เพิ่ม status เป็น active ในโหมดแก้ไข
         };
         const { error: stuErr } = await supabase
           .from('students').update(payloadEdit).eq('student_id', Number(id));
@@ -782,6 +783,7 @@ export default function StudentFormScreen() {
           end_date: formatLocalDate(endDate),
           home_latitude: lat,
           home_longitude: lng,
+          status: 'active', // เพิ่ม status เป็น active
         };
         const { data: ins, error: insErr } = await supabase
           .from('students').insert(payloadCreate).select('student_id').single();
@@ -804,10 +806,32 @@ export default function StudentFormScreen() {
 
         // สำหรับโหมดเพิ่มใหม่: ใช้ insert เท่านั้น
         await insertNewGuardianLinks(studentId, guardians);
+        
+        // อัปเดต parent_id ให้ตรงกับผู้ปกครองหลัก
+        const primary = guardians.find(g => g.is_primary);
+        if (primary && primary.phone?.trim()) {
+          const { data: parentData } = await supabase
+            .from('parents')
+            .select('parent_id')
+            .eq('parent_phone', primary.phone.trim())
+            .order('parent_id', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (parentData) {
+            await supabase
+              .from('students')
+              .update({ parent_id: parentData.parent_id })
+              .eq('student_id', studentId);
+          }
+        }
       }
 
       Alert.alert('สำเร็จ', isEdit ? 'บันทึกการแก้ไขแล้ว' : 'เพิ่มนักเรียนแล้ว', [
-        { text: 'ตกลง', onPress: () => { clearDraft(); safeGoBack('/manage/students'); } },
+        { text: 'ตกลง', onPress: () => { 
+          clearDraft(); 
+          router.replace('/manage/students' as any); 
+        } },
       ]);
     } catch (e: any) {
       Alert.alert('บันทึกไม่สำเร็จ', e?.message ?? 'เกิดข้อผิดพลาด');
@@ -999,7 +1023,7 @@ export default function StudentFormScreen() {
                 </View>
 
                 <View style={styles.row}>
-                  <View style={[styles.col, { flex: 1 }]}>
+                  <View style={[styles.col, { flex: 2 }]}>
                     <Text style={styles.label}>ชื่อผู้ปกครอง</Text>
                     <TextInput
                       style={[styles.input, !nameEditable && { ...readOnlyBg, ...readOnlyBorder }]}
@@ -1010,7 +1034,7 @@ export default function StudentFormScreen() {
                       {...ro(nameEditable)}
                     />
                   </View>
-                  <View style={[styles.col, { flex: 1.7 }]}>
+                  <View style={[styles.col, { flex: 1.2 }]}>
                     <Text style={styles.label}>เบอร์โทรผู้ปกครอง</Text>
                     <TextInput
                       style={styles.input}

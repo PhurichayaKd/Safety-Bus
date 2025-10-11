@@ -45,12 +45,12 @@ const COLORS = {
   borderLight: '#F1F5F9',
   divider: '#E2E8F0',
   
-  // Primary Brand (Resolution Blue & New Car Blue)
-  primary: '#021C8B',        // Resolution Blue
-  primaryDark: '#021C8B',    // Resolution Blue
-  primaryLight: '#1B52D7',   // New Car Blue
+  // Primary Brand (Blue theme matching homepage)
+  primary: '#3B82F6',        // Blue 500 - matching homepage
+  primaryDark: '#2563EB',    // Blue 600
+  primaryLight: '#60A5FA',   // Blue 400
   primarySoft: '#EFF6FF',
-  primaryGradient: ['#021C8B', '#1B52D7'],
+  primaryGradient: ['#3B82F6', '#60A5FA'],
   
   // Status Colors (Phone icons green - Beautiful & Modern)
   success: '#059669',        // Emerald Green - สีเขียวมรกต สวยงาม
@@ -408,25 +408,25 @@ window.addEventListener('message',e=>handle(e.data));
       return;
     }
 
-    // Fetch students ordered by stop_order from route_students
+    // Fetch ALL students from students table with their route information
     const { data, error } = await supabase
-      .from('route_students')
+      .from('students')
       .select(`
-        stop_order,
-        students!inner (
-          student_id,
-          student_name,
-          grade,
-          student_phone,
-          status,
-          home_latitude,
-          home_longitude,
-          primary_parent:students_parent_id_fkey ( parent_phone )
+        student_id,
+        student_name,
+        grade,
+        student_phone,
+        status,
+        home_latitude,
+        home_longitude,
+        primary_parent:students_parent_id_fkey ( parent_phone ),
+        route_students!left (
+          stop_order,
+          route_id
         )
       `)
-      .eq('route_id', driverBusData.route_id)
-      .eq('students.is_active', true)
-      .order('stop_order', { ascending: true });
+      .eq('is_active', true)
+      .order('student_id', { ascending: true });
 
     if (error) {
       console.error('Error fetching students:', error);
@@ -435,11 +435,26 @@ window.addEventListener('message',e=>handle(e.data));
       // Get today's leave requests
       const leaveRequestsToday = await fetchTodayLeaveRequests();
       
-      // Transform data and filter out students who are on leave today
-      const studentsData = (data || []).map((item: any) => ({
-        ...item.students,
-        stop_order: item.stop_order
-      }));
+      // Transform data and assign stop_order based on route assignment or default order
+      const studentsData = (data || []).map((student: any, index: number) => {
+        // Find route assignment for this driver's route
+        const routeAssignment = student.route_students?.find((rs: any) => rs.route_id === driverBusData.route_id);
+        
+        return {
+          student_id: student.student_id,
+          student_name: student.student_name,
+          grade: student.grade,
+          student_phone: student.student_phone,
+          status: student.status,
+          home_latitude: student.home_latitude,
+          home_longitude: student.home_longitude,
+          primary_parent: student.primary_parent,
+          stop_order: routeAssignment?.stop_order || (index + 1) // Use route stop_order or default sequential order
+        };
+      });
+      
+      // Sort by stop_order to maintain pickup sequence
+      studentsData.sort((a, b) => a.stop_order - b.stop_order);
       
       const filteredStudents = studentsData.filter(student => 
         !leaveRequestsToday.has(student.student_id)
@@ -1906,15 +1921,17 @@ const styles = StyleSheet.create({
   alertsModalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
   },
   alertsModalContainer: {
-    width: '90%',
-    maxHeight: '80%',
+    width: '100%',
+    height: '90%',
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     overflow: 'hidden',
+    paddingTop: Platform.OS === 'ios' ? 8 : 0,
   },
   alertsModalHeader: {
     flexDirection: 'row',

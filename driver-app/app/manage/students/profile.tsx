@@ -28,6 +28,13 @@ type Row = {
     parent_name: string;
     parent_phone: string;
   } | null;
+  student_guardians: {
+    parents: {
+      parent_name: string;
+      parent_phone: string;
+    };
+    is_primary: boolean;
+  }[] | null;
   rfid_card_assignments: {
     rfid_cards: {
       rfid_code: string;
@@ -37,50 +44,41 @@ type Row = {
 
 const COLORS = {
   // Background Colors
-  bg: '#FAFBFC',
-  bgSecondary: '#F8FAFC',
+  bg: '#F8F9FA',
+  bgSecondary: '#F1F3F4',
   card: '#FFFFFF',
-  cardElevated: '#FFFFFF',
+  surface: '#FFFFFF',
   
   // Text Colors
-  text: '#0F172A',
-  textSecondary: '#475569',
-  textTertiary: '#64748B',
-  textMuted: '#94A3B8',
+  text: '#1A1A1A',
+  textSecondary: '#6B7280',
+  textTertiary: '#9CA3AF',
   
-  // Border & Divider
-  border: '#E2E8F0',
-  borderLight: '#F1F5F9',
-  divider: '#E2E8F0',
+  // Border Colors
+  border: '#E5E7EB',
+  borderLight: '#F3F4F6',
   
-  // Primary Brand (Resolution Blue & New Car Blue)
-  primary: '#021C8B',        // Resolution Blue
-  primaryDark: '#021C8B',    // Resolution Blue
-  primaryLight: '#1B52D7',   // New Car Blue
-  primarySoft: '#EFF6FF',
-  primaryGradient: ['#021C8B', '#1B52D7'],
+  // Primary Colors (ใช้โทนสีฟ้าเดียวกับหน้าหลัก)
+  primary: '#3B82F6',
+  primarySoft: '#EBF4FF',
+  primaryLight: '#DBEAFE',
   
   // Status Colors
-  success: '#059669',
-  successSoft: '#ECFDF5',
-  warning: '#D97706',
-  warningSoft: '#FFFBEB',
-  danger: '#DC2626',
-  dangerSoft: '#FEF2F2',
-  info: '#021C8B',           // Resolution Blue for info
-  infoSoft: '#EFF6FF',
+  success: '#10B981',
+  successSoft: '#D1FAE5',
+  warning: '#F59E0B',
+  warningSoft: '#FEF3C7',
+  danger: '#EF4444',
+  dangerSoft: '#FEE2E2',
+  info: '#3B82F6',
+  infoSoft: '#EBF4FF',
   
-  // Interactive States
-  hover: '#F8FAFC',
-  pressed: '#F1F5F9',
-  focus: '#021C8B',          // Resolution Blue for focus
-  
-  // Shadows
-  shadow: 'rgba(15, 23, 42, 0.08)',
-  shadowDark: 'rgba(15, 23, 42, 0.15)',
+  // Shadow Colors
+  shadow: '#000000',
+  shadowDark: '#000000',
   
   // Legacy aliases for backward compatibility
-  sub: '#64748B',
+  sub: '#9CA3AF',
 };
 
 export default function ProfilePage() {
@@ -100,6 +98,10 @@ export default function ProfilePage() {
         grade, 
         student_phone,
         parents:parent_id(parent_name, parent_phone),
+        student_guardians(
+          parents(parent_name, parent_phone),
+          is_primary
+        ),
         rfid_card_assignments(rfid_cards(rfid_code))
       `)
       .order('student_id', { ascending: true });
@@ -142,7 +144,7 @@ export default function ProfilePage() {
       onPress={() => router.push({ pathname: '/manage/students/form', params: { id: String(item.student_id) } } as any)}
       activeOpacity={0.9}
     >
-      {/* left: no. badge */}
+      {/* left: student ID display - เอาวงกลมออกและทำให้สวยงาม */}
       <View style={styles.noBadge}>
         <Text style={styles.noBadgeTxt}>{item.student_id}</Text>
       </View>
@@ -164,15 +166,31 @@ export default function ProfilePage() {
           )}
         </View>
 
-        {item.parents && (
-          <Text style={styles.parentLine} numberOfLines={1}>
-            ผู้ปกครอง: {item.parents.parent_name} {item.parents.parent_phone && `(${item.parents.parent_phone})`}
-          </Text>
-        )}
+        {/* แสดงข้อมูลผู้ปกครองจาก student_guardians หรือ parents */}
+        {(() => {
+          // ลองใช้ข้อมูลจาก student_guardians ก่อน
+          if (item.student_guardians && item.student_guardians.length > 0) {
+            const primaryGuardian = item.student_guardians.find(g => g.is_primary) || item.student_guardians[0];
+            return (
+              <Text style={styles.parentLine} numberOfLines={1}>
+                ผู้ปกครอง: {primaryGuardian.parents.parent_name} {primaryGuardian.parents.parent_phone && `(${primaryGuardian.parents.parent_phone})`}
+              </Text>
+            );
+          }
+          // ถ้าไม่มีใน student_guardians ให้ใช้ parents (legacy)
+          if (item.parents) {
+            return (
+              <Text style={styles.parentLine} numberOfLines={1}>
+                ผู้ปกครอง: {item.parents.parent_name} {item.parents.parent_phone && `(${item.parents.parent_phone})`}
+              </Text>
+            );
+          }
+          return null;
+        })()}
       </View>
 
       {/* right: arrow */}
-      <Ionicons name="chevron-forward" size={18} color={COLORS.sub} />
+      <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
     </TouchableOpacity>
   );
 
@@ -339,20 +357,21 @@ const styles = StyleSheet.create({
     ...shadow,
   },
   noBadge: {
-    width: 32, 
-    height: 32, 
-    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
     backgroundColor: COLORS.primarySoft, 
     alignItems: 'center', 
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.primary + '20',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+    alignSelf: 'flex-start',
   },
   noBadgeTxt: { 
-    fontSize: 13, 
+    fontSize: 16, 
     fontWeight: '800', 
     color: COLORS.primary,
-    letterSpacing: 0.1,
+    letterSpacing: -0.2,
   },
 
   name: { 

@@ -1,5 +1,6 @@
 // Main entrypoint for Vercel serverless function
 // The actual API functions are in the /api directory
+import express from 'express';
 import { readFileSync, existsSync } from 'fs';
 import { join, extname } from 'path';
 

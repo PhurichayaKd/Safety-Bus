@@ -396,22 +396,36 @@ export async function handleMainAction(event, action) {
       stack: err.stack
     });
     
+    // ตรวจสอบ error state เพื่อป้องกันการส่งข้อความซ้ำ
+    const errorKey = `${userId}_${action}_error`;
+    const lastErrorTime = userErrorStates.get(errorKey);
+    const now = Date.now();
+    
+    // ถ้าเพิ่งส่งข้อความ error ไปแล้วภายใน 30 วินาที ให้ข้าม
+    if (lastErrorTime && (now - lastErrorTime) < 30000) {
+      console.log('⚠️ Error message already sent recently, skipping to prevent spam');
+      return;
+    }
+    
+    // บันทึกเวลาที่ส่งข้อความ error
+    userErrorStates.set(errorKey, now);
+    
     // พยายามส่งข้อความแสดงข้อผิดพลาด
     if (replyToken) {
       try {
         await replyLineMessage(replyToken, {
           type: 'text',
-          text: 'เกิดข้อผิดพลาดในเมนู กรุณาลองใหม่'
+          text: 'เกิดข้อผิดพลาดในเมนู กรุณาลองใหม่\n\nหากปัญหายังคงเกิดขึ้น กรุณาติดต่อโรงเรียน'
         });
         console.log('✅ Sent error message via reply token');
       } catch (replyError) {
         console.error('❌ Reply token already used or invalid:', replyError);
-        // Use push message as fallback
+        // Use push message as fallback only if not recently sent
         if (userId) {
           try {
             await sendLineMessage(userId, [{
               type: 'text',
-              text: 'เกิดข้อผิดพลาดในเมนู กรุณาลองใหม่'
+              text: 'เกิดข้อผิดพลาดในเมนู กรุณาลองใหม่\n\nหากปัญหายังคงเกิดขึ้น กรุณาติดต่อโรงเรียน'
             }]);
             console.log('✅ Sent error message via push message');
           } catch (pushError) {
@@ -422,6 +436,11 @@ export async function handleMainAction(event, action) {
     } else {
       console.log('⚠️ Cannot send error message - reply token missing');
     }
+    
+    // ล้าง error state หลังจาก 5 นาที
+    setTimeout(() => {
+      userErrorStates.delete(errorKey);
+    }, 300000);
   }
 }
 

@@ -7,12 +7,14 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   TouchableOpacity,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
+import { parseDetails } from '../../../src/services/emergencyService';
+import { safeGoBack } from '../../../src/utils/navigationUtils';
 
 const COLORS = {
   primary: '#007AFF',
@@ -32,6 +34,7 @@ interface EmergencyLog {
   event_time: string;
   event_type: 'PANIC_BUTTON' | 'SENSOR_ALERT' | 'DRIVER_INCAPACITATED';
   triggered_by: 'sensor' | 'driver' | 'student';
+  details?: string; // เพิ่มฟิลด์ details สำหรับข้อมูลเซ็นเซอร์
 }
 
 interface EmergencyStats {
@@ -121,6 +124,31 @@ const EmergencyReports: React.FC = () => {
 
   useEffect(() => {
     fetchEmergencyData();
+
+    // ตั้งค่า real-time subscription สำหรับการอัปเดตข้อมูล
+    const channel = supabase
+      .channel('emergency-reports-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'emergency_logs'
+        },
+        (payload) => {
+          console.log('Emergency reports: Real-time update detected:', payload);
+          // รีเฟรชข้อมูลเมื่อมีการเปลี่ยนแปลง
+          fetchEmergencyData();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription เมื่อ component unmount
+    return () => {
+      if (channel) {
+        channel.unsubscribe();
+      }
+    };
   }, []);
 
   const onRefresh = () => {
@@ -180,6 +208,8 @@ const EmergencyReports: React.FC = () => {
     }
   };
 
+
+
   const formatDateTime = (dateTime: string) => {
     const date = new Date(dateTime);
     return date.toLocaleString('th-TH', {
@@ -195,9 +225,9 @@ const EmergencyReports: React.FC = () => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
-          </TouchableOpacity>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => safeGoBack('/manage/reports')}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
           <Text style={styles.topBarTitle}>รายงานเหตุการณ์ฉุกเฉิน</Text>
           <View style={{ width: 40 }} />
         </View>
@@ -212,7 +242,7 @@ const EmergencyReports: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => safeGoBack('/manage/reports')}>
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>รายงานเหตุการณ์ฉุกเฉิน</Text>
@@ -297,10 +327,11 @@ const EmergencyReports: React.FC = () => {
               </View>
               <View style={styles.logDetails}>
                 <Text style={styles.logDetailText}>
-                  แหล่งที่มา: {getTriggeredByText(log.triggered_by)}
-                </Text>
-                <Text style={styles.logDetailText}>
-                  รหัสคนขับ: {log.driver_id}
+                  แหล่งที่มา: {
+                    log.event_type === 'SENSOR_ALERT' && log.details
+                      ? String(parseDetails(log.details))
+                      : getTriggeredByText(log.triggered_by)
+                  }
                 </Text>
               </View>
             </View>

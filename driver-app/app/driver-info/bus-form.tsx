@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Href, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../../src/services/supabaseClient';
+import { safeGoBack } from '../../src/utils/navigationUtils';
 
 type RouteRow = {
   route_id: number;
@@ -216,7 +217,7 @@ export default function BusForm() {
     <SafeAreaView style={styles.screen}>
       {/* Top bar ให้ฟีลเดียวกับฟอร์มนักเรียน */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => safeGoBack('/driver-info')} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.topTitle}>ข้อมูลรถบัส</Text>

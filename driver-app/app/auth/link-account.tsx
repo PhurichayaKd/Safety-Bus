@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../src/services/supabaseClient';
+import { safeGoBack } from '../../src/utils/navigationUtils';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -162,7 +163,7 @@ export default function LinkAccountScreen() {
     if (step === 'student_id') {
       setStep('name');
     } else {
-      router.back();
+      safeGoBack('/auth/login');
     }
   };
 

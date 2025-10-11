@@ -12,15 +12,21 @@ export interface EmergencyLog {
   resolved?: boolean;
   resolved_at?: string;
   resolved_by?: number;
-  status?: 'pending' | 'resolved' | 'in_progress';
+  status?: 'pending' | 'checked' | 'emergency_confirmed' | 'resolved';
+  details?: string | object; // เพิ่มฟิลด์ details สำหรับข้อมูลเซ็นเซอร์ (รองรับทั้ง string และ object)
+  driver_response_type?: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL';
+  driver_response_time?: string;
+  driver_response_notes?: string;
 }
 
 export interface EmergencyResponse {
+  response_id?: number;
   event_id: number;
-  response_type: 'CHECKED' | 'EMERGENCY';
-  response_time: string;
   driver_id: number;
+  response_type: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL';
+  response_time: string;
   notes?: string;
+  created_at?: string;
 }
 
 // ดึงข้อมูล emergency logs แบบเรียลไทม์
@@ -101,37 +107,29 @@ export const getUnresolvedEmergencyLogs = async (driverId: number) => {
 // บันทึกการตอบสนองของคนขับ
 export const recordEmergencyResponse = async (
   eventId: number,
-  responseType: 'CHECKED' | 'EMERGENCY',
+  responseType: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL',
   driverId: number,
   notes?: string
 ) => {
   try {
     // บันทึกการตอบสนอง
-    const { error: responseError } = await supabase
+    const { data: responseData, error: responseError } = await supabase
       .from('emergency_responses')
       .insert({
         event_id: eventId,
+        driver_id: driverId,
         response_type: responseType,
         response_time: new Date().toISOString(),
-        driver_id: driverId,
         notes: notes
-      });
+      })
+      .select()
+      .single();
 
     if (responseError) throw responseError;
 
-    // อัปเดตสถานะ emergency log
-    const { error: updateError } = await supabase
-      .from('emergency_logs')
-      .update({
-        resolved: true,
-        resolved_at: new Date().toISOString(),
-        resolved_by: driverId
-      })
-      .eq('event_id', eventId);
-
-    if (updateError) throw updateError;
-
-    return { success: true, error: null };
+    // สถานะจะถูกอัปเดตโดย trigger อัตโนมัติ
+    // แต่เราจะ return ข้อมูลการตอบสนองที่บันทึกแล้ว
+    return { success: true, error: null, data: responseData };
   } catch (error) {
     console.error('Error recording emergency response:', error);
     return { success: false, error };
@@ -141,7 +139,7 @@ export const recordEmergencyResponse = async (
 // ส่งการแจ้งเตือนไปยัง LINE
 export const sendLineNotification = async (
   emergencyLog: EmergencyLog,
-  responseType?: 'CHECKED' | 'EMERGENCY'
+  responseType?: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL'
 ) => {
   try {
     const baseUrl = process.env.EXPO_PUBLIC_LINE_NOTIFICATION_URL || 'http://localhost:3000';
@@ -151,14 +149,18 @@ export const sendLineNotification = async (
     if (responseType) {
       // ข้อความตอบสนองจากคนขับ
       if (responseType === 'CHECKED') {
-        message = `🟢 คนขับได้ทำการตรวจสอบเหตุการณ์เรียบร้อยแล้ว\n\nเหตุการณ์: ${getEventTypeText(emergencyLog.event_type)}\nเวลา: ${formatDateTime(emergencyLog.event_time)}\nสถานะ: กลับสู่สถานการณ์ปกติ`;
-      } else {
-        message = `🚨 คนขับแจ้งเหตุฉุกเฉิน!\n\nเหตุการณ์: ${getEventTypeText(emergencyLog.event_type)}\nเวลา: ${formatDateTime(emergencyLog.event_time)}\n⚠️ กำลังทำการให้นักเรียนลงจากรถเพื่อความปลอดภัย`;
+        message = `🟢 คนขับได้ทำการตรวจสอบเหตุการณ์เรียบร้อยแล้ว\n\nเหตุการณ์: ${getEventTypeText(emergencyLog.event_type)}\nเวลา: ${formatDateTime(emergencyLog.event_time)}\nสถานะ: ไม่พบสิ่งผิดปกติ`;
+      } else if (responseType === 'EMERGENCY') {
+        // สร้างข้อความตามรายละเอียดเซ็นเซอร์
+        const sensorDetails = getSensorDetailsMessage(emergencyLog.details);
+        message = `🚨 คนขับยืนยันเป็นเหตุฉุกเฉิน!\n\n${sensorDetails}\n⚠️ กำลังทำการให้นักเรียนลงจากรถเพื่อความปลอดภัย\nเวลา: ${formatDateTime(emergencyLog.event_time)}`;
+      } else if (responseType === 'CONFIRMED_NORMAL') {
+        message = `✅ คนขับยืนยันสถานการณ์กลับมาสู่ปกติแล้ว\n\nเหตุการณ์: ${getEventTypeText(emergencyLog.event_type)}\nเวลา: ${formatDateTime(emergencyLog.event_time)}\nสถานะ: สิ้นสุดการแจ้งเตือน`;
       }
     } else {
       // ข้อความแจ้งเตือนเหตุการณ์ใหม่ (ไม่ส่งถ้า triggered_by เป็น student)
       if (emergencyLog.triggered_by === 'student') {
-        return { success: true, error: null }; // ไม่ส่งแจ้งเตือน LINE
+        return { success: true, error: null }; // ไม่ส่งแจ้งเตือน LINE สำหรับปุ่มฉุกเฉินนักเรียน
       }
       
       message = `🚨 แจ้งเตือนเหตุการณ์ฉุกเฉิน!\n\nประเภท: ${getEventTypeText(emergencyLog.event_type)}\nแหล่งที่มา: ${getTriggeredByText(emergencyLog.triggered_by)}\nเวลา: ${formatDateTime(emergencyLog.event_time)}\nรหัสคนขับ: ${emergencyLog.driver_id}`;
@@ -174,13 +176,15 @@ export const sendLineNotification = async (
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        message: message,
         eventType: responseType ? undefined : emergencyLog.event_type,
         responseType: responseType,
         eventId: emergencyLog.event_id,
         description: emergencyLog.description,
         location: emergencyLog.location,
         notes: emergencyLog.notes,
-        timestamp: emergencyLog.event_time
+        timestamp: emergencyLog.event_time,
+        details: emergencyLog.details
       }),
     });
 
@@ -226,6 +230,94 @@ export const getTriggeredByText = (triggeredBy: string) => {
     default:
       return triggeredBy;
   }
+};
+
+const getSensorDetailsMessage = (details: any): string => {
+  if (!details) return 'เซ็นเซอร์บนรถตรวจพบความผิดปกติ';
+  
+  try {
+    const detailsObj = typeof details === 'string' ? JSON.parse(details) : details;
+    const sensors = [];
+    
+    if (detailsObj.temperature && detailsObj.temperature > 40) {
+      sensors.push('ตรวจพบความร้อนสูง');
+    }
+    
+    if (detailsObj.smoke && detailsObj.smoke > 50) {
+      sensors.push('ตรวจพบควันจำนวนมาก');
+    }
+    
+    if (detailsObj.gas && detailsObj.gas > 30) {
+      sensors.push('ตรวจพบแก๊สรั่ว');
+    }
+    
+    if (sensors.length === 0) {
+      return 'เซ็นเซอร์บนรถตรวจพบความผิดปกติ';
+    }
+    
+    const sensorText = sensors.join(' และ ');
+    return `เซ็นเซอร์บนรถ ${sensorText} คนขับยืนยันเป็นเหตุฉุกเฉิน`;
+  } catch (error) {
+    return 'เซ็นเซอร์บนรถตรวจพบความผิดปกติ คนขับยืนยันเป็นเหตุฉุกเฉิน';
+  }
+};
+
+// ฟังก์ชันสำหรับแปลง details JSON เป็นข้อความที่อ่านง่าย
+export const parseDetails = (details: any): string => {
+  if (!details) return '';
+  
+  // ถ้า details เป็น object แล้ว ให้จัดการโดยตรง
+  if (typeof details === 'object' && details !== null) {
+    try {
+      if (details.source && details.message) {
+        return `เซ็นเซอร์: ${details.source} - ${details.message}`;
+      }
+      if (details.source) {
+        return `เซ็นเซอร์: ${details.source}`;
+      }
+      if (details.message) {
+        return `ข้อความ: ${details.message}`;
+      }
+      // ถ้ามี object แต่ไม่มี source หรือ message ให้แสดงเป็น JSON string
+      return JSON.stringify(details);
+    } catch {
+      return 'ข้อมูลเซ็นเซอร์';
+    }
+  }
+  
+  // ถ้า details เป็น string ให้พยายาม parse
+  if (typeof details === 'string') {
+    try {
+      const parsed = JSON.parse(details);
+      if (parsed.source && parsed.message) {
+        return `เซ็นเซอร์: ${parsed.source} - ${parsed.message}`;
+      }
+      if (parsed.source) {
+        return `เซ็นเซอร์: ${parsed.source}`;
+      }
+      if (parsed.message) {
+        return `ข้อความ: ${parsed.message}`;
+      }
+      // ถ้ามี object แต่ไม่มี source หรือ message ให้แสดงเป็น JSON string
+      return JSON.stringify(parsed);
+    } catch {
+      // ถ้า parse ไม่ได้ ให้ return string ตามที่ได้รับมา
+      return String(details);
+    }
+  }
+  
+  // สำหรับกรณีอื่นๆ ให้แปลงเป็น string
+  return String(details);
+};
+
+// ฟังก์ชันสำหรับแสดงแหล่งที่มาที่รองรับข้อมูลเซ็นเซอร์
+export const getSourceText = (emergency: EmergencyLog): string => {
+  // ถ้าเป็นการแจ้งเตือนเซ็นเซอร์และมี details ให้แสดงข้อมูลจาก details
+  if (['SENSOR_ALERT', 'SMOKE_DETECTED', 'HIGH_TEMPERATURE', 'MOVEMENT_DETECTED'].includes(emergency.event_type) && emergency.details) {
+    return parseDetails(emergency.details);
+  }
+  // ถ้าไม่ใช่ให้แสดงข้อมูลปกติ
+  return getTriggeredByText(emergency.triggered_by);
 };
 
 export const formatDateTime = (dateTime: string) => {

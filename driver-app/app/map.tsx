@@ -4,6 +4,8 @@ import { SafeAreaView, View, Text, TouchableOpacity, StyleSheet, Platform, Alert
 import { useLocalSearchParams, router, Href } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../src/services/supabaseClient';
+import { safeGoBack } from '../src/utils/navigationUtils';
 
 type Pt = { lat: number; lng: number };
 const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -216,7 +218,7 @@ export default function DriverMap() {
             if (returnTo) {
               router.push(`${returnTo}?${params.toString()}` as Href);
             } else {
-              router.back();
+              safeGoBack('/');
             }
           }
         }
@@ -229,7 +231,7 @@ export default function DriverMap() {
     if (returnTo) {
       router.push(returnTo as Href);
     } else {
-      router.back();
+      safeGoBack('/');
     }
   }, [returnTo]);
 

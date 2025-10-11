@@ -44,15 +44,29 @@ const EmergencyModal: React.FC = () => {
   
   const [notes, setNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [waitingForNormalConfirmation, setWaitingForNormalConfirmation] = useState(false);
 
-  const handleResponse = async (responseType: 'CHECKED' | 'EMERGENCY') => {
+  const handleResponse = async (responseType: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL') => {
     if (!currentEmergency) return;
 
     setIsProcessing(true);
     
     try {
       await handleEmergencyResponse(currentEmergency.event_id, responseType, notes);
-      setNotes(''); // รีเซ็ตหมายเหตุ
+      
+      if (responseType === 'EMERGENCY') {
+        // หลังจากกดฉุกเฉิน ให้แสดงปุ่มยืนยันสถานการณ์กลับมาปกติ
+        setWaitingForNormalConfirmation(true);
+      } else if (responseType === 'CONFIRMED_NORMAL') {
+        // หลังจากยืนยันสถานการณ์กลับมาปกติ ให้ปิด modal
+        setWaitingForNormalConfirmation(false);
+        setNotes('');
+        dismissModal();
+      } else {
+        // กรณี CHECKED ให้ปิด modal ทันที
+        setNotes('');
+        dismissModal();
+      }
     } catch (error) {
       console.error('Error handling response:', error);
     } finally {
@@ -60,11 +74,24 @@ const EmergencyModal: React.FC = () => {
     }
   };
 
-  const confirmEmergencyResponse = (responseType: 'CHECKED' | 'EMERGENCY') => {
-    const title = responseType === 'CHECKED' ? 'ยืนยันการตรวจสอบ' : 'ยืนยันสถานการณ์ฉุกเฉิน';
-    const message = responseType === 'CHECKED' 
-      ? 'คุณต้องการยืนยันว่าได้ตรวจสอบเหตุการณ์เรียบร้อยแล้วใช่หรือไม่?'
-      : 'คุณต้องการแจ้งสถานการณ์ฉุกเฉินและให้นักเรียนลงจากรถใช่หรือไม่?';
+  const confirmEmergencyResponse = (responseType: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL') => {
+    let title = '';
+    let message = '';
+    
+    switch (responseType) {
+      case 'CHECKED':
+        title = 'ยืนยันการตรวจสอบ';
+        message = 'คุณต้องการยืนยันว่าได้ตรวจสอบเหตุการณ์เรียบร้อยแล้วใช่หรือไม่?';
+        break;
+      case 'EMERGENCY':
+        title = 'ยืนยันสถานการณ์ฉุกเฉิน';
+        message = 'คุณต้องการแจ้งสถานการณ์ฉุกเฉินและให้นักเรียนลงจากรถใช่หรือไม่?\n\nระบบจะส่งข้อความแจ้งเตือนไปยังผู้ปกครองทุกคน';
+        break;
+      case 'CONFIRMED_NORMAL':
+        title = 'ยืนยันสถานการณ์กลับมาปกติ';
+        message = 'คุณต้องการยืนยันว่าสถานการณ์กลับมาสู่ปกติแล้วใช่หรือไม่?\n\nระบบจะส่งข้อความแจ้งผู้ปกครองว่าสิ้นสุดการแจ้งเตือน';
+        break;
+    }
 
     Alert.alert(
       title,
@@ -209,23 +236,41 @@ const EmergencyModal: React.FC = () => {
 
           {/* Action Buttons */}
           <View style={styles.actionContainer}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.checkedButton]}
-              onPress={() => confirmEmergencyResponse('CHECKED')}
-              disabled={isProcessing}
-            >
-              <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
-              <Text style={styles.actionButtonText}>ตรวจสอบเรียบร้อย</Text>
-            </TouchableOpacity>
+            {waitingForNormalConfirmation ? (
+              // แสดงปุ่มยืนยันสถานการณ์กลับมาปกติ หลังจากกดฉุกเฉิน
+              <TouchableOpacity
+                style={[styles.actionButton, styles.confirmNormalButton]}
+                onPress={() => confirmEmergencyResponse('CONFIRMED_NORMAL')}
+                disabled={isProcessing}
+              >
+                <Ionicons name="checkmark-done" size={24} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>ยืนยันสถานการณ์กลับมาปกติ</Text>
+              </TouchableOpacity>
+            ) : (
+              // แสดงปุ่มตามประเภทการแจ้งเตือน
+              <>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.checkedButton]}
+                  onPress={() => confirmEmergencyResponse('CHECKED')}
+                  disabled={isProcessing}
+                >
+                  <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
+                  <Text style={styles.actionButtonText}>ตรวจสอบแล้ว</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, styles.emergencyButton]}
-              onPress={() => confirmEmergencyResponse('EMERGENCY')}
-              disabled={isProcessing}
-            >
-              <Ionicons name="warning" size={24} color="#FFFFFF" />
-              <Text style={styles.actionButtonText}>ฉุกเฉิน</Text>
-            </TouchableOpacity>
+                {/* แสดงปุ่มฉุกเฉินเฉพาะกรณีที่มาจากเซ็นเซอร์ */}
+                {currentEmergency.triggered_by === 'sensor' && (
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.emergencyButton]}
+                    onPress={() => confirmEmergencyResponse('EMERGENCY')}
+                    disabled={isProcessing}
+                  >
+                    <Ionicons name="warning" size={24} color="#FFFFFF" />
+                    <Text style={styles.actionButtonText}>ฉุกเฉิน</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
           </View>
         </View>
       </View>
@@ -385,6 +430,9 @@ const styles = StyleSheet.create({
   },
   emergencyButton: {
     backgroundColor: COLORS.danger,
+  },
+  confirmNormalButton: {
+    backgroundColor: COLORS.primary,
   },
   actionButtonText: {
     fontSize: 16,

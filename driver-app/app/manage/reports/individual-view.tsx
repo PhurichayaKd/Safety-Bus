@@ -8,13 +8,14 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
+  SafeAreaView,
   TextInput,
   Modal,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
+import { safeGoBack } from '../../../src/utils/navigationUtils';
 
 const COLORS = {
   primary: '#007AFF',
@@ -347,7 +348,7 @@ const IndividualView: React.FC = () => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => safeGoBack('/manage/reports')}>
             <Ionicons name="chevron-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
           <Text style={styles.topBarTitle}>ดูข้อมูลรายบุคคล</Text>
@@ -364,7 +365,7 @@ const IndividualView: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => safeGoBack('/manage/reports')}>
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>ดูข้อมูลรายบุคคล</Text>

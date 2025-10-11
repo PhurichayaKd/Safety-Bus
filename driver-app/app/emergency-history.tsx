@@ -12,6 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { supabase } from '../src/services/supabaseClient';
+import { safeGoBack } from '../src/utils/navigationUtils';
 import { useEmergency } from '../src/contexts/EmergencyContext';
 import {
   EmergencyLog,
@@ -20,6 +22,7 @@ import {
   getEventTypeIcon,
   getEventTypeColor,
   getTriggeredByText,
+  getSourceText,
   formatDateTime,
 } from '../src/services/emergencyService';
 
@@ -75,7 +78,7 @@ const EmergencyHistoryScreen: React.FC = () => {
     Alert.alert(
       getEventTypeText(emergency.event_type),
       `เวลา: ${formatDateTime(emergency.event_time)}\n` +
-      `แหล่งที่มา: ${getTriggeredByText(emergency.triggered_by)}\n` +
+      `แหล่งที่มา: ${getSourceText(emergency)}\n` +
       `${emergency.description ? `รายละเอียด: ${emergency.description}\n` : ''}` +
       `${emergency.location ? `ตำแหน่ง: ${emergency.location}\n` : ''}` +
       `สถานะ: ${emergency.status === 'resolved' ? 'แก้ไขแล้ว' : 'รอดำเนินการ'}`,
@@ -148,7 +151,7 @@ const EmergencyHistoryScreen: React.FC = () => {
 
         <View style={styles.emergencyDetails}>
           <Text style={styles.triggeredBy}>
-            แหล่งที่มา: {getTriggeredByText(item.triggered_by)}
+            แหล่งที่มา: {getSourceText(item)}
           </Text>
           
           {item.description && (
@@ -190,7 +193,7 @@ const EmergencyHistoryScreen: React.FC = () => {
         <View style={styles.header}>
           <TouchableOpacity 
             style={styles.backButton} 
-            onPress={() => router.back()}
+            onPress={() => safeGoBack('/')}
           >
             <Ionicons name="arrow-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
@@ -211,7 +214,7 @@ const EmergencyHistoryScreen: React.FC = () => {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton} 
-          onPress={() => router.back()}
+          onPress={() => safeGoBack('/')}
         >
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>

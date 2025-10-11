@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
+import { safeGoBack } from '../../../src/utils/navigationUtils';
 
 type Row = {
   student_id: number;
@@ -179,7 +180,7 @@ export default function ProfilePage() {
     <SafeAreaView style={styles.screen}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => safeGoBack('/manage')} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.title}>ข้อมูลนักเรียน</Text>

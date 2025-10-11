@@ -12,6 +12,15 @@ import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { supabase } from '../../src/services/supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
+import { 
+  parseDetails, 
+  getSourceText, 
+  getEventTypeText as getEventTypeTextFromService,
+  getEventTypeIcon as getEventTypeIconFromService,
+  getEventTypeColor as getEventTypeColorFromService,
+  getTriggeredByText as getTriggeredByTextFromService,
+  formatDateTime as formatDateTimeFromService
+} from '../../src/services/emergencyService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -91,6 +100,15 @@ type Student = {
 type StudentWithGeo = Student & { lat: number; lng: number; dist: number };
 type Pt = { lat: number; lng: number };
 
+interface EmergencyLog {
+  event_id: number;
+  driver_id: number;
+  event_time: string;
+  event_type: 'PANIC_BUTTON' | 'SENSOR_ALERT' | 'DRIVER_INCAPACITATED';
+  triggered_by: 'sensor' | 'driver' | 'student';
+  details?: string;
+}
+
 const STORAGE_KEYS = {
   phase: 'trip_phase',
   resetFlag: 'reset_today_flag',
@@ -155,6 +173,7 @@ export default function PassengerMapPage() {
   const [alertsVisible, setAlertsVisible] = useState(false);
   const [driverId, setDriverId] = useState<number | null>(null);
   const [driverReady, setDriverReady] = useState(false);
+  const [emergencyLogs, setEmergencyLogs] = useState<EmergencyLog[]>([]);
 
   // Date calculations
   const startOfTodayISO = useMemo(() => {
@@ -272,6 +291,8 @@ window.addEventListener('message',e=>handle(e.data));
     const s = JSON.stringify(payload).replace(/\\/g,'\\\\').replace(/`/g,'\\`');
     webRef.current?.injectJavaScript(`(function(){window.dispatchEvent(new MessageEvent('message',{data:\`${s}\`}));})();true;`);
   }, []);
+
+
 
   // Location permission
   const requestLocationPermission = async () => {
@@ -474,12 +495,41 @@ window.addEventListener('message',e=>handle(e.data));
     setAbsentSet(ab);
   }, [startOfTodayISO, driverId]);
 
+  // Load emergency logs
+  const fetchEmergencyLogs = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('emergency_logs')
+        .select('*')
+        .order('event_time', { ascending: false })
+        .limit(20); // Get latest 20 emergency logs
+
+      if (error) {
+        console.error('Error fetching emergency logs:', error);
+        setEmergencyLogs([]);
+        return;
+      }
+
+      setEmergencyLogs(data || []);
+    } catch (error) {
+      console.error('Error fetching emergency logs:', error);
+      setEmergencyLogs([]);
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       await fetchStudents();
       await fetchTodayEvents();
     })();
   }, [fetchStudents, fetchTodayEvents]);
+
+  // Fetch emergency logs when alerts modal is opened
+  useEffect(() => {
+    if (alertsVisible) {
+      fetchEmergencyLogs();
+    }
+  }, [alertsVisible, fetchEmergencyLogs]);
 
   // Real-time subscription for leave requests
   useEffect(() => {
@@ -996,12 +1046,6 @@ window.addEventListener('message',e=>handle(e.data));
               <Text style={styles.appTitle}>แผนที่ & รายชื่อผู้โดยสาร</Text>
               <View style={styles.titleRow}>
                 <Text style={styles.subtitle}>จัดการเส้นทางและนักเรียน</Text>
-                {bus && (
-                  <View style={styles.statusBadge}>
-                    <View style={styles.statusDot} />
-                    <Text style={styles.statusText}>ออนไลน์</Text>
-                  </View>
-                )}
               </View>
             </View>
           </View>
@@ -1264,6 +1308,67 @@ window.addEventListener('message',e=>handle(e.data));
             </View>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Emergency Alerts Modal */}
+      <Modal
+        transparent
+        visible={alertsVisible}
+        animationType="slide"
+        onRequestClose={() => setAlertsVisible(false)}
+      >
+        <View style={styles.alertsModalBackdrop}>
+          <View style={styles.alertsModalContainer}>
+            <View style={styles.alertsModalHeader}>
+              <Text style={styles.alertsModalTitle}>แจ้งเตือนฉุกเฉิน</Text>
+              <TouchableOpacity 
+                onPress={() => setAlertsVisible(false)}
+                style={styles.alertsModalCloseBtn}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.alertsModalContent}>
+              {emergencyLogs.length === 0 ? (
+                <View style={styles.alertsEmptyContainer}>
+                  <Ionicons name="checkmark-circle" size={48} color={COLORS.success} />
+                  <Text style={styles.alertsEmptyText}>ไม่มีเหตุการณ์ฉุกเฉิน</Text>
+                  <Text style={styles.alertsEmptySubtext}>ระบบทำงานปกติ</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={emergencyLogs}
+                  keyExtractor={(item) => item.event_id.toString()}
+                  renderItem={({ item }) => (
+                    <View style={styles.alertsLogItem}>
+                      <View style={styles.alertsLogHeader}>
+                        <View style={styles.alertsLogTypeContainer}>
+                          <Ionicons
+                            name={getEventTypeIconFromService(item.event_type)}
+                            size={20}
+                            color={getEventTypeColorFromService(item.event_type)}
+                          />
+                          <Text style={[styles.alertsLogType, { color: getEventTypeColorFromService(item.event_type) }]}>
+                            {getEventTypeTextFromService(item.event_type)}
+                          </Text>
+                        </View>
+                        <Text style={styles.alertsLogTime}>{formatDateTimeFromService(item.event_time)}</Text>
+                      </View>
+                      <View style={styles.alertsLogDetails}>
+                        <Text style={styles.alertsLogDetailText}>
+                          แหล่งที่มา: {getSourceText(item)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={styles.alertsListContainer}
+                />
+              )}
+            </View>
+          </View>
+        </View>
       </Modal>
 
     </SafeAreaView>
@@ -1795,6 +1900,106 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.text,
+  },
+
+  // Emergency Alerts Modal Styles
+  alertsModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  alertsModalContainer: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  alertsModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  alertsModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  alertsModalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.bg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  alertsModalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  alertsEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  alertsEmptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 16,
+  },
+  alertsEmptySubtext: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  alertsListContainer: {
+    paddingBottom: 16,
+  },
+  alertsLogItem: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  alertsLogHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  alertsLogTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  alertsLogType: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  alertsLogTime: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  alertsLogDetails: {
+    marginTop: 4,
+  },
+  alertsLogDetailText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
   },
 
 

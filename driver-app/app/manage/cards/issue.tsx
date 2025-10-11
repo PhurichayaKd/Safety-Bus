@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
+import { getAllAvailableRfidCards, AvailableRfidCard, assignRfidCard, getStudentRfidAssignment } from '../../../src/services/rfidService';
 
 type StudentLite = {
   student_id: number;
@@ -104,51 +105,17 @@ export default function IssueCardScreen() {
 
   /* -------- โหลดบัตรว่าง -------- */
   const loadAvailableCards = async () => {
-    // 1) พยายามใช้ view v_available_cards ถ้ามี
-    const tryView = await supabase
-      .from('v_available_cards')
-      .select('card_id, rfid_code')
-      .order('rfid_code', { ascending: true });
-
-    if (!tryView.error && tryView.data) {
-      setCards(tryView.data as AvailableCard[]);
-      return;
-    }
-
-    // 2) fallback: query จากตาราง (กรณีไม่มี view)
-    // ดึง card_ids ที่ถูก assign แบบ active อยู่
-    const activeRes = await supabase
-      .from('rfid_card_assignments')
-      .select('card_id')
-      .is('valid_to', null);
-
-    if (activeRes.error) {
-      // ถ้าดึงไม่ได้ ให้ปิดลิสต์ (อาจยังไม่ได้สร้างตาราง/นโยบาย)
+    try {
+      const availableCards = await getAllAvailableRfidCards();
+      setCards(availableCards.map((card) => ({
+        card_id: card.card_id,
+        rfid_code: card.rfid_code
+      })));
+    } catch (error: any) {
+      console.error('Error loading available cards:', error);
+      Alert.alert('โหลดบัตรไม่สำเร็จ', error?.message || 'เกิดข้อผิดพลาด');
       setCards([]);
-      return;
     }
-    const assignedIds = (activeRes.data || []).map((r: any) => r.card_id) as number[];
-
-    // ดึง rfid_cards ที่ไม่อยู่ใน assignedIds + is_active=true + (status='available' หรือไม่มีคอลัมน์นี้)
-    let query = supabase
-      .from('rfid_cards')
-      .select('card_id, rfid_code, is_active, status')
-      .eq('is_active', true)
-      .order('rfid_code', { ascending: true }) as any;
-
-    if (assignedIds.length > 0) {
-      query = query.not('card_id', 'in', `(${assignedIds.join(',')})`);
-    }
-
-    const res = await query;
-    if (res.error) {
-      setCards([]);
-      return;
-    }
-    const rows = (res.data || []) as any[];
-    // กรอง status ถ้ามีคอลัมน์
-    const filtered = rows.filter((r) => !r.status || r.status === 'available');
-    setCards(filtered.map((r) => ({ card_id: r.card_id, rfid_code: r.rfid_code })));
   };
 
   useEffect(() => {
@@ -157,34 +124,35 @@ export default function IssueCardScreen() {
 
   /* -------- เมื่อเลือกนักเรียน: โหลดบัตรล่าสุด -------- */
   const fetchCurrentCard = async (sid: number) => {
-    const { data, error } = await supabase
-      .from('rfid_card_assignments')
-      .select(`
-        card_id,
-        valid_from,
-        valid_to,
-        rfid:rfid_cards!inner ( card_id, rfid_code, is_active )
-      `)
-      .eq('student_id', sid)
-      .order('valid_from', { ascending: false })
-      .limit(1);
+    try {
+      const assignment = await getStudentRfidAssignment(sid);
+      
+      if (assignment) {
+        // ดึงข้อมูลบัตรจาก card_id
+        const { data: cardData, error: cardError } = await supabase
+          .from('rfid_cards')
+          .select('rfid_code, is_active')
+          .eq('card_id', assignment.card_id)
+          .single();
 
-    if (error) {
-      Alert.alert('โหลดบัตรไม่สำเร็จ', error.message);
-      setCurrent(null);
-      return;
-    }
+        if (cardError || !cardData) {
+          setCurrent(null);
+          return;
+        }
 
-    if (data && data.length > 0) {
-      const row: any = data[0];
-      setCurrent({
-        card_id: row.rfid.card_id,
-        rfid_code: row.rfid.rfid_code,
-        is_active: row.rfid.is_active,
-        valid_from: row.valid_from,
-        valid_to: row.valid_to,
-      });
-    } else {
+        setCurrent({
+          card_id: assignment.card_id,
+          rfid_code: cardData.rfid_code,
+          is_active: cardData.is_active,
+          valid_from: assignment.valid_from,
+          valid_to: assignment.valid_to ?? null,
+        });
+      } else {
+        setCurrent(null);
+      }
+    } catch (error: any) {
+      console.error('Error fetching current card:', error);
+      Alert.alert('โหลดบัตรไม่สำเร็จ', error?.message || 'เกิดข้อผิดพลาด');
       setCurrent(null);
     }
   };
@@ -213,20 +181,10 @@ export default function IssueCardScreen() {
     if (!selected || !newCard || !driverId) return;
     setSaving(true);
     try {
-      // เรียก RPC ที่ทำธุรกรรมฝั่ง DB (ปลอดภัยกว่าทำหลายคำสั่งจาก client)
-      const { data, error } = await supabase.rpc('fn_issue_card', {
-        p_student_id: selected.student_id,
-        p_new_rfid_code: newCard.rfid_code,
-        p_assigned_by: driverId,
-        p_old_card_action: reason, // 'lost' | 'damaged' | 'returned'
-      });
+      // ใช้ assignRfidCard ที่จะจัดการการแทนที่บัตรเดิมอัตโนมัติ
+      await assignRfidCard(selected.student_id, newCard.card_id, driverId);
 
-      if (error) throw error;
-      if (data !== 'ISSUED_OK') {
-        // คืนค่าข้อความอื่น ๆ จากฟังก์ชัน เช่น NEW_CARD_ALREADY_ASSIGNED
-        throw new Error(String(data || 'เกิดข้อผิดพลาด'));
-      }
-
+      // รีเฟรชข้อมูล
       await fetchCurrentCard(selected.student_id);
       await loadAvailableCards();
       setNewCard(null);

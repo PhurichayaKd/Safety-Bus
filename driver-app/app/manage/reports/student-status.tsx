@@ -14,6 +14,7 @@ import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
+import { safeGoBack } from '../../../src/utils/navigationUtils';
 
 const COLORS = {
   primary: '#007AFF',
@@ -239,7 +240,7 @@ const StudentStatusReports: React.FC = () => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => safeGoBack('/manage/reports')}>
             <Ionicons name="chevron-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
           <Text style={styles.topBarTitle}>สถานะการขึ้น-ลงรถนักเรียน</Text>
@@ -256,7 +257,7 @@ const StudentStatusReports: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => safeGoBack('/manage/reports')}>
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>สถานะการขึ้น-ลงรถนักเรียน</Text>

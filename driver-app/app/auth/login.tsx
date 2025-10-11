@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, Dimensions, Platform } from 'react-native';
 import { supabase, authWithRetry } from '../../src/services/supabaseClient';
 import { router } from 'expo-router';
+import { safeGoBack } from '../../src/utils/navigationUtils';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -80,7 +81,7 @@ export default function LoginScreen() {
       {/* Back Button */}
       <TouchableOpacity 
         style={styles.backButton} 
-        onPress={() => router.back()}
+        onPress={() => safeGoBack('/')}
         activeOpacity={0.7}
       >
         <Ionicons name="arrow-back" size={24} color={COLORS.text} />

@@ -17,7 +17,7 @@ interface EmergencyContextType {
   showEmergencyModal: boolean;
   currentEmergency: EmergencyLog | null;
   markAsRead: (eventId: number) => void;
-  handleEmergencyResponse: (eventId: number, responseType: 'CHECKED' | 'EMERGENCY', notes?: string) => Promise<void>;
+  handleEmergencyResponse: (eventId: number, responseType: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL', notes?: string) => Promise<void>;
   dismissModal: () => void;
   refreshEmergencies: () => Promise<void>;
   createEmergency: (eventData: any) => Promise<void>;
@@ -129,7 +129,7 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
   // จัดการการตอบสนองของคนขับ
   const handleEmergencyResponse = async (
     eventId: number, 
-    responseType: 'CHECKED' | 'EMERGENCY', 
+    responseType: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL', 
     notes?: string
   ) => {
     if (!driverId) return;
@@ -149,18 +149,24 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
         await sendLineNotification(emergency, responseType);
       }
 
-      // อัปเดต UI
-      setEmergencies(prev => prev.filter(e => e.event_id !== eventId));
-      setUnreadCount(prev => Math.max(0, prev - 1));
-      setShowEmergencyModal(false);
-      setCurrentEmergency(null);
+      // อัปเดต UI - สำหรับ EMERGENCY ไม่ปิด modal ทันที
+      if (responseType === 'EMERGENCY') {
+        // ไม่ปิด modal ให้รอการยืนยันสถานการณ์กลับมาปกติ
+        Alert.alert('สำเร็จ', 'ส่งสัญญาณฉุกเฉินเรียบร้อย\nกรุณายืนยันเมื่อสถานการณ์กลับมาปกติ');
+      } else {
+        // สำหรับ CHECKED และ CONFIRMED_NORMAL ให้ปิด modal
+        setEmergencies(prev => prev.filter(e => e.event_id !== eventId));
+        setUnreadCount(prev => Math.max(0, prev - 1));
+        setShowEmergencyModal(false);
+        setCurrentEmergency(null);
 
-      // แสดงข้อความยืนยัน
-      const message = responseType === 'CHECKED' 
-        ? 'บันทึกการตรวจสอบเรียบร้อย' 
-        : 'ส่งสัญญาณฉุกเฉินเรียบร้อย';
-      
-      Alert.alert('สำเร็จ', message);
+        // แสดงข้อความยืนยัน
+        const message = responseType === 'CHECKED' 
+          ? 'บันทึกการตรวจสอบเรียบร้อย' 
+          : 'ยืนยันสถานการณ์กลับมาปกติเรียบร้อย';
+        
+        Alert.alert('สำเร็จ', message);
+      }
 
     } catch (error) {
       console.error('Error handling emergency response:', error);

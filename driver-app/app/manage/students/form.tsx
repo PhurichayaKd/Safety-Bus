@@ -17,6 +17,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams, Href } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
 import RfidCardSelector from '../../components/RfidCardSelector';
+import { safeGoBack } from '../../../src/utils/navigationUtils';
 
 const COLORS = {
   // Background Colors
@@ -806,7 +807,7 @@ export default function StudentFormScreen() {
       }
 
       Alert.alert('สำเร็จ', isEdit ? 'บันทึกการแก้ไขแล้ว' : 'เพิ่มนักเรียนแล้ว', [
-        { text: 'ตกลง', onPress: () => { clearDraft(); router.back(); } },
+        { text: 'ตกลง', onPress: () => { clearDraft(); safeGoBack('/manage/students'); } },
       ]);
     } catch (e: any) {
       Alert.alert('บันทึกไม่สำเร็จ', e?.message ?? 'เกิดข้อผิดพลาด');
@@ -834,7 +835,7 @@ export default function StudentFormScreen() {
                   .from('students').update({ status: 'inactive' }).eq('student_id', sid);
                 if (e2) throw e2;
                 Alert.alert('เปลี่ยนสถานะแล้ว', 'มีประวัติการใช้งาน จึงเปลี่ยนเป็นไม่ใช้งานแทน', [
-                  { text: 'ตกลง', onPress: () => { clearDraft(); router.back(); } },
+                  { text: 'ตกลง', onPress: () => { clearDraft(); safeGoBack('/manage/students'); } },
                 ]);
               } else {
                 throw error;
@@ -842,7 +843,7 @@ export default function StudentFormScreen() {
             } else {
 
               Alert.alert('สำเร็จ', 'ลบข้อมูลแล้ว', [
-                { text: 'ตกลง', onPress: () => { clearDraft(); router.back(); } },
+                { text: 'ตกลง', onPress: () => { clearDraft(); safeGoBack('/manage/students'); } },
               ]);
             }
           } catch (e: any) {
@@ -878,7 +879,7 @@ export default function StudentFormScreen() {
     <View style={styles.screen}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => { clearDraft(); router.back(); }} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => { clearDraft(); safeGoBack('/manage/students'); }} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>{isEdit ? 'แก้ไขนักเรียน' : 'เพิ่มนักเรียน'}</Text>

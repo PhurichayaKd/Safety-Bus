@@ -2,20 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 
 // Mock data for testing
 const MOCK_STUDENTS = {
-    '100006': {
-        student_id: '100006',
-        student_name: 'กฤษฎา',
-        grade: 'ม.6/1'
-    },
-    '100007': {
-        student_id: '100007', 
-        student_name: 'สมชาย',
-        grade: 'ม.5/2'
-    },
-    '100011': {
-        student_id: '100011',
-        student_name: 'ก ศรีสุข',
-        grade: 'ป.4/5'
+    'test-user-id': {
+        student_id: 100006,
+        student_name: 'กฤษฎา ทดสอบ',
+        grade: 'ม.6/1',
+        student_phone: '0812345678'
     }
 };
 
@@ -39,63 +30,65 @@ async function getStudentByLineId(lineUserId) {
         // Handle test mode
         if (lineUserId === 'test-user-id') {
             console.log('🧪 Test mode detected - returning mock data');
+            const mockData = MOCK_STUDENTS[lineUserId];
             return {
-                id: 'TEST001',
-                name: 'นักเรียนทดสอบ',
-                class: 'ม.1/1',
+                id: mockData.student_id,
+                name: mockData.student_name,
+                class: mockData.grade,
+                phone: mockData.student_phone,
                 line_user_id: lineUserId
             };
         }
         
         const supabase = createSupabaseClient();
         
-        // ขั้นตอนที่ 1: ตรวจสอบการเชื่อมโยงจากตาราง parent_line_links
-        const { data: parentLink, error: parentError } = await supabase
-            .from('parent_line_links')
-            .select('parent_id')
+        // ขั้นตอนที่ 1: ตรวจสอบการเชื่อมโยงจากตาราง student_line_links
+        const { data: studentLink, error: linkError } = await supabase
+            .from('student_line_links')
+            .select(`
+                student_id,
+                students (
+                    student_id,
+                    student_name,
+                    grade,
+                    student_phone,
+                    is_active
+                )
+            `)
             .eq('line_user_id', lineUserId)
             .eq('active', true)
-            .maybeSingle(); // ใช้ maybeSingle แทน single เพื่อไม่ให้ error เมื่อไม่พบข้อมูล
+            .maybeSingle();
 
-        if (parentError) {
-            console.error('Error finding parent link:', parentError);
-            throw parentError;
+        if (linkError) {
+            console.error('Error finding student link:', linkError);
+            throw linkError;
         }
 
-        if (!parentLink) {
-            console.log('No parent link found for LINE ID:', lineUserId);
+        if (!studentLink || !studentLink.students) {
+            console.log('No student link found for LINE ID:', lineUserId);
             return null;
         }
 
-        console.log('Found parent_id:', parentLink.parent_id);
+        const student = studentLink.students;
 
-        // ขั้นตอนที่ 2: หาข้อมูลนักเรียนจาก students table
-        const { data: student, error: studentError } = await supabase
-            .from('students')
-            .select('student_id, student_name, grade')
-            .eq('parent_id', parentLink.parent_id)
-            .maybeSingle(); // ใช้ maybeSingle แทน single
-
-        if (studentError) {
-            console.error('Error finding student:', studentError);
-            throw studentError;
-        }
-
-        if (!student) {
-            console.log('No student found for parent_id:', parentLink.parent_id);
+        // Check if student is active
+        if (!student.is_active) {
+            console.log('Student account is inactive:', student.student_id);
             return null;
         }
 
         console.log('Found student data:', {
             student_id: student.student_id,
             student_name: student.student_name,
-            grade: student.grade
+            grade: student.grade,
+            student_phone: student.student_phone
         });
 
         return {
             id: student.student_id,
             name: student.student_name,
             class: student.grade || 'ไม่ระบุ',
+            phone: student.student_phone || '',
             line_user_id: lineUserId
         };
 

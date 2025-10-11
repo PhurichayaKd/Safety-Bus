@@ -3,133 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Safety Bus - ฟอร์มแจ้งลาหยุด</title>
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <title>ฟอร์มแจ้งลา - ระบบรถโรงเรียน</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
-        }
-
-        .container {
+        .leave-form-container {
             max-width: 500px;
-            margin: 0 auto;
+            margin: 20px auto;
             padding: 20px;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .header {
             background: white;
             border-radius: 15px;
-            padding: 25px;
-            text-align: center;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-
-        .header h1 {
-            color: #667eea;
-            font-size: 24px;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-
-        .header p {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .form-container {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-            flex: 1;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         }
 
         .student-info {
-            background: #f8f9ff;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-left: 4px solid #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            text-align: center;
         }
 
-        .student-info h3 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 16px;
+        .student-info h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.5em;
         }
 
-        .info-row {
-            display: flex;
-            justify-content: space-between;
+        .student-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .student-detail {
+            background: rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .student-detail label {
+            display: block;
+            font-size: 0.9em;
+            opacity: 0.9;
             margin-bottom: 5px;
-            font-size: 14px;
         }
 
-        .info-label {
-            font-weight: 600;
-            color: #555;
+        .student-detail span {
+            font-weight: bold;
+            font-size: 1.1em;
         }
 
-        .info-value {
+        .form-section {
+            margin-bottom: 25px;
+        }
+
+        .form-section h3 {
             color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .form-group {
-            margin-bottom: 20px;
+        .date-selection {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
         }
 
-        .form-group label {
+        .date-input-group {
+            margin-bottom: 15px;
+        }
+
+        .date-input-group label {
             display: block;
             margin-bottom: 8px;
-            font-weight: 600;
-            color: #555;
-            font-size: 14px;
+            font-weight: 500;
+            color: #495057;
         }
 
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
+        .date-input {
             width: 100%;
             padding: 12px;
-            border: 2px solid #e1e5e9;
+            border: 2px solid #dee2e6;
             border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s ease;
+            font-size: 16px;
+            transition: border-color 0.3s;
         }
 
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
+        .date-input:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        .form-group textarea {
-            resize: vertical;
-            min-height: 80px;
+        .add-date-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
         }
 
-        .date-inputs {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+        .add-date-btn:hover {
+            background: #218838;
+        }
+
+        .add-date-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .selected-dates {
+            margin-top: 20px;
+        }
+
+        .date-tag {
+            display: inline-flex;
+            align-items: center;
+            background: #667eea;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            margin: 5px;
+            font-size: 14px;
+            gap: 8px;
+        }
+
+        .remove-date {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+        }
+
+        .remove-date:hover {
+            background: rgba(255,255,255,0.2);
         }
 
         .submit-btn {
@@ -138,21 +168,21 @@
             color: white;
             border: none;
             padding: 15px;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
             cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            margin-top: 10px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
         }
 
         .submit-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
         }
 
         .submit-btn:disabled {
-            background: #ccc;
+            background: #6c757d;
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
@@ -164,18 +194,10 @@
             padding: 20px;
         }
 
-        .loading.show {
-            display: block;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
+        .loading i {
+            font-size: 2em;
+            color: #667eea;
             animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
         }
 
         @keyframes spin {
@@ -183,47 +205,44 @@
             100% { transform: rotate(360deg); }
         }
 
-        .success-message,
         .error-message {
-            padding: 15px;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
             border-radius: 8px;
-            margin-bottom: 20px;
-            font-weight: 500;
-            display: none;
+            margin: 15px 0;
+            border: 1px solid #f5c6cb;
         }
 
         .success-message {
             background: #d4edda;
             color: #155724;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 15px 0;
             border: 1px solid #c3e6cb;
         }
 
-        .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+        .info-box {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #bee5eb;
         }
 
-        .success-message.show,
-        .error-message.show {
-            display: block;
+        .info-box i {
+            margin-right: 8px;
         }
 
-        .required {
-            color: #e74c3c;
-        }
-
-        @media (max-width: 480px) {
-            .container {
-                padding: 10px;
+        @media (max-width: 600px) {
+            .leave-form-container {
+                margin: 10px;
+                padding: 15px;
             }
-            
-            .header,
-            .form-container {
-                padding: 20px;
-            }
-            
-            .date-inputs {
+
+            .student-details {
                 grid-template-columns: 1fr;
             }
         }
@@ -231,274 +250,70 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>📝 ฟอร์มแจ้งลาหยุด</h1>
-            <p>ระบบ Safety Bus - แจ้งลาหยุดเรียน</p>
-        </div>
-
-        <div class="form-container">
-            <div class="success-message" id="successMessage"></div>
-            <div class="error-message" id="errorMessage"></div>
-
-            <div class="student-info">
-                <h3>📋 ข้อมูลนักเรียน</h3>
-                <div class="info-row">
-                    <span class="info-label">ชื่อ:</span>
-                    <span class="info-value" id="studentName">-</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">รหัสนักเรียน:</span>
-                    <span class="info-value" id="studentId">-</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">ชั้น:</span>
-                    <span class="info-value" id="studentClass">-</span>
-                </div>
+        <div class="leave-form-container">
+            <div class="loading" id="loading">
+                <i class="fas fa-spinner"></i>
+                <p>กำลังโหลดข้อมูล...</p>
             </div>
 
-            <form id="leaveForm">
-                <div class="form-group">
-                    <label for="leaveType">ประเภทการลา <span class="required">*</span></label>
-                    <select id="leaveType" name="leaveType" required>
-                        <option value="">เลือกประเภทการลา</option>
-                        <option value="sick">ลาป่วย</option>
-                        <option value="personal">ลากิจ</option>
-                        <option value="emergency">ลาฉุกเฉิน</option>
-                        <option value="other">อื่นๆ</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>วันที่ลา <span class="required">*</span></label>
-                    <div class="date-inputs">
-                        <div>
-                            <label for="startDate" style="font-size: 12px; margin-bottom: 5px;">วันที่เริ่มต้น</label>
-                            <input type="date" id="startDate" name="startDate" required>
+            <div id="form-content" style="display: none;">
+                <div class="student-info">
+                    <h2><i class="fas fa-user-graduate"></i> ข้อมูลนักเรียน</h2>
+                    <div class="student-details">
+                        <div class="student-detail">
+                            <label>ชื่อ-นามสกุล</label>
+                            <span id="student-name">-</span>
                         </div>
-                        <div>
-                            <label for="endDate" style="font-size: 12px; margin-bottom: 5px;">วันที่สิ้นสุด</label>
-                            <input type="date" id="endDate" name="endDate" required>
+                        <div class="student-detail">
+                            <label>รหัสนักเรียน</label>
+                            <span id="student-id">-</span>
+                        </div>
+                        <div class="student-detail">
+                            <label>ชั้นเรียน</label>
+                            <span id="student-grade">-</span>
+                        </div>
+                        <div class="student-detail">
+                            <label>เบอร์โทร</label>
+                            <span id="student-phone">-</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="reason">เหตุผลการลา <span class="required">*</span></label>
-                    <textarea id="reason" name="reason" placeholder="กรุณาระบุเหตุผลการลา..." required></textarea>
+                <div class="info-box">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>หมายเหตุ:</strong> สามารถเลือกวันลาได้สูงสุด 3 วัน และสามารถเลือกได้ตั้งแต่วันปัจจุบันเป็นต้นไป
                 </div>
 
-                <div class="form-group">
-                    <label for="contactNumber">เบอร์โทรติดต่อ</label>
-                    <input type="tel" id="contactNumber" name="contactNumber" placeholder="เบอร์โทรติดต่อ (ไม่บังคับ)">
-                </div>
+                <form id="leave-form">
+                    <div class="form-section">
+                        <h3><i class="fas fa-calendar-alt"></i> เลือกวันที่ลา</h3>
+                        <div class="date-selection">
+                            <div class="date-input-group">
+                                <label for="leave-date">เลือกวันที่:</label>
+                                <input type="date" id="leave-date" class="date-input" min="">
+                                <button type="button" class="add-date-btn" id="add-date-btn">
+                                    <i class="fas fa-plus"></i> เพิ่มวันที่
+                                </button>
+                            </div>
+                            
+                            <div class="selected-dates" id="selected-dates">
+                                <p><strong>วันที่เลือก:</strong></p>
+                                <div id="date-tags"></div>
+                            </div>
+                        </div>
+                    </div>
 
-                <button type="submit" class="submit-btn" id="submitBtn">
-                    📤 ส่งใบลา
-                </button>
-            </form>
-
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <div>กำลังส่งใบลา...</div>
+                    <button type="submit" class="submit-btn" id="submit-btn" disabled>
+                        <i class="fas fa-paper-plane"></i> ยืนยันส่งคำขอลา
+                    </button>
+                </form>
             </div>
+
+            <div id="error-container"></div>
+            <div id="success-container"></div>
         </div>
     </div>
 
-    <script>
-        let liffInitialized = false;
-        let studentData = {};
-
-        // Initialize LIFF
-        async function initializeLiff() {
-            try {
-                await liff.init({ liffId: '2008065330-AXGy9xda' });
-                liffInitialized = true;
-                console.log('LIFF initialized successfully');
-                
-                // Check if user is logged in
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                    return;
-                }
-                
-                // Get user profile
-                const profile = await liff.getProfile();
-                console.log('User profile:', profile);
-                
-            } catch (error) {
-                console.error('LIFF initialization failed:', error);
-                showError('ไม่สามารถเชื่อมต่อกับ LINE ได้');
-            }
-        }
-
-        // Get URL parameters
-        function getUrlParams() {
-            const urlParams = new URLSearchParams(window.location.search);
-            return {
-                studentId: urlParams.get('studentId'),
-                studentName: urlParams.get('studentName'),
-                class: urlParams.get('class')
-            };
-        }
-
-        // Load student data
-        function loadStudentData() {
-            const params = getUrlParams();
-            
-            if (params.studentId && params.studentName) {
-                studentData = {
-                    studentId: params.studentId,
-                    studentName: decodeURIComponent(params.studentName),
-                    class: params.class ? decodeURIComponent(params.class) : 'ไม่ระบุ'
-                };
-                
-                // Update UI
-                document.getElementById('studentId').textContent = studentData.studentId;
-                document.getElementById('studentName').textContent = studentData.studentName;
-                document.getElementById('studentClass').textContent = studentData.class;
-            } else {
-                showError('ไม่พบข้อมูลนักเรียน กรุณาเข้าใช้งานผ่าน LINE Bot');
-            }
-        }
-
-        // Set default dates
-        function setDefaultDates() {
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
-            
-            document.getElementById('startDate').value = todayStr;
-            document.getElementById('endDate').value = todayStr;
-            
-            // Set minimum date to today
-            document.getElementById('startDate').min = todayStr;
-            document.getElementById('endDate').min = todayStr;
-        }
-
-        // Handle date changes
-        function setupDateHandlers() {
-            const startDate = document.getElementById('startDate');
-            const endDate = document.getElementById('endDate');
-            
-            startDate.addEventListener('change', function() {
-                endDate.min = this.value;
-                if (endDate.value < this.value) {
-                    endDate.value = this.value;
-                }
-            });
-        }
-
-        // Show success message
-        function showSuccess(message) {
-            const successEl = document.getElementById('successMessage');
-            successEl.textContent = message;
-            successEl.classList.add('show');
-            
-            // Hide error message
-            document.getElementById('errorMessage').classList.remove('show');
-        }
-
-        // Show error message
-        function showError(message) {
-            const errorEl = document.getElementById('errorMessage');
-            errorEl.textContent = message;
-            errorEl.classList.add('show');
-            
-            // Hide success message
-            document.getElementById('successMessage').classList.remove('show');
-        }
-
-        // Show/hide loading
-        function showLoading(show) {
-            const loading = document.getElementById('loading');
-            const submitBtn = document.getElementById('submitBtn');
-            
-            if (show) {
-                loading.classList.add('show');
-                submitBtn.disabled = true;
-            } else {
-                loading.classList.remove('show');
-                submitBtn.disabled = false;
-            }
-        }
-
-        // Submit leave form
-        async function submitLeaveForm(formData) {
-            try {
-                showLoading(true);
-                
-                const response = await fetch('/api/submit-leave-request', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        studentId: studentData.studentId,
-                        studentName: studentData.studentName,
-                        class: studentData.class,
-                        leaveType: formData.leaveType,
-                        startDate: formData.startDate,
-                        endDate: formData.endDate,
-                        reason: formData.reason,
-                        contactNumber: formData.contactNumber,
-                        submittedAt: new Date().toISOString()
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    showSuccess('ส่งใบลาเรียบร้อยแล้ว! ระบบจะแจ้งให้คนขับทราบ');
-                    
-                    // Reset form
-                    document.getElementById('leaveForm').reset();
-                    setDefaultDates();
-                    
-                    // Close LIFF after 3 seconds
-                    setTimeout(() => {
-                        if (liffInitialized) {
-                            liff.closeWindow();
-                        }
-                    }, 3000);
-                } else {
-                    throw new Error(result.error || 'เกิดข้อผิดพลาดในการส่งใบลา');
-                }
-
-            } catch (error) {
-                console.error('Error submitting leave form:', error);
-                showError('เกิดข้อผิดพลาด: ' + error.message);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Handle form submission
-        document.getElementById('leaveForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            if (!studentData.studentId) {
-                showError('ไม่พบข้อมูลนักเรียน กรุณาเข้าใช้งานผ่าน LINE Bot');
-                return;
-            }
-            
-            const formData = new FormData(this);
-            const data = Object.fromEntries(formData);
-            
-            // Validate dates
-            if (new Date(data.endDate) < new Date(data.startDate)) {
-                showError('วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มต้น');
-                return;
-            }
-            
-            submitLeaveForm(data);
-        });
-
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            loadStudentData();
-            setDefaultDates();
-            setupDateHandlers();
-            initializeLiff();
-        });
-    </script>
+    <script src="js/leave-form.js"></script>
 </body>
 </html>

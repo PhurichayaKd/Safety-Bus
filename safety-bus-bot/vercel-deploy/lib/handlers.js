@@ -1,9 +1,9 @@
-import { sendLineMessage, replyLineMessage } from './line.js';
+import { sendLineMessage, replyLineMessage, getUserProfile } from './line.js';
 import { supabase } from './db.js';
 import { sendMainMenu } from './menu.js';
 import { getStudentByLineId } from './student-data.js';
 import { config } from './config.js';
-import { checkLineUserIdExists, matchLineIds } from './line-id-matcher.js';
+import { checkLineUserIdExists, matchLineIds, checkAndAutoMatchLineId } from './line-id-matcher.js';
 
 // Store user form states (in production, use Redis or database)
 const userFormStates = new Map();
@@ -56,9 +56,19 @@ export async function handleTextMessage(event) {
 
   console.log(`📝 Text message from ${userId}: ${text}`);
 
-  // ตรวจสอบการผูกบัญชี: ใช้ฟังก์ชันใหม่
-  const linkStatus = await checkLineUserIdExists(userId);
+  // ตรวจสอบการผูกบัญชีและพยายามจับคู่อัตโนมัติ
+  const linkStatus = await checkAndAutoMatchLineId(userId);
   let isLinked = linkStatus.exists;
+  
+  // ถ้าจับคู่อัตโนมัติสำเร็จ ให้แจ้งผู้ใช้
+  if (linkStatus.autoMatched) {
+    await replyLineMessage(event.replyToken, {
+      type: 'text',
+      text: `✅ ${linkStatus.message}\n\nยินดีต้อนรับสู่ระบบ Safety Bus! 🚌\n\nตอนนี้คุณสามารถใช้งานระบบได้แล้ว\nกดปุ่มเมนูด้านล่างเพื่อเริ่มใช้งาน`
+    });
+    await sendMainMenu(userId);
+    return;
+  }
 
   // ถ้ายังไม่ผูกบัญชี แต่ข้อความไม่ใช่รหัสนักเรียนหรือรหัสเชื่อมโยง
   // ให้ลองจับคู่ LINE Display ID กับ LINE User ID
@@ -555,8 +565,8 @@ export async function handleStudentCodeLinking(event, studentCode) {
   const userId = event.source.userId;
 
   try {
-    // ตรวจสอบว่าผูกบัญชีแล้วหรือไม่
-    const linkStatus = await checkLineUserIdExists(userId);
+    // ตรวจสอบว่าผูกบัญชีแล้วหรือไม่ และพยายามจับคู่อัตโนมัติ
+    const linkStatus = await checkAndAutoMatchLineId(userId);
     if (linkStatus.exists) {
       await replyLineMessage(event.replyToken, {
         type: 'text',
@@ -645,12 +655,26 @@ async function validateAndUpdateLineId(userId, studentId, parentId) {
       };
     }
 
+    // ดึง Display ID ของผู้ใช้จาก LINE API
+    let userDisplayName;
+    try {
+      const userProfile = await getUserProfile(userId);
+      userDisplayName = userProfile.displayName;
+      console.log(`📋 User Display Name: ${userDisplayName}`);
+    } catch (error) {
+      console.error('Error getting user profile:', error);
+      return {
+        isValid: false,
+        message: 'ไม่สามารถดึงข้อมูลโปรไฟล์ LINE ได้ กรุณาลองใหม่อีกครั้ง'
+      };
+    }
+
     // ขั้นตอนที่ 1: ตรวจสอบใน student_line_links ด้วย line_display_id ก่อน
     const { data: studentLineIdData, error: studentLineIdError } = await supabase
       .from('student_line_links')
       .select('*')
       .eq('student_id', studentId)
-      .eq('line_display_id', userId)
+      .eq('line_display_id', userDisplayName)
       .eq('active', true)
       .single();
 
@@ -663,7 +687,7 @@ async function validateAndUpdateLineId(userId, studentId, parentId) {
           linked_at: new Date().toISOString()
         })
         .eq('student_id', studentId)
-        .eq('line_display_id', userId)
+        .eq('line_display_id', userDisplayName)
         .eq('active', true);
 
       if (updateError) {
@@ -674,7 +698,7 @@ async function validateAndUpdateLineId(userId, studentId, parentId) {
         };
       }
 
-      return { isValid: true, message: 'ตรวจสอบและอัปเดต LINE ID สำเร็จ (นักเรียน)' };
+      return { isValid: true, message: `✅ ยืนยันตัวตนสำเร็จ!\nDisplay Name: ${userDisplayName}\nสถานะ: นักเรียน` };
     }
 
     // ขั้นตอนที่ 2: ตรวจสอบใน parent_line_links ด้วย line_display_id
@@ -682,7 +706,7 @@ async function validateAndUpdateLineId(userId, studentId, parentId) {
       .from('parent_line_links')
       .select('*')
       .eq('parent_id', parentId)
-      .eq('line_display_id', userId)
+      .eq('line_display_id', userDisplayName)
       .eq('active', true)
       .single();
 
@@ -695,7 +719,7 @@ async function validateAndUpdateLineId(userId, studentId, parentId) {
           linked_at: new Date().toISOString()
         })
         .eq('parent_id', parentId)
-        .eq('line_display_id', userId)
+        .eq('line_display_id', userDisplayName)
         .eq('active', true);
 
       if (updateError) {
@@ -706,7 +730,7 @@ async function validateAndUpdateLineId(userId, studentId, parentId) {
         };
       }
 
-      return { isValid: true, message: 'ตรวจสอบและอัปเดต LINE ID สำเร็จ (ผู้ปกครอง)' };
+      return { isValid: true, message: `✅ ยืนยันตัวตนสำเร็จ!\nDisplay Name: ${userDisplayName}\nสถานะ: ผู้ปกครอง` };
     }
 
     // ขั้นตอนที่ 3: ถ้าไม่พบ line_display_id ให้ตรวจสอบ line_user_id ที่มีอยู่แล้ว
@@ -793,7 +817,7 @@ async function validateAndUpdateLineId(userId, studentId, parentId) {
     // ถ้าไม่พบข้อมูลในทั้งสองตาราง
     return {
       isValid: false,
-      message: 'ไม่พบข้อมูล LINE ID ในระบบ\nกรุณาติดต่อคนขับเพื่อเพิ่มข้อมูลของคุณในระบบก่อน'
+      message: `❌ ไม่พบข้อมูล Display Name "${userDisplayName}" ในระบบ\n\nกรุณาติดต่อคนขับเพื่อเพิ่มข้อมูลของคุณในระบบก่อน\nหรือตรวจสอบว่าได้สแกน QR Code ที่ถูกต้องแล้ว`
     };
 
   } catch (error) {

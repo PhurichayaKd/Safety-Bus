@@ -174,4 +174,35 @@ export async function setDefaultRichMenu(richMenuId) {
   }
 }
 
+/**
+ * ดึงข้อมูลโปรไฟล์ของผู้ใช้จาก LINE API
+ * @param {string} userId - LINE User ID
+ * @returns {Object} ข้อมูลโปรไฟล์ผู้ใช้
+ */
+export async function getUserProfile(userId) {
+  try {
+    console.log(`🔄 Getting user profile for: ${userId}`);
+    
+    const profile = await lineClient.getProfile(userId);
+    
+    console.log(`✅ User profile retrieved:`, {
+      userId: profile.userId,
+      displayName: profile.displayName,
+      pictureUrl: profile.pictureUrl,
+      statusMessage: profile.statusMessage
+    });
+    
+    return profile;
+  } catch (error) {
+    console.error(`❌ Error getting user profile for ${userId}:`, error);
+    
+    // Log error details สำหรับ debugging
+    if (error.response) {
+      console.error('LINE API Response:', error.response.status, error.response.data);
+    }
+    
+    throw error;
+  }
+}
+
 export { lineClient };

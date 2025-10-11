@@ -201,6 +201,129 @@ export async function checkLineUserIdExists(lineUserId) {
 }
 
 /**
+ * ตรวจสอบและพยายามจับคู่ LINE User ID อัตโนมัติ
+ * สำหรับผู้ใช้ที่มี line_display_id แต่ไม่มี line_user_id
+ * @param {string} lineUserId - LINE User ID จริง
+ * @returns {Object} ผลการตรวจสอบและจับคู่
+ */
+export async function checkAndAutoMatchLineId(lineUserId) {
+  try {
+    // ตรวจสอบการเชื่อมโยงปกติก่อน
+    const existingLink = await checkLineUserIdExists(lineUserId);
+    if (existingLink.exists) {
+      return existingLink;
+    }
+
+    console.log(`🔍 ไม่พบ LINE User ID: ${lineUserId} ในระบบ, พยายามจับคู่อัตโนมัติ...`);
+
+    // ค้นหาใน student_line_links ที่มี line_display_id แต่ไม่มี line_user_id
+    const { data: incompleteStudents, error: studentError } = await supabase
+      .from('student_line_links')
+      .select(`
+        *,
+        students (
+          student_name,
+          student_code,
+          class
+        )
+      `)
+      .eq('active', true)
+      .not('line_display_id', 'is', null)
+      .is('line_user_id', null);
+
+    if (!studentError && incompleteStudents && incompleteStudents.length > 0) {
+      console.log(`📊 พบ ${incompleteStudents.length} รายการ student ที่ยังไม่ได้จับคู่`);
+      
+      // ถ้ามีเพียงรายการเดียว ให้จับคู่อัตโนมัติ
+      if (incompleteStudents.length === 1) {
+        const student = incompleteStudents[0];
+        console.log(`🔄 จับคู่อัตโนมัติ: Student ID ${student.student_id} กับ LINE User ID ${lineUserId}`);
+        
+        const { error: updateError } = await supabase
+          .from('student_line_links')
+          .update({
+            line_user_id: lineUserId,
+            linked_at: new Date().toISOString()
+          })
+          .eq('id', student.id);
+
+        if (!updateError) {
+          return {
+            exists: true,
+            userType: 'student',
+            userData: student.students,
+            autoMatched: true,
+            message: `จับคู่อัตโนมัติสำเร็จ - นักเรียน: ${student.students?.student_name}`
+          };
+        }
+      }
+    }
+
+    // ค้นหาใน parent_line_links ที่มี line_display_id แต่ไม่มี line_user_id
+    const { data: incompleteParents, error: parentError } = await supabase
+      .from('parent_line_links')
+      .select(`
+        *,
+        parents (
+          parent_name,
+          phone_number
+        ),
+        students (
+          student_name,
+          student_code,
+          class
+        )
+      `)
+      .eq('active', true)
+      .not('line_display_id', 'is', null)
+      .is('line_user_id', null);
+
+    if (!parentError && incompleteParents && incompleteParents.length > 0) {
+      console.log(`📊 พบ ${incompleteParents.length} รายการ parent ที่ยังไม่ได้จับคู่`);
+      
+      // ถ้ามีเพียงรายการเดียว ให้จับคู่อัตโนมัติ
+      if (incompleteParents.length === 1) {
+        const parent = incompleteParents[0];
+        console.log(`🔄 จับคู่อัตโนมัติ: Parent ID ${parent.parent_id} กับ LINE User ID ${lineUserId}`);
+        
+        const { error: updateError } = await supabase
+          .from('parent_line_links')
+          .update({
+            line_user_id: lineUserId,
+            linked_at: new Date().toISOString()
+          })
+          .eq('id', parent.id);
+
+        if (!updateError) {
+          return {
+            exists: true,
+            userType: 'parent',
+            userData: {
+              parent: parent.parents,
+              student: parent.students
+            },
+            autoMatched: true,
+            message: `จับคู่อัตโนมัติสำเร็จ - ผู้ปกครอง: ${parent.parents?.parent_name}`
+          };
+        }
+      }
+    }
+
+    return {
+      exists: false,
+      message: 'ไม่พบข้อมูล LINE User ID ในระบบ และไม่สามารถจับคู่อัตโนมัติได้'
+    };
+
+  } catch (error) {
+    console.error('Error in checkAndAutoMatchLineId:', error);
+    return {
+      exists: false,
+      message: 'เกิดข้อผิดพลาดในการตรวจสอบและจับคู่ LINE User ID'
+    };
+  }
+}
+
+/**
  * ดึงข้อมูลผู้ใช้จาก LINE Display ID
  * @param {string} lineDisplayId - LINE Display ID ที่ผู้ใช้ตั้งเอง
  * @returns {Object} ข้อมูลผู้ใช้

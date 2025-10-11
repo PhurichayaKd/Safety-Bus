@@ -85,11 +85,53 @@ function validateLineSignature(body, signature, secret) {
   }
 }
 
-// Process events asynchronously
-async function processEventsAsync(events) {
-  for (const event of events) {
-    console.log('📨 Processing event:', event.type);
+// Process events with immediate response
+async function processEventsImmediate(events) {
+  // Process only the first event immediately for faster response
+  const event = events[0];
+  if (!event) return;
 
+  console.log('📨 Processing event:', event.type);
+
+  try {
+    switch (event.type) {
+      case 'message':
+        if (event.message.type === 'text') {
+          await handleTextMessage(event);
+        }
+        break;
+
+      case 'postback':
+        await handlePostback(event);
+        break;
+
+      case 'follow':
+        await handleFollow(event);
+        break;
+
+      case 'unfollow':
+        console.log(`User ${event.source.userId} unfollowed the bot`);
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+  } catch (eventError) {
+    console.error(`Error handling event ${event.type}:`, eventError);
+  }
+
+  // Process remaining events asynchronously if any
+  if (events.length > 1) {
+    setImmediate(() => {
+      processRemainingEvents(events.slice(1));
+    });
+  }
+}
+
+// Process remaining events in background
+async function processRemainingEvents(events) {
+  for (const event of events) {
+    console.log('📨 Processing remaining event:', event.type);
     try {
       switch (event.type) {
         case 'message':
@@ -97,25 +139,20 @@ async function processEventsAsync(events) {
             await handleTextMessage(event);
           }
           break;
-
         case 'postback':
           await handlePostback(event);
           break;
-
         case 'follow':
           await handleFollow(event);
           break;
-
         case 'unfollow':
           console.log(`User ${event.source.userId} unfollowed the bot`);
           break;
-
         default:
           console.log(`Unhandled event type: ${event.type}`);
       }
     } catch (eventError) {
-      console.error(`Error handling event ${event.type}:`, eventError);
-      // Continue processing other events even if one fails
+      console.error(`Error handling remaining event ${event.type}:`, eventError);
     }
   }
 }
@@ -187,14 +224,13 @@ export default async function handler(req, res) {
     const body = JSON.parse(bodyString);
     const { events } = body;
 
-    // Send response immediately to prevent timeout
-    res.status(200).json({ message: 'OK' });
-
-    // Process events asynchronously after sending response
+    // Process first event immediately for faster response
     if (events && events.length > 0) {
-      // Don't await this - let it run in background
-      processEventsAsync(events);
+      await processEventsImmediate(events);
     }
+
+    // Send response after processing first event
+    res.status(200).json({ message: 'OK' });
 
     return;
   } catch (error) {

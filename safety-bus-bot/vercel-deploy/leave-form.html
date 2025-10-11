@@ -3,57 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ฟอร์มแจ้งลา - ระบบรถโรงเรียน</title>
-    <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>ฟอร์มแจ้งลา - Safety Bus</title>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        .leave-form-container {
-            max-width: 500px;
-            margin: 20px auto;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
             background: white;
-            border-radius: 15px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px 20px;
         }
 
         .student-info {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #f8f9fa;
+            border-radius: 15px;
             padding: 20px;
-            border-radius: 12px;
             margin-bottom: 25px;
-            text-align: center;
+            border-left: 4px solid #4facfe;
         }
 
-        .student-info h2 {
-            margin: 0 0 10px 0;
-            font-size: 1.5em;
+        .student-info h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
         }
 
-        .student-details {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 15px;
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
         }
 
-        .student-detail {
-            background: rgba(255,255,255,0.2);
-            padding: 10px;
-            border-radius: 8px;
-            text-align: center;
+        .info-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
         }
 
-        .student-detail label {
-            display: block;
-            font-size: 0.9em;
-            opacity: 0.9;
-            margin-bottom: 5px;
+        .info-label {
+            font-weight: 600;
+            color: #666;
         }
 
-        .student-detail span {
-            font-weight: bold;
-            font-size: 1.1em;
+        .info-value {
+            color: #333;
+            font-weight: 500;
         }
 
         .form-section {
@@ -63,103 +93,89 @@
         .form-section h3 {
             color: #333;
             margin-bottom: 15px;
-            font-size: 1.2em;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            font-size: 18px;
         }
 
-        .date-selection {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 12px;
-            border: 2px solid #e9ecef;
+        .date-container {
+            margin-bottom: 20px;
         }
 
         .date-input-group {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
             margin-bottom: 15px;
+            border: 2px solid #e9ecef;
+            transition: border-color 0.3s ease;
+            position: relative;
+        }
+
+        .date-input-group:hover {
+            border-color: #4facfe;
         }
 
         .date-input-group label {
             display: block;
             margin-bottom: 8px;
-            font-weight: 500;
-            color: #495057;
+            font-weight: 600;
+            color: #333;
         }
 
-        .date-input {
-            width: 100%;
+        .date-input-group input[type="date"] {
+            width: calc(100% - 60px);
             padding: 12px;
-            border: 2px solid #dee2e6;
+            border: 1px solid #ddd;
             border-radius: 8px;
             font-size: 16px;
-            transition: border-color 0.3s;
+            transition: border-color 0.3s ease;
+            display: inline-block;
         }
 
-        .date-input:focus {
+        .date-input-group input[type="date"]:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: #4facfe;
+            box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+        }
+
+        .remove-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-left: 10px;
+            transition: background-color 0.3s ease;
+        }
+
+        .remove-btn:hover {
+            background: #c82333;
         }
 
         .add-date-btn {
-            background: #28a745;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
+            padding: 12px 24px;
+            border-radius: 25px;
             font-size: 14px;
-            transition: background-color 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-bottom: 20px;
         }
 
         .add-date-btn:hover {
-            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 172, 254, 0.3);
         }
 
         .add-date-btn:disabled {
-            background: #6c757d;
+            background: #ccc;
             cursor: not-allowed;
-        }
-
-        .selected-dates {
-            margin-top: 20px;
-        }
-
-        .date-tag {
-            display: inline-flex;
-            align-items: center;
-            background: #667eea;
-            color: white;
-            padding: 8px 12px;
-            border-radius: 20px;
-            margin: 5px;
-            font-size: 14px;
-            gap: 8px;
-        }
-
-        .remove-date {
-            background: none;
-            border: none;
-            color: white;
-            cursor: pointer;
-            font-size: 16px;
-            padding: 0;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background-color 0.3s;
-        }
-
-        .remove-date:hover {
-            background: rgba(255,255,255,0.2);
+            transform: none;
+            box-shadow: none;
         }
 
         .submit-btn {
@@ -168,36 +184,34 @@
             color: white;
             border: none;
             padding: 15px;
-            border-radius: 12px;
+            border-radius: 15px;
             font-size: 18px;
-            font-weight: bold;
+            font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            margin-top: 20px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .submit-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
-        }
-
-        .submit-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
+            box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
         }
 
         .loading {
-            display: none;
             text-align: center;
-            padding: 20px;
+            padding: 40px;
+            color: #666;
         }
 
-        .loading i {
-            font-size: 2em;
-            color: #667eea;
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4facfe;
+            border-radius: 50%;
             animation: spin 1s linear infinite;
+            margin-left: 10px;
         }
 
         @keyframes spin {
@@ -205,115 +219,497 @@
             100% { transform: rotate(360deg); }
         }
 
-        .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 12px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border: 1px solid #f5c6cb;
+        .message {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 500;
+            display: none;
         }
 
-        .success-message {
+        .message.success {
             background: #d4edda;
             color: #155724;
-            padding: 12px;
-            border-radius: 8px;
-            margin: 15px 0;
             border: 1px solid #c3e6cb;
         }
 
-        .info-box {
-            background: #d1ecf1;
-            color: #0c5460;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border: 1px solid #bee5eb;
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
 
-        .info-box i {
-            margin-right: 8px;
-        }
-
-        @media (max-width: 600px) {
-            .leave-form-container {
+        @media (max-width: 480px) {
+            .container {
                 margin: 10px;
-                padding: 15px;
+                border-radius: 15px;
+            }
+            
+            .header {
+                padding: 20px 15px;
+            }
+            
+            .content {
+                padding: 20px 15px;
+            }
+            
+            .header h1 {
+                font-size: 20px;
             }
 
-            .student-details {
-                grid-template-columns: 1fr;
+            .date-input-group input[type="date"] {
+                width: calc(100% - 50px);
+                margin-bottom: 10px;
+            }
+
+            .remove-btn {
+                width: 40px;
+                padding: 8px;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="leave-form-container">
-            <div class="loading" id="loading">
-                <i class="fas fa-spinner"></i>
-                <p>กำลังโหลดข้อมูล...</p>
+        <div class="header">
+            <h1>🚌 ฟอร์มแจ้งลา</h1>
+            <p>ระบบแจ้งลาออนไลน์ Safety Bus</p>
+        </div>
+
+        <div class="content">
+            <div id="loading-screen" class="loading">
+                กำลังโหลดข้อมูล...
             </div>
 
-            <div id="form-content" style="display: none;">
+            <div id="message" class="message"></div>
+
+            <div id="main-form" style="display: none;">
                 <div class="student-info">
-                    <h2><i class="fas fa-user-graduate"></i> ข้อมูลนักเรียน</h2>
-                    <div class="student-details">
-                        <div class="student-detail">
-                            <label>ชื่อ-นามสกุล</label>
-                            <span id="student-name">-</span>
-                        </div>
-                        <div class="student-detail">
-                            <label>รหัสนักเรียน</label>
-                            <span id="student-id">-</span>
-                        </div>
-                        <div class="student-detail">
-                            <label>ชั้นเรียน</label>
-                            <span id="student-grade">-</span>
-                        </div>
-                        <div class="student-detail">
-                            <label>เบอร์โทร</label>
-                            <span id="student-phone">-</span>
-                        </div>
+                    <h3>ข้อมูลนักเรียน</h3>
+                    <div class="info-row">
+                        <span class="info-label">ชื่อ-นามสกุล:</span>
+                        <span class="info-value" id="studentName">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">รหัสนักเรียน:</span>
+                        <span class="info-value" id="studentId">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">ชั้นเรียน:</span>
+                        <span class="info-value" id="studentClass">-</span>
                     </div>
                 </div>
 
-                <div class="info-box">
-                    <i class="fas fa-info-circle"></i>
-                    <strong>หมายเหตุ:</strong> สามารถเลือกวันลาได้สูงสุด 3 วัน และสามารถเลือกได้ตั้งแต่วันปัจจุบันเป็นต้นไป
-                </div>
-
-                <form id="leave-form">
-                    <div class="form-section">
-                        <h3><i class="fas fa-calendar-alt"></i> เลือกวันที่ลา</h3>
-                        <div class="date-selection">
-                            <div class="date-input-group">
-                                <label for="leave-date">เลือกวันที่:</label>
-                                <input type="date" id="leave-date" class="date-input" min="">
-                                <button type="button" class="add-date-btn" id="add-date-btn">
-                                    <i class="fas fa-plus"></i> เพิ่มวันที่
-                                </button>
-                            </div>
-                            
-                            <div class="selected-dates" id="selected-dates">
-                                <p><strong>วันที่เลือก:</strong></p>
-                                <div id="date-tags"></div>
-                            </div>
-                        </div>
+                <div id="dateSection" class="form-section" style="display: none;">
+                    <h3>เลือกวันที่ลา (สูงสุด 3 วัน)</h3>
+                    <div id="dateContainer" class="date-container">
+                        <!-- Date inputs will be added here dynamically -->
                     </div>
-
-                    <button type="submit" class="submit-btn" id="submit-btn" disabled>
-                        <i class="fas fa-paper-plane"></i> ยืนยันส่งคำขอลา
+                    <button type="button" id="addDateBtn" class="add-date-btn" onclick="addDate()">
+                        ➕ เพิ่มวันที่
                     </button>
-                </form>
-            </div>
+                </div>
 
-            <div id="error-container"></div>
-            <div id="success-container"></div>
+                <div id="submitSection" class="form-section" style="display: none;">
+                    <button type="button" class="submit-btn" onclick="submitLeaveRequest()">
+                        ✅ ยืนยันส่งคำขอลา
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <script src="js/leave-form.js"></script>
+    <!-- JavaScript -->
+    <script>
+        // Leave Form JavaScript Functions
+        console.log('🚀 Leave Form JS loaded');
+
+        // Global variables
+        let liffInitialized = false;
+        let studentData = {};
+
+        // Initialize LIFF
+        async function initializeLiff() {
+            try {
+                console.log('🔄 Initializing LIFF...');
+                await liff.init({ liffId: '2008065330-AXGy9xda' });
+                liffInitialized = true;
+                console.log('✅ LIFF initialized successfully');
+                
+                // Check if user is logged in
+                if (!liff.isLoggedIn()) {
+                    console.log('🔐 User not logged in, redirecting to login...');
+                    liff.login();
+                    return;
+                }
+                
+                // Get user profile
+                const profile = await liff.getProfile();
+                console.log('👤 User profile:', profile);
+                
+                // Load student data from URL parameters
+                loadStudentDataFromUrl();
+                
+            } catch (error) {
+                console.error('❌ LIFF initialization failed:', error);
+                showErrorMessage('ไม่สามารถเชื่อมต่อกับ LINE ได้');
+            }
+        }
+
+        // Get URL parameters
+        function getUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return {
+                studentId: urlParams.get('studentId'),
+                studentName: urlParams.get('studentName'),
+                studentClass: urlParams.get('class')
+            };
+        }
+
+        // Load student data from URL
+        function loadStudentDataFromUrl() {
+            const params = getUrlParams();
+            console.log('📋 URL Parameters:', params);
+            
+            if (params.studentId && params.studentName) {
+                studentData = {
+                    studentId: params.studentId,
+                    studentName: decodeURIComponent(params.studentName),
+                    studentClass: params.studentClass ? decodeURIComponent(params.studentClass) : 'ไม่ระบุ'
+                };
+                
+                console.log('👤 Student data loaded:', studentData);
+            } else {
+                console.warn('⚠️ No student data in URL parameters, using default data');
+                // Use default data for testing
+                studentData = {
+                    studentId: '100011',
+                    studentName: 'ด.ญ กุรุษญา ญา',
+                    studentClass: 'ป.4/5'
+                };
+            }
+            
+            updateStudentInfo();
+            showMainForm();
+        }
+
+        // Update student information in UI
+        function updateStudentInfo() {
+            const elements = {
+                'student-name': studentData.studentName,
+                'student-id': studentData.studentId,
+                'student-class': studentData.studentClass,
+                'confirm-student-name': studentData.studentName,
+                'confirm-student-id': studentData.studentId,
+                'confirm-student-class': studentData.studentClass
+            };
+            
+            Object.entries(elements).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = value || '-';
+                }
+            });
+        }
+
+        // Show main form
+        function showMainForm() {
+            console.log('📱 Showing main form...');
+            
+            // Hide loading screen
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) {
+                loadingScreen.style.display = 'none';
+                console.log('✅ Loading screen hidden');
+            }
+            
+            // Show main form
+            const mainForm = document.getElementById('main-form');
+            if (mainForm) {
+                mainForm.style.display = 'block';
+                console.log('✅ Main form displayed');
+            }
+        }
+
+        // Show error message
+        function showErrorMessage(message) {
+            const errorSection = document.getElementById('error-section');
+            const errorMessage = document.getElementById('error-message');
+            
+            if (errorSection && errorMessage) {
+                errorMessage.textContent = message;
+                errorSection.style.display = 'block';
+            } else {
+                alert(message);
+            }
+        }
+
+        // Show success message
+        function showSuccessMessage(message) {
+            const successSection = document.getElementById('success-section');
+            if (successSection) {
+                successSection.style.display = 'block';
+                
+                // Auto close after 3 seconds
+                let countdown = 3;
+                const countdownElement = document.getElementById('countdown');
+                
+                const timer = setInterval(() => {
+                    countdown--;
+                    if (countdownElement) {
+                        countdownElement.textContent = countdown;
+                    }
+                    
+                    if (countdown <= 0) {
+                        clearInterval(timer);
+                        if (liffInitialized) {
+                            liff.closeWindow();
+                        }
+                    }
+                }, 1000);
+            }
+        }
+
+        // Date picker functions
+        function setupDatePicker() {
+            const leaveDateInput = document.getElementById('leave-date');
+            const addDateBtn = document.getElementById('add-date-btn');
+            const datesContainer = document.getElementById('dates-container');
+            const confirmBtn = document.getElementById('confirm-btn');
+            
+            let selectedDates = [];
+            
+            // Set minimum date to today
+            const today = new Date().toISOString().split('T')[0];
+            if (leaveDateInput) {
+                leaveDateInput.min = today;
+            }
+            
+            // Add date button click handler
+            if (addDateBtn) {
+                addDateBtn.addEventListener('click', function() {
+                    const selectedDate = leaveDateInput.value;
+                    
+                    if (!selectedDate) {
+                        alert('กรุณาเลือกวันที่');
+                        return;
+                    }
+                    
+                    if (selectedDates.includes(selectedDate)) {
+                        alert('วันที่นี้ถูกเลือกแล้ว');
+                        return;
+                    }
+                    
+                    selectedDates.push(selectedDate);
+                    updateDatesDisplay();
+                    leaveDateInput.value = '';
+                    updateConfirmButton();
+                });
+            }
+            
+            // Update dates display
+            function updateDatesDisplay() {
+                if (!datesContainer) return;
+                
+                if (selectedDates.length === 0) {
+                    datesContainer.innerHTML = '<p class="no-dates">ยังไม่ได้เลือกวันที่</p>';
+                } else {
+                    const datesHtml = selectedDates.map(date => {
+                        const dateObj = new Date(date);
+                        const formattedDate = dateObj.toLocaleDateString('th-TH', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                        });
+                        
+                        return `
+                            <div class="selected-date">
+                                <span>${formattedDate}</span>
+                                <button type="button" class="remove-date" data-date="${date}">✕</button>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    datesContainer.innerHTML = datesHtml;
+                    
+                    // Add remove date handlers
+                    datesContainer.querySelectorAll('.remove-date').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            const dateToRemove = this.getAttribute('data-date');
+                            selectedDates = selectedDates.filter(date => date !== dateToRemove);
+                            updateDatesDisplay();
+                            updateConfirmButton();
+                        });
+                    });
+                }
+            }
+            
+            // Update confirm button state
+            function updateConfirmButton() {
+                if (confirmBtn) {
+                    confirmBtn.disabled = selectedDates.length === 0;
+                }
+            }
+            
+            // Return selected dates for form submission
+            window.getSelectedDates = function() {
+                return selectedDates;
+            };
+        }
+
+        // Form submission
+        function setupFormSubmission() {
+            const confirmBtn = document.getElementById('confirm-btn');
+            const finalConfirmBtn = document.getElementById('final-confirm-btn');
+            const backBtn = document.getElementById('back-btn');
+            const retryBtn = document.getElementById('retry-btn');
+            
+            // Confirm button - show confirmation section
+            if (confirmBtn) {
+                confirmBtn.addEventListener('click', function() {
+                    const selectedDates = window.getSelectedDates ? window.getSelectedDates() : [];
+                    
+                    if (selectedDates.length === 0) {
+                        alert('กรุณาเลือกวันที่แจ้งลา');
+                        return;
+                    }
+                    
+                    // Update confirmation display
+                    updateConfirmationDisplay(selectedDates);
+                    
+                    // Show confirmation section
+                    document.getElementById('main-form').style.display = 'none';
+                    document.getElementById('confirmation-section').style.display = 'block';
+                });
+            }
+            
+            // Final confirm button - submit form
+            if (finalConfirmBtn) {
+                finalConfirmBtn.addEventListener('click', async function() {
+                    const selectedDates = window.getSelectedDates ? window.getSelectedDates() : [];
+                    await submitLeaveRequest(selectedDates);
+                });
+            }
+            
+            // Back button - return to main form
+            if (backBtn) {
+                backBtn.addEventListener('click', function() {
+                    document.getElementById('confirmation-section').style.display = 'none';
+                    document.getElementById('main-form').style.display = 'block';
+                });
+            }
+            
+            // Retry button - hide error and show main form
+            if (retryBtn) {
+                retryBtn.addEventListener('click', function() {
+                    document.getElementById('error-section').style.display = 'none';
+                    document.getElementById('main-form').style.display = 'block';
+                });
+            }
+        }
+
+        // Update confirmation display
+        function updateConfirmationDisplay(selectedDates) {
+            const confirmDatesContainer = document.getElementById('confirm-dates');
+            
+            if (confirmDatesContainer && selectedDates.length > 0) {
+                const datesHtml = selectedDates.map(date => {
+                    const dateObj = new Date(date);
+                    const formattedDate = dateObj.toLocaleDateString('th-TH', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                    return `<div class="confirm-date-item">${formattedDate}</div>`;
+                }).join('');
+                
+                confirmDatesContainer.innerHTML = datesHtml;
+            }
+        }
+
+        // Submit leave request
+        async function submitLeaveRequest(selectedDates) {
+            try {
+                console.log('📤 Submitting leave request...');
+                
+                // Get LINE user ID if available
+                let lineUserId = null;
+                if (liffInitialized && liff.isLoggedIn()) {
+                    try {
+                        const profile = await liff.getProfile();
+                        lineUserId = profile.userId;
+                    } catch (error) {
+                        console.warn('⚠️ Could not get LINE profile:', error);
+                    }
+                }
+                
+                const requestData = {
+                    student_id: studentData.studentId,
+                    studentName: studentData.studentName,
+                    studentClass: studentData.studentClass,
+                    leave_dates: selectedDates,
+                    line_user_id: lineUserId,
+                    submittedAt: new Date().toISOString()
+                };
+                
+                console.log('📋 Request data:', requestData);
+                
+                const response = await fetch('/api/submit-leave', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const result = await response.json();
+                console.log('📨 Response:', result);
+                
+                if (result.success) {
+                    // Hide confirmation section
+                    document.getElementById('confirmation-section').style.display = 'none';
+                    
+                    // Show success message
+                    showSuccessMessage('ส่งข้อมูลการลาเรียบร้อยแล้ว');
+                } else {
+                    throw new Error(result.error || 'เกิดข้อผิดพลาดในการส่งข้อมูล');
+                }
+                
+            } catch (error) {
+                console.error('❌ Error submitting leave request:', error);
+                
+                // Hide confirmation section
+                document.getElementById('confirmation-section').style.display = 'none';
+                
+                // Show error message
+                showErrorMessage('เกิดข้อผิดพลาด: ' + error.message);
+            }
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 DOM loaded, initializing leave form...');
+            
+            // Setup date picker
+            setupDatePicker();
+            
+            // Setup form submission
+            setupFormSubmission();
+            
+            // Initialize LIFF
+            if (typeof liff !== 'undefined') {
+                initializeLiff();
+            } else {
+                console.warn('⚠️ LIFF SDK not available, running in fallback mode');
+                loadStudentDataFromUrl();
+            }
+        });
+
+        // Export functions for global access
+        window.initializeLiff = initializeLiff;
+        window.loadStudentDataFromUrl = loadStudentDataFromUrl;
+        window.showErrorMessage = showErrorMessage;
+        window.showSuccessMessage = showSuccessMessage;
+    </script>
 </body>
 </html>

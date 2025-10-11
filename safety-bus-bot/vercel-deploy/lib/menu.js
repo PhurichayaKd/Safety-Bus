@@ -21,7 +21,7 @@ const mainRichMenu = {
       action: {
         type: "postback",
         data: "action=history",
-        displayText: "📊 ประวัตินักเรียน"
+        displayText: "ประวัตินักเรียน"
       }
     },
     {
@@ -34,7 +34,7 @@ const mainRichMenu = {
       action: {
         type: "postback",
         data: "action=leave",
-        displayText: "📝 ฟอร์มแจ้งลา"
+        displayText: "ฟอร์มแจ้งลา"
       }
     },
     {
@@ -47,7 +47,7 @@ const mainRichMenu = {
       action: {
         type: "postback",
         data: "action=location",
-        displayText: "🚌 ตำแหน่งรถ"
+        displayText: "ตำแหน่งรถ"
       }
     },
     {
@@ -60,7 +60,7 @@ const mainRichMenu = {
       action: {
         type: "postback",
         data: "action=contact",
-        displayText: "📞 ติดต่อคนขับ"
+        displayText: "ติดต่อคนขับ"
       }
     }
   ]
@@ -191,7 +191,6 @@ export async function sendMainMenu(userId, replyToken, options = {}) {
   const menuMessage = {
     type: 'text',
     text: menuText
-    // ...สามารถเพิ่ม quick reply หรือ rich menu ได้...
   };
   
   try {

@@ -102,7 +102,7 @@ export default async function handler(req, res) {
       .select(`
         driver_id,
         driver_name,
-        bus_number,
+        license_plate,
         phone_number
       `)
       .eq('driver_id', driver_id)
@@ -139,7 +139,7 @@ export default async function handler(req, res) {
     let messageText = `${messageInfo.emoji} ${messageInfo.title}\n\n${messageInfo.message}`;
     
     messageText += `\n\n👨‍✈️ คนขับ: ${driverData.driver_name}`;
-    messageText += `\n🚌 รถเมล์: ${driverData.bus_number}`;
+    messageText += `\n🚌 รถเมล์: ${driverData.license_plate}`;
     
     if (location) {
       messageText += `\n📍 ตำแหน่ง: ${location}`;
@@ -298,7 +298,7 @@ export default async function handler(req, res) {
       driver: {
         id: driver_id,
         name: driverData.driver_name,
-        bus_number: driverData.bus_number
+        license_plate: driverData.license_plate
       },
       status: {
         trip_phase,

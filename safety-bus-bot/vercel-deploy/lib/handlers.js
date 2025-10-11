@@ -21,6 +21,8 @@ export { userFormStates, userLeaveFormStates, userErrorStates };
 export async function checkLinkStatus(userId) {
   try {
     console.log(`🔍 Checking link status for user: ${userId}`);
+    
+    // ตรวจสอบการเชื่อมโยงปกติก่อน
     const studentData = await getStudentByLineId(userId);
     
     if (studentData && studentData.student) {
@@ -32,7 +34,21 @@ export async function checkLinkStatus(userId) {
       };
     }
     
-    console.log(`❌ User ${userId} is not linked`);
+    // ถ้าไม่พบการเชื่อมโยง ให้ลองจับคู่อัตโนมัติ
+    console.log(`🔄 Attempting auto-match for user: ${userId}`);
+    const autoMatchResult = await checkAndAutoMatchLineId(userId);
+    
+    if (autoMatchResult.exists) {
+      console.log(`✅ Auto-matched user ${userId} as ${autoMatchResult.userType}`);
+      return { 
+        linked: true, 
+        type: autoMatchResult.userType, 
+        student: autoMatchResult.userData.student || autoMatchResult.userData,
+        autoMatched: autoMatchResult.autoMatched
+      };
+    }
+    
+    console.log(`❌ User ${userId} is not linked and cannot be auto-matched`);
     return { linked: false, type: null, student: null };
   } catch (error) {
     console.error('❌ Error in checkLinkStatus:', error);
@@ -56,18 +72,53 @@ export async function handleTextMessage(event) {
 
   console.log(`📝 Text message from ${userId}: ${text}`);
 
-  // ตรวจสอบการผูกบัญชีและพยายามจับคู่อัตโนมัติ
-  const linkStatus = await checkAndAutoMatchLineId(userId);
-  let isLinked = linkStatus.exists;
+  // ตรวจสอบการผูกบัญชีแบบเร็ว (ไม่ auto match ก่อน)
+  let isLinked = false;
   
-  // ถ้าจับคู่อัตโนมัติสำเร็จ ให้แจ้งผู้ใช้
-  if (linkStatus.autoMatched) {
-    await replyLineMessage(event.replyToken, {
-      type: 'text',
-      text: `✅ ${linkStatus.message}\n\nยินดีต้อนรับสู่ระบบ Safety Bus! 🚌\n\nตอนนี้คุณสามารถใช้งานระบบได้แล้ว\nกดปุ่มเมนูด้านล่างเพื่อเริ่มใช้งาน`
+  // ตรวจสอบการผูกบัญชีแบบง่าย ๆ ก่อน
+  try {
+    const { data: studentLink } = await supabase
+      .from('student_line_links')
+      .select('id')
+      .eq('line_user_id', userId)
+      .limit(1)
+      .single();
+    
+    if (studentLink) {
+      isLinked = true;
+    } else {
+      const { data: parentLink } = await supabase
+        .from('parent_line_links')
+        .select('id')
+        .eq('line_user_id', userId)
+        .limit(1)
+        .single();
+      
+      if (parentLink) {
+        isLinked = true;
+      }
+    }
+  } catch (error) {
+    console.log('Quick link check failed, will try auto match later');
+  }
+
+  // ถ้ายังไม่ผูกบัญชี ให้ลอง auto match (แต่ทำใน background)
+  if (!isLinked) {
+    // ทำ auto match ใน background หลังจากตอบกลับแล้ว
+    setImmediate(async () => {
+      try {
+        const linkStatus = await checkAndAutoMatchLineId(userId);
+        if (linkStatus.autoMatched) {
+          await sendLineMessage(userId, [{
+            type: 'text',
+            text: `✅ ${linkStatus.message}\n\nยินดีต้อนรับสู่ระบบ Safety Bus! 🚌\n\nตอนนี้คุณสามารถใช้งานระบบได้แล้ว`
+          }]);
+          await sendMainMenu(userId);
+        }
+      } catch (error) {
+        console.error('Background auto match failed:', error);
+      }
     });
-    await sendMainMenu(userId);
-    return;
   }
 
   // ถ้ายังไม่ผูกบัญชี แต่ข้อความไม่ใช่รหัสนักเรียนหรือรหัสเชื่อมโยง
@@ -102,7 +153,7 @@ export async function handleTextMessage(event) {
   if (!isLinked) {
     await replyLineMessage(event.replyToken, {
       type: 'text',
-      text: `สวัสดีครับ! 👋\n\nยินดีต้อนรับสู่ระบบ Safety Bus\n\nเพื่อใช้งานระบบ กรุณาผูกบัญชีก่อน\nโดยพิมพ์รหัสนักเรียน 6 หลัก\n\nตัวอย่าง: 123456\n\n📝 หมายเหตุ: รหัสนักเรียนคือรหัส 6 หลักที่ใช้ในโรงเรียน`
+      text: `สวัสดีครับ! 👋\n\nยินดีต้อนรับสู่ระบบ Safety Bus\n\nเพื่อใช้งานระบบ กรุณาผูกบัญชีก่อน\nโดยพิมพ์รหัสนักเรียน 6 หลัก\n\nตัวอย่าง: 123456\n\n📝 หมายเหตุ: รหัสนักเรียนคือรหัส 6 หลัก โดยคนขับจะแจ้งให้ทราบ`
     });
     return;
   }
@@ -137,7 +188,7 @@ export async function handleTextMessage(event) {
 
   // ตรวจสอบคำสั่งติดต่อ
   if (text.includes('ติดต่อ') || text.includes('contact') || text.includes('โทร')) {
-    await handleContactRequest(event);
+    await handleContactDriverRequest(event);
     return;
   }
 
@@ -248,7 +299,7 @@ export async function handleFollow(event) {
     let nameText = student ? student.student_name : '';
     const welcomeMessage = {
       type: 'text',
-      text: `✅ ผูกบัญชีสำเร็จแล้ว\n\nสวัสดี${roleText === 'ผู้ปกครอง' ? 'ครับ คุณ' : 'ครับ น้อง'}${nameText}\nสถานะ: ${roleText}\n\nคุณสามารถใช้เมนูด้านล่างเพื่อ:\n• ดูประวัตินักเรียน\n• แจ้งลาหยุด\n• ตรวจสอบตำแหน่งรถ\n• ติดต่อคนขับ\n\nหากต้องการเปลี่ยนบัญชี กรุณาติดต่อโรงเรียน`
+      text: `✅ ผูกบัญชีสำเร็จแล้ว\n\nสวัสดี${roleText === 'ผู้ปกครอง' ? 'ครับ คุณ' : 'ครับ น้อง'}${nameText}\nสถานะ: ${roleText}\n\nคุณสามารถใช้เมนูด้านล่างเพื่อ:\n• ดูประวัตินักเรียน\n• แจ้งลาหยุด\n• ตรวจสอบตำแหน่งรถ\n• ติดต่อคนขับ\n\nหากต้องการเปลี่ยนบัญชี กรุณาติดต่อคนขับ`
     };
     await replyLineMessage(event.replyToken, welcomeMessage);
     // ไม่ส่งเมนูเพิ่มเติม เพราะ Rich Menu จะแสดงอยู่แล้ว
@@ -274,8 +325,10 @@ export async function handleMainAction(event, action) {
 
   try {
     // ตรวจสอบการผูกบัญชีและประเภทผู้ใช้
-    const { linked, type, student } = await checkLinkStatus(userId);
-    console.log(`🔗 Account linking status: ${linked}, type: ${type}`);
+    const linkResult = await checkLinkStatus(userId);
+    const { linked, type, student, autoMatched } = linkResult;
+    console.log(`🔗 Account linking status: ${linked}, type: ${type}, autoMatched: ${autoMatched}`);
+    
     if (!linked) {
       if (replyToken) {
         await replyLineMessage(replyToken, {
@@ -285,66 +338,53 @@ export async function handleMainAction(event, action) {
       }
       return;
     }
-    // Track if reply token has been used
-    let replyTokenUsed = false;
-
-    // แสดงสิทธิ์การใช้งาน/ข้อความพิเศษตามประเภท
-    if (action === 'main_menu') {
+    
+    // ถ้าเป็นการจับคู่อัตโนมัติ ให้แจ้งผู้ใช้
+    if (autoMatched && replyToken) {
       let roleText = type === 'parent' ? 'ผู้ปกครอง' : 'นักเรียน';
       let nameText = student ? student.student_name : '';
-      if (replyToken) {
-        // ส่งข้อความต้อนรับพร้อมเมนูในครั้งเดียว
-        await sendMainMenu(userId, replyToken, {
-          welcomeText: `✅ ผูกบัญชีสำเร็จแล้ว\n\nสวัสดี${roleText === 'ผู้ปกครอง' ? 'ครับ คุณ' : 'ครับ น้อง'}${nameText}\nสถานะ: ${roleText}\n\nคุณสามารถใช้เมนูด้านล่างเพื่อ:\n• ดูประวัตินักเรียน\n• แจ้งลาหยุด\n• ตรวจสอบตำแหน่งรถ\n• ติดต่อคนขับ\n\nหากต้องการเปลี่ยนบัญชี กรุณาติดต่อโรงเรียน`
-        });
-        replyTokenUsed = true;
-      }
+      await replyLineMessage(replyToken, {
+        type: 'text',
+        text: `✅ จับคู่บัญชีสำเร็จ!\n\nสวัสดี${roleText === 'ผู้ปกครอง' ? 'ครับ คุณ' : 'ครับ น้อง'}${nameText}\nสถานะ: ${roleText}\n\nยินดีต้อนรับกลับสู่ระบบ Safety Bus! 🚌\nตอนนี้คุณสามารถใช้งานระบบได้แล้ว`
+      });
+      await sendMainMenu(userId);
+      return;
     }
-
+    // จัดการ action ต่างๆ โดยใช้ replyToken เพียงครั้งเดียว
     switch (action) {
       case 'history':
       case 'student_history':
-        if (!replyTokenUsed) {
-          await handleHistoryRequest(event);
-        } else {
-          // Use push message instead of reply
-          await handleHistoryRequestPush(userId);
-        }
+        await handleHistoryRequest(event);
         break;
+        
       case 'leave':
       case 'leave_request':
-        if (!replyTokenUsed) {
-          await handleLeaveRequestMenu(event);
-        }
-        // ไม่ส่งข้อความเพิ่มเติมเมื่อ replyToken ถูกใช้แล้ว เพื่อป้องกันการส่งซ้ำ
+        await handleLeaveRequestMenu(event);
         break;
+        
       case 'location':
       case 'bus_location':
-        if (!replyTokenUsed) {
-          await handleBusLocationRequest(event);
-        } else {
-          await handleBusLocationRequestPush(userId);
-        }
+        await handleBusLocationRequest(event);
         break;
+        
       case 'contact':
       case 'contact_driver':
-        if (!replyTokenUsed) {
-          await handleContactDriverRequest(event);
-        } else {
-          await handleContactDriverRequestPush(userId);
-        }
+        await handleContactDriverRequest(event);
         break;
+        
       case 'main_menu':
-        if (!replyTokenUsed) {
-          // ส่งเมนูหลัก (บังคับส่ง replyToken)
-          await sendMainMenu(userId, replyToken);
-        }
+        // ส่งเมนูหลักพร้อมข้อความต้อนรับ
+        let roleText = type === 'parent' ? 'ผู้ปกครอง' : 'นักเรียน';
+        let nameText = student ? student.student_name : '';
+        await sendMainMenu(userId, replyToken, {
+          welcomeText: `✅ ผูกบัญชีสำเร็จแล้ว\n\nสวัสดี${roleText === 'ผู้ปกครอง' ? 'ครับ คุณ' : 'ครับ น้อง'}${nameText}\nสถานะ: ${roleText}\n\nคุณสามารถใช้เมนูด้านล่างเพื่อ:\n• ดูประวัตินักเรียน\n• แจ้งลาหยุด\n• ตรวจสอบตำแหน่งรถ\n• ติดต่อคนขับ\n\nหากต้องการเปลี่ยนบัญชี กรุณาติดต่อโรงเรียน`
+        });
         break;
+        
       default:
-        if (!replyTokenUsed) {
-          // ส่งเมนูหลัก fallback
-          await sendMainMenu(userId, replyToken);
-        }
+        // ส่งเมนูหลัก fallback
+        await sendMainMenu(userId, replyToken);
+        break;
     }
   } catch (err) {
     console.error('❌ Error in handleMainAction:', err);
@@ -352,12 +392,12 @@ export async function handleMainAction(event, action) {
       action: action,
       userId: userId,
       replyToken: replyToken,
-      replyTokenUsed: replyTokenUsed,
       message: err.message,
       stack: err.stack
     });
     
-    if (replyToken && !replyTokenUsed) {
+    // พยายามส่งข้อความแสดงข้อผิดพลาด
+    if (replyToken) {
       try {
         await replyLineMessage(replyToken, {
           type: 'text',
@@ -380,7 +420,7 @@ export async function handleMainAction(event, action) {
         }
       }
     } else {
-      console.log('⚠️ Cannot send error message - reply token already used or missing');
+      console.log('⚠️ Cannot send error message - reply token missing');
     }
   }
 }
@@ -1003,7 +1043,7 @@ export async function handleHistoryRequest(event) {
     });
   } catch (error) {
     console.error('Error handling history request:', error);
-    // Only reply if we haven't replied yet
+    // Only reply once - don't use push message as fallback to prevent spam
     try {
       await replyLineMessage(event.replyToken, {
         type: 'text',
@@ -1011,14 +1051,8 @@ export async function handleHistoryRequest(event) {
       });
     } catch (replyError) {
       console.error('Reply token already used or invalid:', replyError);
-      // Use push message as fallback
-      const userId = event.source.userId;
-      if (userId) {
-        await sendLineMessage(userId, [{
-          type: 'text',
-          text: 'เกิดข้อผิดพลาดในการดึงประวัติ กรุณาลองใหม่อีกครั้ง'
-        }]);
-      }
+      // Don't use push message fallback to prevent duplicate messages
+      console.log('⚠️ Skipping push message fallback to prevent spam');
     }
   }
 }
@@ -1165,9 +1199,9 @@ export async function handleLeaveRequestMenu(event) {
       `📋 ข้อมูลนักเรียน:\n` +
       `ชื่อ: ${studentData.student.student_name}\n` +
       `รหัส: ${studentData.student.student_id}\n` +
-      `ชั้น: ${studentData.student.class || 'ไม่ระบุ'}\n\n` +
+      `ชั้น: ${studentData.student.grade || 'ไม่ระบุ'}\n\n` +
       `🔗 เปิดฟอร์มแจ้งลาหยุด:\n` +
-      `${config.liffAppUrl}/leave-form?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}&class=${encodeURIComponent(studentData.student.class || 'ไม่ระบุ')}`;
+      `${config.liffAppUrl}/leave-form?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}&grade=${encodeURIComponent(studentData.student.grade || 'ไม่ระบุ')}`;
 
     // ใช้ reply message เพื่อตอบสนองการกดเมนูเท่านั้น
     await replyLineMessage(event.replyToken, {
@@ -1246,9 +1280,9 @@ export async function handleLeaveRequestMenuPush(userId) {
       `📋 ข้อมูลนักเรียน:\n` +
       `ชื่อ: ${studentData.student.student_name}\n` +
       `รหัส: ${studentData.student.student_id}\n` +
-      `ชั้น: ${studentData.student.class || 'ไม่ระบุ'}\n\n` +
+      `ชั้น: ${studentData.student.grade || 'ไม่ระบุ'}\n\n` +
       `🔗 เปิดฟอร์มแจ้งลาหยุด:\n` +
-      `${config.liffAppUrl}/leave-form?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}&class=${encodeURIComponent(studentData.student.class || 'ไม่ระบุ')}`;
+      `${config.liffAppUrl}/leave-form?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}&grade=${encodeURIComponent(studentData.student.grade || 'ไม่ระบุ')}`;
 
     await sendLineMessage(userId, {
       type: 'text',
@@ -1358,29 +1392,73 @@ export async function handleBusLocationRequestPush(userId) {
  * @param {Object} event - LINE webhook event
  */
 export async function handleContactDriverRequest(event) {
-  const messages = [
-    {
-      type: 'text',
-      text: '📞 ติดต่อคนขับรถ\n\n👨‍💼 สมชาย คนขับ\n📱 เบอร์โทร: 081-234-5678\n🚌 ป้ายทะเบียน: 1กก-1234\n\n⏰ เวลาทำการ: 06:00 - 17:00 น.'
-    },
-    {
+  const userId = event.source.userId;
+  
+  try {
+    console.log('🔍 [DEBUG] handleContactDriverRequest called for userId:', userId);
+    console.log('📞 [INFO] Showing driver ID 1 information directly (no student-driver relationship check)');
+    
+    // ดึงข้อมูลคนขับ ID 1 โดยตรง (ไม่มี bus_number column)
+    const { data: driverData, error: driverError } = await supabase
+      .from('driver_bus')
+      .select(`
+        driver_id,
+        driver_name,
+        phone_number,
+        license_plate
+      `)
+      .eq('driver_id', 1)
+      .single();
+
+    console.log('🔍 [DEBUG] Driver ID 1 query result:', { driverData, driverError });
+
+    if (driverError || !driverData) {
+      console.log('❌ [DEBUG] Driver ID 1 not found, sending contact school message');
+      await replyLineMessage(event.replyToken, {
+        type: 'text',
+        text: '📞 ติดต่อคนขับรถ\n\n⚠️ ไม่พบข้อมูลคนขับในระบบ\nกรุณาติดต่อโรงเรียนโดยตรง\n\n📞 โทร: 043-754-321\n⏰ เวลาทำการ: 08:00 - 16:30 น.'
+      });
+      return;
+    }
+
+    // สร้างข้อความแสดงข้อมูลคนขับ
+    console.log('✅ [DEBUG] Driver ID 1 found! Creating response message');
+    const driverName = driverData.driver_name || 'ไม่ระบุชื่อ';
+    const phoneNumber = driverData.phone_number || 'ไม่ระบุเบอร์';
+    const licensePlate = driverData.license_plate || 'ไม่ระบุทะเบียน';
+    
+    console.log('🔍 [DEBUG] Driver info:', { driverName, phoneNumber, licensePlate });
+    
+    // ทำความสะอาดเบอร์โทรศัพท์ (เอาขีดและช่องว่างออก)
+    const cleanPhoneNumber = phoneNumber.replace(/[-\s]/g, '');
+    
+    await replyLineMessage(event.replyToken, {
       type: 'template',
-      altText: 'โทรหาคนขับรถ',
+      altText: `📞 ติดต่อคนขับรถ - ${driverName} ${phoneNumber}`,
       template: {
         type: 'buttons',
-        text: 'คุณต้องการโทรหาคนขับรถหรือไม่?',
+        thumbnailImageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=400&h=200&fit=crop',
+        imageAspectRatio: 'rectangle',
+        imageSize: 'cover',
+        title: '📞 ติดต่อคนขับรถ',
+        text: `👨‍💼 ${driverName}\n📱 เบอร์โทร: ${phoneNumber}\n🚌 ป้ายทะเบียน: ${licensePlate}\n⏰ เวลาทำการ: 06:00 - 17:00 น.`,
         actions: [
           {
             type: 'uri',
             label: '📞 โทรหาคนขับ',
-            uri: 'tel:0812345678'
+            uri: `tel:${cleanPhoneNumber}`
           }
         ]
       }
-    }
-  ];
-  
-  await replyLineMessage(event.replyToken, messages);
+    });
+
+  } catch (error) {
+    console.error('Error in handleContactDriverRequest:', error);
+    await replyLineMessage(event.replyToken, {
+      type: 'text',
+      text: '❌ เกิดข้อผิดพลาดในการดึงข้อมูลคนขับ\nกรุณาลองใหม่อีกครั้ง หรือติดต่อโรงเรียนโดยตรง\n\n📞 โทร: 043-754-321'
+    });
+  }
 }
 
 /**

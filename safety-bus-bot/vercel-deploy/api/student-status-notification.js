@@ -88,8 +88,7 @@ export default async function handler(req, res) {
       .select(`
         student_id,
         student_name,
-        student_code,
-        class,
+        grade,
         pickup_location,
         dropoff_location
       `)
@@ -110,7 +109,7 @@ export default async function handler(req, res) {
         .select(`
           driver_id,
           driver_name,
-          bus_number,
+          license_plate,
           phone_number
         `)
         .eq('driver_id', driver_id)
@@ -141,13 +140,13 @@ export default async function handler(req, res) {
 
     let messageText = `${messageInfo.emoji} ${messageInfo.title}\n\n`;
     messageText += `👨‍🎓 นักเรียน: ${studentData.student_name}`;
-    messageText += `\n🆔 รหัส: ${studentData.student_code}`;
-    messageText += `\n🏫 ชั้น: ${studentData.class}`;
+    messageText += `\n🆔 รหัส: ${studentData.student_id}`;
+    messageText += `\n🏫 ชั้น: ${studentData.grade}`;
     messageText += `\n\n${messageInfo.message}`;
     
     if (driverData) {
       messageText += `\n\n👨‍✈️ คนขับ: ${driverData.driver_name}`;
-      messageText += `\n🚌 รถเมล์: ${driverData.bus_number}`;
+      messageText += `\n🚌 รถเมล์: ${driverData.license_plate}`;
     }
     
     if (location) {
@@ -313,15 +312,15 @@ export default async function handler(req, res) {
       student: {
         id: student_id,
         name: studentData.student_name,
-        code: studentData.student_code,
-        class: studentData.class
+        code: studentData.student_id,
+        class: studentData.grade
       },
       status: status,
       phase: phase,
       driver: driverData ? {
         id: driver_id,
         name: driverData.driver_name,
-        bus_number: driverData.bus_number
+        license_plate: driverData.license_plate
       } : null,
       notification_results: notificationResults,
       summary: {

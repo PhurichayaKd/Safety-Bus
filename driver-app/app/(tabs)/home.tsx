@@ -62,19 +62,77 @@ function MenuCard({
   );
 }
 
-// ใช้ข้อมูล mock แทน Supabase เพื่อหลีกเลี่ยง connection errors
+// ฟังก์ชันสำหรับดึงข้อมูลสถิติจริงจาก AsyncStorage
 async function getTodayProgress() {
-  // Mock data สำหรับการแสดงผล
-  return {
-    target: 24,
-    pickupGo: 18,
-    dropGo: 18,
-    pickupRet: 15,
-    dropRet: 15,
-  };
+  try {
+    // ดึงข้อมูลจำนวนนักเรียนทั้งหมด
+    const studentCount = await getStudentCount();
+    
+    // ดึงข้อมูลสถิติจาก AsyncStorage ที่ถูกอัปเดตจากหน้า passenger-list
+    const statsData = await AsyncStorage.getItem('passenger_stats');
+    
+    if (statsData) {
+      const stats = JSON.parse(statsData);
+      return {
+        target: studentCount,
+        pickupGo: stats.pickupGo || 0,
+        dropGo: stats.dropGo || 0,
+        pickupRet: stats.pickupRet || 0,
+        dropRet: stats.dropRet || 0,
+      };
+    }
+    
+    // ถ้าไม่มีข้อมูลใน AsyncStorage ให้ใช้ค่าเริ่มต้น
+    return {
+      target: studentCount,
+      pickupGo: 0,
+      dropGo: 0,
+      pickupRet: 0,
+      dropRet: 0,
+    };
+  } catch (error) {
+    console.warn('เกิดข้อผิดพลาดในการดึงข้อมูลสถิติ:', error);
+    // ใช้ข้อมูล fallback
+    return {
+      target: 24,
+      pickupGo: 0,
+      dropGo: 0,
+      pickupRet: 0,
+      dropRet: 0,
+    };
+  }
 }
 
-// ฟังก์ชันสำหรับอัพเดตสถานะนักเรียนลงรถที่โรงเรียน
+// ฟังก์ชันสำหรับรีเซ็ตสถิติเมื่อเปลี่ยนเป็นขากลับ
+async function resetStatsForReturn() {
+  try {
+    // รีเซ็ตเฉพาะสถิติขากลับ แต่เก็บสถิติขาไปไว้
+    const currentStats = await AsyncStorage.getItem('passenger_stats');
+    let stats = {
+      pickupGo: 0,
+      dropGo: 0,
+      pickupRet: 0,
+      dropRet: 0
+    };
+    
+    if (currentStats) {
+      const parsed = JSON.parse(currentStats);
+      stats = {
+        pickupGo: parsed.pickupGo || 0,
+        dropGo: parsed.dropGo || 0,
+        pickupRet: 0, // รีเซ็ตขากลับ
+        dropRet: 0    // รีเซ็ตขากลับ
+      };
+    }
+    
+    await AsyncStorage.setItem('passenger_stats', JSON.stringify(stats));
+    console.log('รีเซ็ตสถิติสำหรับขากลับเรียบร้อยแล้ว');
+  } catch (error) {
+    console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถิติ:', error);
+  }
+}
+
+// ฟังก์ชันสำหรับอัพเดตสถานะนักเรียนลงรถที่โรงเรียนลับรับกลับ
 async function updateSchoolDropoffStatus() {
   try {
     const driverId = await AsyncStorage.getItem('driverId');
@@ -115,7 +173,7 @@ async function updateSchoolDropoffStatus() {
 }
 
 const HomePage = () => {
-  const { signOut } = useAuth();
+  const { signOut, session } = useAuth();
   const [status, setStatus] = useState<BusStatus | null>(null);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -209,9 +267,14 @@ const HomePage = () => {
       const p = await getTodayProgress();
 
       if (next === 'arrived_school') {
+        // ตรวจสอบว่านักเรียนขึ้นรถครบหรือยัง
         if (p.pickupGo < p.target) {
           const remain = p.target - p.pickupGo;
-          Alert.alert('ยังเช็กไม่ครบ', `ยังมีนักเรียนที่ยังไม่ขึ้นรถเช้าอีก ${remain} คน`);
+          Alert.alert(
+            'นักเรียนยังขึ้นรถไม่ครบ', 
+            `ยังมีนักเรียนที่ยังไม่ขึ้นรถอีก ${remain} คน\n\nเมื่อถึงโรงเรียนให้คนขับกด "ลงรถ" ให้ครบก่อน ถึงจะกดอัปเดต "รอรับกลับ" ได้`,
+            [{ text: 'ตกลง' }]
+          );
           return;
         }
         
@@ -220,25 +283,43 @@ const HomePage = () => {
       }
 
       if (next === 'waiting_return') {
+        // ตรวจสอบว่านักเรียนลงรถที่โรงเรียนครบหรือยัง
         if (p.dropGo < p.pickupGo) {
           const remain = p.pickupGo - p.dropGo;
           Alert.alert('ยังเช็กไม่ครบ', `ยังมีนักเรียนที่ยังไม่ลงรถที่โรงเรียนอีก ${remain} คน`);
           return;
         }
+        
+        // รีเซ็ตสถิติเมื่อเปลี่ยนเป็นขากลับ
+        await resetStatsForReturn();
         await AsyncStorage.setItem('trip_phase', 'return');
       }
 
       if (next === 'finished') {
-        if (p.dropRet < p.pickupRet) {
-          const remain = p.pickupRet - p.dropRet;
-          Alert.alert('ยังเช็กไม่ครบ', `ยังมีนักเรียนที่ยังไม่ลงรถถึงบ้านอีก ${remain} คน`);
+        // ตรวจสอบว่านักเรียนลงรถครบหรือยัง (ทั้งขึ้นรถและลงรถต้องเท่ากับจำนวนทั้งหมด)
+        if (p.pickupRet < p.target || p.dropRet < p.target) {
+          const remainPickup = p.target - p.pickupRet;
+          const remainDrop = p.target - p.dropRet;
+          
+          let message = '';
+          if (remainPickup > 0 && remainDrop > 0) {
+            message = `ยังมีนักเรียนที่ยังไม่ขึ้นรถอีก ${remainPickup} คน และยังไม่ลงรถอีก ${remainDrop} คน`;
+          } else if (remainPickup > 0) {
+            message = `ยังมีนักเรียนที่ยังไม่ขึ้นรถอีก ${remainPickup} คน`;
+          } else if (remainDrop > 0) {
+            message = `ยังมีนักเรียนที่ยังไม่ลงรถอีก ${remainDrop} คน`;
+          }
+          
+          Alert.alert('ยังเช็กไม่ครบ', message);
           return;
         }
         await markNewDayReset();
       }
 
       if (next === 'enroute') {
+        // รีเซ็ตทุกอย่างเมื่อเริ่มเดินทาง (ยกเว้นคนลา)
         await markNewDayReset();
+        await resetStatsForReturn(); // รีเซ็ตสถิติด้วย
       }
 
       setStatus(next);
@@ -248,13 +329,15 @@ const HomePage = () => {
       // ส่งแจ้งเตือนไปยัง LINE Bot (ยกเว้นสถานะ waiting_departure)
       if (next !== 'waiting_departure') {
         try {
-          const response = await fetch('https://safety-bus-liff-v4-new.vercel.app/api/notify-status-update', {
+          const response = await fetch('https://safety-bus-liff-v4-new.vercel.app/api/driver-status-notification', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              status: next,
+              driver_id: session?.user?.id,
+              trip_phase: next,
+              current_status: next,
               timestamp: new Date().toISOString(),
             }),
           });
@@ -319,7 +402,9 @@ const HomePage = () => {
             <View style={styles.brandText}>
               <Text style={styles.appTitle}>SAFETY BUS</Text>
               <View style={styles.titleRow}>
-                <Text style={styles.subtitle}>แดชบอร์ดคนขับ</Text>
+                <Text style={styles.subtitle}>
+                  แดชบอร์ดคนขับ
+                </Text>
               </View>
             </View>
           </View>
@@ -342,8 +427,14 @@ const HomePage = () => {
       <View style={styles.dateTimeContainer}>
         <View style={styles.dateTimeCard}>
           <View style={styles.dateSection}>
-            <Ionicons name="calendar-outline" size={14} color={COLORS.primary} />
-            <Text style={styles.dateText}>{formatDate(currentDateTime)}</Text>
+            <Ionicons 
+              name="calendar-outline" 
+              size={14} 
+              color={COLORS.primary} 
+            />
+            <Text style={styles.dateText}>
+              {formatDate(currentDateTime)}
+            </Text>
           </View>
           <View style={styles.timeSection}>
             <Ionicons name="time-outline" size={14} color={COLORS.success} />

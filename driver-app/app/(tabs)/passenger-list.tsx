@@ -64,6 +64,8 @@ const COLORS = {
   dangerSoft: '#FEF2F2',
   info: '#2563EB',
   infoSoft: '#EFF6FF',
+  waiting: '#6366F1',        // สีม่วงน้ำเงินสำหรับสถานะรอรับ
+  waitingSoft: '#EEF2FF',    // พื้นหลังสีม่วงอ่อนนุ่มนวล
   
   // Additional Colors
   surfaceDisabled: '#F8FAFC',
@@ -813,11 +815,11 @@ window.addEventListener('message',e=>handle(e.data));
     if (phase === 'go') {
       if (droppedGoSet.has(sid)) return { status: 'dropped', color: COLORS.success, icon: 'checkmark-circle', label: 'ส่งแล้ว' };
       if (boardedGoSet.has(sid)) return { status: 'boarded', color: COLORS.warning, icon: 'car', label: 'ขึ้นรถ' };
-      return { status: 'waiting', color: COLORS.info, icon: 'hourglass-outline', label: 'รอรับ' };
+      return { status: 'waiting', color: COLORS.waiting, icon: 'time', label: 'รอรับ' };
     } else {
       if (droppedReturnSet.has(sid)) return { status: 'dropped', color: COLORS.success, icon: 'checkmark-circle', label: 'ส่งแล้ว' };
       if (boardedReturnSet.has(sid)) return { status: 'boarded', color: COLORS.warning, icon: 'car', label: 'ขึ้นรถ' };
-      return { status: 'waiting', color: COLORS.info, icon: 'hourglass-outline', label: 'รอรับ' };
+      return { status: 'waiting', color: COLORS.waiting, icon: 'time', label: 'รอรับ' };
     }
   };
 
@@ -891,11 +893,13 @@ window.addEventListener('message',e=>handle(e.data));
         }
       } else {
         // For pickup/dropoff, check if record exists first
+        const today = new Date().toISOString().split('T')[0];
         const { data: existingRecord } = await supabase
           .from('pickup_dropoff')
           .select('id')
           .eq('student_id', selected.student_id)
-          .eq('driver_id', driverId)
+          .gte('event_time', `${today}T00:00:00.000Z`)
+          .lt('event_time', `${today}T23:59:59.999Z`)
           .eq('location_type', location)
           .single();
 
@@ -907,10 +911,9 @@ window.addEventListener('message',e=>handle(e.data));
             .update({
               event_type: eventType,
               event_time: now,
+              driver_id: driverId,
             })
-            .eq('student_id', selected.student_id)
-            .eq('driver_id', driverId)
-            .eq('location_type', location);
+            .eq('id', existingRecord.id);
           error = updateError;
         } else {
           // Insert new record
@@ -934,21 +937,58 @@ window.addEventListener('message',e=>handle(e.data));
       }
 
       // Update local state
-      const sid = selected.student_id;
       if (eventType === 'pickup') {
         if (phase === 'go') {
-          setBoardedGoSet(prev => new Set([...prev, sid]));
+          setBoardedGoSet(prev => new Set([...prev, selected.student_id]));
         } else {
-          setBoardedReturnSet(prev => new Set([...prev, sid]));
+          setBoardedReturnSet(prev => new Set([...prev, selected.student_id]));
         }
       } else if (eventType === 'dropoff') {
         if (phase === 'go') {
-          setDroppedGoSet(prev => new Set([...prev, sid]));
+          setDroppedGoSet(prev => new Set([...prev, selected.student_id]));
         } else {
-          setDroppedReturnSet(prev => new Set([...prev, sid]));
+          setDroppedReturnSet(prev => new Set([...prev, selected.student_id]));
         }
       } else if (eventType === 'absent') {
-        setAbsentSet(prev => new Set([...prev, sid]));
+        setAbsentSet(prev => new Set([...prev, selected.student_id]));
+      }
+
+      // Update statistics in AsyncStorage
+      try {
+        // Calculate new statistics based on current sets
+        let newPickupGo = boardedGoSet.size;
+        let newDropGo = droppedGoSet.size;
+        let newPickupRet = boardedReturnSet.size;
+        let newDropRet = droppedReturnSet.size;
+
+        // Adjust for the new action
+        if (eventType === 'pickup') {
+          if (phase === 'go') {
+            newPickupGo = boardedGoSet.size + 1; // +1 for the new pickup
+          } else {
+            newPickupRet = boardedReturnSet.size + 1; // +1 for the new pickup in return phase
+          }
+        } else if (eventType === 'dropoff') {
+          if (phase === 'go') {
+            newDropGo = droppedGoSet.size + 1; // +1 for the new dropoff
+          } else {
+            newDropRet = droppedReturnSet.size + 1; // +1 for the new dropoff in return phase
+          }
+        }
+        // For absent, no change in statistics
+
+        // Save updated statistics to AsyncStorage with new structure
+        const stats = {
+          pickupGo: newPickupGo,
+          dropGo: newDropGo,
+          pickupRet: newPickupRet,
+          dropRet: newDropRet,
+          total: students.length
+        };
+        
+        await AsyncStorage.setItem('passenger_stats', JSON.stringify(stats));
+      } catch (statsError) {
+        console.error('Error updating statistics:', statsError);
       }
 
       // Show success message
@@ -986,7 +1026,10 @@ window.addEventListener('message',e=>handle(e.data));
     
     return (
       <TouchableOpacity 
-        style={styles.studentCard}
+        style={[
+          styles.studentCard,
+          statusInfo.status === 'waiting' && styles.studentCardWaiting
+        ]}
         onPress={() => handleStudentPress(item)}
         activeOpacity={0.7}
       >
@@ -1069,7 +1112,7 @@ window.addEventListener('message',e=>handle(e.data));
 
   const total = students.length;
   const came = boardedGoSet.size;
-  const back = boardedReturnSet.size;
+  const back = droppedGoSet.size + droppedReturnSet.size;
   const absent = absentSet.size;
 
   return (
@@ -1246,7 +1289,7 @@ window.addEventListener('message',e=>handle(e.data));
                   <View style={[styles.statusIcon, { backgroundColor: COLORS.success + '20' }]}>
                     <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
                   </View>
-                  <Text style={styles.statusOptionText}>ผู้ปกครองมารับ</Text>
+                  <Text style={styles.statusOptionText}>ลงรถ</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
@@ -1647,6 +1690,15 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+  studentCardWaiting: {
+    backgroundColor: COLORS.waitingSoft,  // พื้นหลังสีม่วงอ่อนนุ่มนวล
+    borderColor: COLORS.waiting,         // เส้นขอบสีม่วงน้ำเงิน
+    borderWidth: 2,                      // เส้นขอบหนาขึ้นเพื่อให้โดดเด่น
+    shadowColor: COLORS.waiting,         // เงาสีม่วงน้ำเงิน
+    shadowOpacity: 0.15,                 // เงาชัดขึ้น
+    shadowRadius: 10,                    // เงากว้างขึ้น
+    elevation: 5,                        // ยกระดับให้สูงขึ้น
+  },
   studentNumberContainer: {
     backgroundColor: COLORS.primarySoft,
     paddingHorizontal: 8,
@@ -1711,11 +1763,17 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statusIndicator: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   phoneButtonsContainer: {
     flexDirection: 'column',

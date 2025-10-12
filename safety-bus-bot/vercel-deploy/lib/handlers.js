@@ -329,11 +329,18 @@ export async function handleMainAction(event, action) {
     const { linked, type, student, autoMatched } = linkResult;
     console.log(`🔗 Account linking status: ${linked}, type: ${type}, autoMatched: ${autoMatched}`);
     
+    // สำหรับเมนูติดต่อคนขับ ให้ใช้งานได้แม้ไม่ได้ผูกบัญชี
+    if (!linked && action === 'contact_driver') {
+      console.log('🚌 Contact driver requested by unlinked user, allowing access');
+      await handleContactDriverRequest(event);
+      return;
+    }
+    
     if (!linked) {
       if (replyToken) {
         await replyLineMessage(replyToken, {
           type: 'text',
-          text: 'กรุณาผูกบัญชีก่อนใช้งาน\nโดยพิมพ์รหัสนักเรียน 6 หลัก'
+          text: 'กรุณาผูกบัญชีก่อนใช้งาน\nโดยพิมพ์รหัสนักเรียน 6 หลัก\n\n💡 หรือหากต้องการติดต่อคนขับ สามารถใช้เมนู "ติดต่อคนขับ" ได้โดยไม่ต้องผูกบัญชี'
         });
       }
       return;
@@ -401,8 +408,8 @@ export async function handleMainAction(event, action) {
     const lastErrorTime = userErrorStates.get(errorKey);
     const now = Date.now();
     
-    // ถ้าเพิ่งส่งข้อความ error ไปแล้วภายใน 30 วินาที ให้ข้าม
-    if (lastErrorTime && (now - lastErrorTime) < 30000) {
+    // เพิ่มเวลา cooldown เป็น 60 วินาที เพื่อลดการส่งซ้ำ
+    if (lastErrorTime && (now - lastErrorTime) < 60000) {
       console.log('⚠️ Error message already sent recently, skipping to prevent spam');
       return;
     }
@@ -410,7 +417,7 @@ export async function handleMainAction(event, action) {
     // บันทึกเวลาที่ส่งข้อความ error
     userErrorStates.set(errorKey, now);
     
-    // พยายามส่งข้อความแสดงข้อผิดพลาด
+    // ส่งข้อความ error เฉพาะผ่าน reply token เท่านั้น (ไม่ใช้ push message fallback)
     if (replyToken) {
       try {
         await replyLineMessage(replyToken, {
@@ -420,27 +427,16 @@ export async function handleMainAction(event, action) {
         console.log('✅ Sent error message via reply token');
       } catch (replyError) {
         console.error('❌ Reply token already used or invalid:', replyError);
-        // Use push message as fallback only if not recently sent
-        if (userId) {
-          try {
-            await sendLineMessage(userId, [{
-              type: 'text',
-              text: 'เกิดข้อผิดพลาดในเมนู กรุณาลองใหม่\n\nหากปัญหายังคงเกิดขึ้น กรุณาติดต่อโรงเรียน'
-            }]);
-            console.log('✅ Sent error message via push message');
-          } catch (pushError) {
-            console.error('❌ Failed to send push message:', pushError);
-          }
-        }
+        console.log('⚠️ Skipping push message fallback to prevent spam');
       }
     } else {
       console.log('⚠️ Cannot send error message - reply token missing');
     }
     
-    // ล้าง error state หลังจาก 5 นาที
+    // ล้าง error state หลังจาก 10 นาที
     setTimeout(() => {
       userErrorStates.delete(errorKey);
-    }, 300000);
+    }, 600000);
   }
 }
 
@@ -1412,71 +1408,133 @@ export async function handleBusLocationRequestPush(userId) {
  */
 export async function handleContactDriverRequest(event) {
   const userId = event.source.userId;
+  const replyToken = event.replyToken;
   
   try {
     console.log('🔍 [DEBUG] handleContactDriverRequest called for userId:', userId);
-    console.log('📞 [INFO] Showing driver ID 1 information directly (no student-driver relationship check)');
     
-    // ดึงข้อมูลคนขับ ID 1 โดยตรง (ไม่มี bus_number column)
-    const { data: driverData, error: driverError } = await supabase
-      .from('driver_bus')
-      .select(`
-        driver_id,
-        driver_name,
-        phone_number,
-        license_plate
-      `)
-      .eq('driver_id', 1)
-      .single();
+    // ตรวจสอบ replyToken ก่อน
+    if (!replyToken) {
+      console.error('❌ No reply token provided');
+      return;
+    }
+    
+    console.log('📞 [INFO] Fetching driver ID 1 via RPC get_driver_current_status');
+    
+    let driverInfo = null;
+    let phoneNumber = null;
+    
+    // ลองดึงข้อมูลคนขับจาก RPC function ก่อน
+    try {
+      const { data: driverStatus, error: rpcError } = await supabase
+        .rpc('get_driver_current_status', { p_driver_id: 1 });
 
-    console.log('🔍 [DEBUG] Driver ID 1 query result:', { driverData, driverError });
+      console.log('🔍 [DEBUG] RPC get_driver_current_status result:', { driverStatus, rpcError });
 
-    if (driverError || !driverData) {
-      console.log('❌ [DEBUG] Driver ID 1 not found, sending contact school message');
-      await replyLineMessage(event.replyToken, {
+      if (!rpcError && driverStatus && driverStatus.success === true) {
+        driverInfo = driverStatus;
+        phoneNumber = driverStatus.phone_number;
+        console.log('✅ [DEBUG] Got driver info from RPC');
+      } else {
+        console.log('⚠️ [DEBUG] RPC failed or no data, trying fallback...');
+      }
+    } catch (rpcErr) {
+      console.log('⚠️ [DEBUG] RPC exception:', rpcErr.message);
+    }
+    
+    // ถ้า RPC ไม่ได้ผล ให้ลองดึงจากตารางโดยตรง
+    if (!driverInfo) {
+      try {
+        console.log('🔍 [DEBUG] Trying direct database query...');
+        const { data: driverRow, error: dbError } = await supabase
+          .from('driver_bus')
+          .select('driver_id, driver_name, phone_number, license_plate')
+          .eq('driver_id', 1)
+          .single();
+        
+        console.log('🔍 [DEBUG] Direct query result:', { driverRow, dbError });
+        
+        if (!dbError && driverRow) {
+          driverInfo = {
+            driver_name: driverRow.driver_name,
+            license_plate: driverRow.license_plate,
+            success: true
+          };
+          phoneNumber = driverRow.phone_number;
+          console.log('✅ [DEBUG] Got driver info from direct query');
+        }
+      } catch (dbErr) {
+        console.log('⚠️ [DEBUG] Direct query exception:', dbErr.message);
+      }
+    }
+    
+    // ถ้ายังไม่มีข้อมูลคนขับ ให้ส่งข้อความติดต่อโรงเรียน
+    if (!driverInfo) {
+      console.log('❌ [DEBUG] No driver info found, sending contact school message');
+      await replyLineMessage(replyToken, {
         type: 'text',
         text: '📞 ติดต่อคนขับรถ\n\n⚠️ ไม่พบข้อมูลคนขับในระบบ\nกรุณาติดต่อโรงเรียนโดยตรง\n\n📞 โทร: 043-754-321\n⏰ เวลาทำการ: 08:00 - 16:30 น.'
       });
       return;
     }
-
-    // สร้างข้อความแสดงข้อมูลคนขับ
-    console.log('✅ [DEBUG] Driver ID 1 found! Creating response message');
-    const driverName = driverData.driver_name || 'ไม่ระบุชื่อ';
-    const phoneNumber = driverData.phone_number || 'ไม่ระบุเบอร์';
-    const licensePlate = driverData.license_plate || 'ไม่ระบุทะเบียน';
     
-    console.log('🔍 [DEBUG] Driver info:', { driverName, phoneNumber, licensePlate });
+    // ตรวจสอบและทำความสะอาดข้อมูล
+    const driverName = driverInfo.driver_name || 'คนขับรถโรงเรียน';
+    const licensePlate = driverInfo.license_plate || 'ไม่ระบุ';
+    phoneNumber = phoneNumber || '043-754-321';
     
-    // ทำความสะอาดเบอร์โทรศัพท์ (เอาขีดและช่องว่างออก)
+    console.log('🔍 [DEBUG] Final driver info:', { driverName, phoneNumber, licensePlate });
+    
+    // ทำความสะอาดเบอร์โทรศัพท์
     const cleanPhoneNumber = phoneNumber.replace(/[-\s]/g, '');
     
-    await replyLineMessage(event.replyToken, {
-      type: 'template',
-      altText: `📞 ติดต่อคนขับรถ - ${driverName} ${phoneNumber}`,
-      template: {
-        type: 'buttons',
-        thumbnailImageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=400&h=200&fit=crop',
-        imageAspectRatio: 'rectangle',
-        imageSize: 'cover',
-        title: '📞 ติดต่อคนขับรถ',
-        text: `👨‍💼 ${driverName}\n📱 เบอร์โทร: ${phoneNumber}\n🚌 ป้ายทะเบียน: ${licensePlate}\n⏰ เวลาทำการ: 06:00 - 17:00 น.`,
-        actions: [
-          {
-            type: 'uri',
-            label: '📞 โทรหาคนขับ',
-            uri: `tel:${cleanPhoneNumber}`
-          }
-        ]
-      }
-    });
+    // ลองส่ง template message ก่อน
+    try {
+      await replyLineMessage(replyToken, {
+        type: 'template',
+        altText: `📞 ติดต่อคนขับรถ - ${driverName} ${phoneNumber}`,
+        template: {
+          type: 'buttons',
+          thumbnailImageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=400&h=200&fit=crop',
+          imageAspectRatio: 'rectangle',
+          imageSize: 'cover',
+          title: '📞 ติดต่อคนขับรถ',
+          text: `👨‍💼 ${driverName}\n📱 เบอร์โทร: ${phoneNumber}\n🚌 ป้ายทะเบียน: ${licensePlate}\n⏰ เวลาทำการ: 06:00 - 17:00 น.`,
+          actions: [
+            {
+              type: 'uri',
+              label: '📞 โทรหาคนขับ',
+              uri: `tel:${cleanPhoneNumber}`
+            }
+          ]
+        }
+      });
+      console.log('✅ [DEBUG] Template message sent successfully');
+    } catch (templateError) {
+      console.log('⚠️ [DEBUG] Template message failed, trying simple text:', templateError.message);
+      
+      // ถ้า template message ไม่ได้ ให้ส่งข้อความธรรมดา
+      await replyLineMessage(replyToken, {
+        type: 'text',
+        text: `📞 ติดต่อคนขับรถ\n\n👨‍💼 ${driverName}\n📱 เบอร์โทร: ${phoneNumber}\n🚌 ป้ายทะเบียน: ${licensePlate}\n⏰ เวลาทำการ: 06:00 - 17:00 น.\n\n💡 กดที่เบอร์โทรเพื่อโทรหาคนขับ`
+      });
+      console.log('✅ [DEBUG] Simple text message sent as fallback');
+    }
 
   } catch (error) {
-    console.error('Error in handleContactDriverRequest:', error);
-    await replyLineMessage(event.replyToken, {
-      type: 'text',
-      text: '❌ เกิดข้อผิดพลาดในการดึงข้อมูลคนขับ\nกรุณาลองใหม่อีกครั้ง หรือติดต่อโรงเรียนโดยตรง\n\n📞 โทร: 043-754-321'
-    });
+    console.error('❌ Error in handleContactDriverRequest:', error);
+    
+    // ส่งข้อความ error แบบง่าย
+    try {
+      if (replyToken) {
+        await replyLineMessage(replyToken, {
+          type: 'text',
+          text: '❌ เกิดข้อผิดพลาดในการดึงข้อมูลคนขับ\n\nกรุณาติดต่อโรงเรียนโดยตรง:\n📞 043-754-321\n\nขออภัยในความไม่สะดวก 🙏'
+        });
+      }
+    } catch (replyError) {
+      console.error('❌ Failed to send error message:', replyError);
+    }
   }
 }
 

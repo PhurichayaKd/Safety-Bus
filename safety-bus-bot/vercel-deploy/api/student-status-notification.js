@@ -249,27 +249,7 @@ export default async function handler(req, res) {
       console.error('Error fetching parent LINE links:', error);
     }
 
-    // ส่งไปยัง Admin Group (ถ้ามี)
-    const adminGroupId = process.env.LINE_ADMIN_GROUP_ID;
-    if (adminGroupId) {
-      try {
-        await lineClient.pushMessage(adminGroupId, lineMessage);
-        notificationResults.push({
-          lineUserId: adminGroupId,
-          type: 'admin_group',
-          status: 'success'
-        });
-        console.log('✅ Student status notification sent to admin group');
-      } catch (error) {
-        console.error('❌ Failed to send to admin group:', error);
-        notificationResults.push({
-          lineUserId: adminGroupId,
-          type: 'admin_group',
-          status: 'failed',
-          error: error.message
-        });
-      }
-    }
+
 
     // บันทึก log การส่งข้อความ
     try {

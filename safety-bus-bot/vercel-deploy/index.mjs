@@ -39,6 +39,17 @@ export default function handler(req, res) {
       }
     }
     
+    // Handle specific form routes
+    if (url.startsWith('/leave-form')) {
+      const formPath = join(process.cwd(), 'leave-form.html');
+      if (existsSync(formPath)) {
+        const formContent = readFileSync(formPath, 'utf8');
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+        return res.status(200).send(formContent);
+      }
+    }
+    
     // Handle static files
     const filePath = join(process.cwd(), url.startsWith('/') ? url.slice(1) : url);
     const ext = extname(filePath).toLowerCase();

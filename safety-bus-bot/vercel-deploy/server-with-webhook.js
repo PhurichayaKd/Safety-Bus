@@ -163,6 +163,124 @@ app.post('/api/submit-leave', async (req, res) => {
     try {
         console.log('📨 Received leave request:', req.body);
         
+        // Handle new format from leave form
+        const { student_id, leave_dates, line_user_id } = req.body;
+        
+        if (student_id && leave_dates) {
+            // Validate required fields
+            if (!student_id || !leave_dates || !Array.isArray(leave_dates) || leave_dates.length === 0) {
+                return res.status(400).json({ 
+                    error: 'Missing required fields: student_id and leave_dates array' 
+                });
+            }
+
+            // Validate maximum 3 days
+            if (leave_dates.length > 3) {
+                return res.status(400).json({ 
+                    error: 'Cannot request leave for more than 3 days' 
+                });
+            }
+
+            // Validate date format and ensure dates are not in the past
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const validDates = [];
+            for (const dateStr of leave_dates) {
+                const leaveDate = new Date(dateStr);
+                if (isNaN(leaveDate.getTime())) {
+                    return res.status(400).json({ 
+                        error: `Invalid date format: ${dateStr}` 
+                    });
+                }
+                
+                leaveDate.setHours(0, 0, 0, 0);
+                if (leaveDate < today) {
+                    return res.status(400).json({ 
+                        error: `Cannot request leave for past dates: ${dateStr}` 
+                    });
+                }
+                
+                validDates.push(dateStr);
+            }
+
+            // Check if student exists and is active
+            const { data: student, error: studentError } = await supabase
+                .from('students')
+                .select('student_id, student_name, is_active')
+                .eq('student_id', student_id)
+                .single();
+
+            if (studentError || !student) {
+                return res.status(404).json({ error: 'Student not found' });
+            }
+
+            if (!student.is_active) {
+                return res.status(403).json({ error: 'Student account is inactive' });
+            }
+
+            // Check for duplicate leave requests
+            const { data: existingLeaves, error: checkError } = await supabase
+                .from('leave_requests')
+                .select('leave_date')
+                .eq('student_id', student_id)
+                .in('leave_date', validDates)
+                .eq('status', 'approved');
+
+            if (checkError) {
+                console.error('Error checking existing leaves:', checkError);
+                return res.status(500).json({ error: 'Database error while checking existing leaves' });
+            }
+
+            if (existingLeaves && existingLeaves.length > 0) {
+                const duplicateDates = existingLeaves.map(leave => leave.leave_date);
+                return res.status(409).json({ 
+                    error: 'Leave already requested for these dates',
+                    duplicate_dates: duplicateDates
+                });
+            }
+
+            // Prepare leave requests data
+            const leaveRequests = validDates.map(date => ({
+                student_id: student_id,
+                leave_date: date,
+                status: 'approved',
+                leave_type: 'personal',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }));
+
+            // Insert leave requests
+            const { data: insertedLeaves, error: insertError } = await supabase
+                .from('leave_requests')
+                .insert(leaveRequests)
+                .select();
+
+            if (insertError) {
+                console.error('Error inserting leave requests:', insertError);
+                return res.status(500).json({ error: 'Failed to submit leave requests' });
+            }
+
+            console.log('Leave requests submitted successfully:', {
+                student_id,
+                student_name: student.student_name,
+                leave_dates: validDates,
+                line_user_id
+            });
+
+            return res.status(201).json({
+                success: true,
+                message: 'Leave requests submitted successfully',
+                data: {
+                    student_id,
+                    student_name: student.student_name,
+                    leave_requests: insertedLeaves,
+                    submitted_dates: validDates
+                }
+            });
+        }
+        
+        // Handle legacy format for backward compatibility
         const { action, userId, studentInfo, leaveDates } = req.body;
         
         if (action === 'getStudentInfo') {
@@ -202,15 +320,13 @@ app.post('/api/submit-leave', async (req, res) => {
         }
         
         return res.status(400).json({
-            ok: false,
-            error: 'Invalid action'
+            error: 'Invalid action or missing required fields'
         });
         
     } catch (error) {
         console.error('❌ API Error:', error);
         return res.status(500).json({
-            ok: false,
-            error: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์'
+            error: 'Internal server error'
         });
     }
 });
@@ -252,56 +368,133 @@ app.post('/api/student-status-notification', async (req, res) => {
     }
 });
 
+// Driver Status Notification API endpoint
+app.post('/api/driver-status-notification', async (req, res) => {
+    try {
+        // Import the handler function
+        const { default: driverStatusHandler } = await import('./api/driver-status-notification.js');
+        
+        // Call the handler
+        await driverStatusHandler(req, res);
+    } catch (error) {
+        console.error('❌ Driver Status Notification API Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์: ' + error.message
+        });
+    }
+});
+
+// Get Driver Status API endpoint
+app.get('/api/get-driver-status', async (req, res) => {
+    try {
+        // Import the handler function
+        const { default: getDriverStatusHandler } = await import('./api/get-driver-status.js');
+        
+        // Call the handler
+        await getDriverStatusHandler(req, res);
+    } catch (error) {
+        console.error('❌ Get Driver Status API Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์: ' + error.message
+        });
+    }
+});
+
+app.post('/api/get-driver-status', async (req, res) => {
+    try {
+        // Import the handler function
+        const { default: getDriverStatusHandler } = await import('./api/get-driver-status.js');
+        
+        // Call the handler
+        await getDriverStatusHandler(req, res);
+    } catch (error) {
+        console.error('❌ Get Driver Status API Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์: ' + error.message
+        });
+    }
+});
+
 // API routes
-app.get('/api/get-bus-locations', (req, res) => {
+app.get('/api/get-bus-locations', async (req, res) => {
     try {
         // Set CORS headers
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-        // Mock bus data for testing
-        const mockBusData = [
-            {
-                id: 1,
-                bus_number: "MSU-001",
-                driver_name: "นายสมชาย ใจดี",
-                route_name: "เส้นทาง A - หอพักมหาวิทยาลัย",
-                capacity: 30,
-                status: "active",
-                has_location: true,
-                current_latitude: 16.2498137,
-                current_longitude: 103.2557912,
-                home_latitude: 16.2450000,
-                home_longitude: 103.2500000,
-                school_latitude: 16.2550000,
-                school_longitude: 103.2600000,
-                last_seen: new Date().toISOString()
-            },
-            {
-                id: 2,
-                bus_number: "MSU-002",
-                driver_name: "นายวิชัย รักษ์ดี",
-                route_name: "เส้นทาง B - ตัวเมือง",
-                capacity: 25,
-                status: "active",
-                has_location: true,
-                current_latitude: 16.2520000,
-                current_longitude: 103.2580000,
-                home_latitude: 16.2470000,
-                home_longitude: 103.2520000,
-                school_latitude: 16.2550000,
-                school_longitude: 103.2600000,
-                last_seen: new Date(Date.now() - 30000).toISOString()
-            }
-        ];
+        // Query real data from database
+        const { data: driversData, error: driversError } = await supabase
+            .from('driver_bus')
+            .select(`
+                driver_id,
+                driver_name,
+                license_plate,
+                capacity,
+                current_status,
+                home_latitude,
+                home_longitude,
+                school_latitude,
+                school_longitude,
+                current_latitude,
+                current_longitude,
+                current_updated_at,
+                routes(route_name)
+            `)
+            .eq('is_active', true);
 
-        const filteredData = mockBusData.filter(bus => bus.status === 'active' && bus.has_location);
+        if (driversError) {
+            console.error('Error fetching drivers:', driversError);
+            return res.status(500).json({
+                success: false,
+                error: 'ไม่สามารถดึงข้อมูลคนขับได้'
+            });
+        }
+
+        // Query live locations
+        const { data: liveLocations, error: liveError } = await supabase
+            .from('live_driver_locations')
+            .select('*');
+
+        if (liveError) {
+            console.error('Error fetching live locations:', liveError);
+        }
+
+        // Combine data
+        const busData = driversData.map(driver => {
+            const liveLocation = liveLocations?.find(loc => loc.driver_id === driver.driver_id);
+            
+            return {
+                id: driver.driver_id,
+                bus_number: driver.license_plate,
+                driver_name: driver.driver_name,
+                route_name: driver.routes?.route_name || 'ไม่ระบุเส้นทาง',
+                capacity: driver.capacity,
+                status: driver.current_status,
+                has_location: !!(liveLocation || (driver.current_latitude && driver.current_longitude)),
+                current_latitude: liveLocation?.latitude || driver.current_latitude,
+                current_longitude: liveLocation?.longitude || driver.current_longitude,
+                home_latitude: driver.home_latitude,
+                home_longitude: driver.home_longitude,
+                school_latitude: driver.school_latitude,
+                school_longitude: driver.school_longitude,
+                last_seen: liveLocation?.last_updated || driver.current_updated_at || new Date().toISOString()
+            };
+        });
+
+        // Filter only active buses with location data
+        const filteredData = busData.filter(bus => 
+            bus.status === 'active' && 
+            (bus.has_location || bus.home_latitude || bus.school_latitude)
+        );
 
         res.json({
             success: true,
             data: filteredData,
-            total_buses: mockBusData.length,
+            total_buses: busData.length,
             buses_with_location: filteredData.length,
             last_updated: new Date().toISOString()
         });

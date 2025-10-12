@@ -61,7 +61,7 @@
       }
     },
     {
-      "src": "/(.*)",
+      "src": "/",
       "dest": "/index.mjs",
       "headers": {
         "X-Content-Type-Options": "nosniff",

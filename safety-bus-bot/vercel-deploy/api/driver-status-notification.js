@@ -21,14 +21,54 @@ try {
 
 // ข้อความสำหรับสถานะต่างๆ ของคนขับ
 const DRIVER_STATUS_MESSAGES = {
+  // เริ่มออกเดินทาง
+  start_journey: {
+    emoji: '🚌',
+    title: 'คนขับเริ่มออกเดินทาง',
+    message: 'คนขับได้เริ่มออกเดินทางแล้ว กรุณาเตรียมตัวให้พร้อม'
+  },
   go: {
     emoji: '🚌',
-    title: 'คนขับเริ่มเส้นทางรับนักเรียน',
-    message: 'คนขับได้เริ่มเส้นทางรับนักเรียนแล้ว กรุณาเตรียมตัวให้พร้อม'
+    title: 'คนขับเริ่มออกเดินทาง',
+    message: 'คนขับได้เริ่มออกเดินทางแล้ว กรุณาเตรียมตัวให้พร้อม'
   },
+  // ถึงโรงเรียน
+  arrived_school: {
+    emoji: '🏫',
+    title: 'คนขับถึงโรงเรียนแล้ว',
+    message: 'คนขับได้มาถึงโรงเรียนเรียบร้อยแล้ว นักเรียนสามารถลงรถได้'
+  },
+  arrive_school: {
+    emoji: '🏫',
+    title: 'คนขับถึงโรงเรียนแล้ว',
+    message: 'คนขับได้มาถึงโรงเรียนเรียบร้อยแล้ว นักเรียนสามารถลงรถได้'
+  },
+  // รอรับกลับบ้าน
+  waiting_return: {
+    emoji: '⏰',
+    title: 'คนขับรอรับกลับบ้าน',
+    message: 'คนขับกำลังรอรับนักเรียนกลับบ้าน กรุณาเตรียมตัวให้พร้อม'
+  },
+  wait_pickup: {
+    emoji: '⏰',
+    title: 'คนขับรอรับกลับบ้าน',
+    message: 'คนขับกำลังรอรับนักเรียนกลับบ้าน กรุณาเตรียมตัวให้พร้อม'
+  },
+  // จบการเดินทาง
+  finished: {
+    emoji: '✅',
+    title: 'คนขับจบการเดินทาง',
+    message: 'คนขับได้เสร็จสิ้นการเดินทางแล้ว นักเรียนทุกคนได้กลับถึงบ้านเรียบร้อย'
+  },
+  finish_journey: {
+    emoji: '✅',
+    title: 'คนขับจบการเดินทาง',
+    message: 'คนขับได้เสร็จสิ้นการเดินทางแล้ว นักเรียนทุกคนได้กลับถึงบ้านเรียบร้อย'
+  },
+  // สถานะเพิ่มเติม (เก็บไว้เพื่อความเข้ากันได้)
   return: {
     emoji: '🏠',
-    title: 'คนขับเริ่มเส้นทางส่งนักเรียนกลับบ้าน',
+    title: 'คนขับเริ่มเส้นทางส่งกลับบ้าน',
     message: 'คนขับได้เริ่มเส้นทางส่งนักเรียนกลับบ้านแล้ว'
   },
   pickup: {
@@ -45,16 +85,6 @@ const DRIVER_STATUS_MESSAGES = {
     emoji: '🛣️',
     title: 'คนขับกำลังเดินทาง',
     message: 'คนขับกำลังเดินทางไปยังจุดหมายปลายทาง'
-  },
-  arrived_school: {
-    emoji: '🏫',
-    title: 'คนขับมาถึงโรงเรียนแล้ว',
-    message: 'คนขับได้มาถึงโรงเรียนเรียบร้อยแล้ว'
-  },
-  finished: {
-    emoji: '✅',
-    title: 'คนขับเสร็จสิ้นการเดินทาง',
-    message: 'คนขับได้เสร็จสิ้นการเดินทางแล้ว'
   }
 };
 
@@ -160,10 +190,15 @@ export default async function handler(req, res) {
 
     // ส่งแจ้งเตือนไปยัง student_line_links และ parent_line_links
     try {
-      // ดึงข้อมูลจาก student_line_links
+      // ดึงข้อมูลจาก student_line_links พร้อม join กับตาราง students
       const { data: studentLinks, error: studentError } = await supabase
         .from('student_line_links')
-        .select('line_user_id, student_name')
+        .select(`
+          line_user_id, 
+          student_id,
+          line_display_id,
+          students!inner(student_name)
+        `)
         .not('line_user_id', 'is', null)
         .neq('line_user_id', '');
 
@@ -174,18 +209,22 @@ export default async function handler(req, res) {
         for (const student of studentLinks) {
           try {
             await lineClient.pushMessage(student.line_user_id, lineMessage);
+            const studentName = student.students?.student_name || student.line_display_id || 'Unknown Student';
             notificationResults.push({
               lineUserId: student.line_user_id,
-              studentName: student.student_name,
+              studentId: student.student_id,
+              studentName: studentName,
               type: 'student',
               status: 'success'
             });
-            console.log(`✅ Driver status notification sent to student ${student.student_name} (${student.line_user_id})`);
+            console.log(`✅ Driver status notification sent to student ${studentName} (${student.line_user_id})`);
           } catch (error) {
-            console.error(`❌ Failed to send to student ${student.student_name}:`, error);
+            const studentName = student.students?.student_name || student.line_display_id || 'Unknown Student';
+            console.error(`❌ Failed to send to student ${studentName}:`, error);
             notificationResults.push({
               lineUserId: student.line_user_id,
-              studentName: student.student_name,
+              studentId: student.student_id,
+              studentName: studentName,
               type: 'student',
               status: 'failed',
               error: error.message
@@ -196,10 +235,16 @@ export default async function handler(req, res) {
         console.log('No student LINE links found');
       }
 
-      // ดึงข้อมูลจาก parent_line_links
+      // ดึงข้อมูลจาก parent_line_links พร้อม join กับตาราง parents และ students
       const { data: parentLinks, error: parentError } = await supabase
         .from('parent_line_links')
-        .select('line_user_id, parent_name, student_name')
+        .select(`
+          line_user_id, 
+          parent_id,
+          line_display_id,
+          parents!inner(parent_name),
+          students!inner(student_name)
+        `)
         .not('line_user_id', 'is', null)
         .neq('line_user_id', '');
 
@@ -210,20 +255,26 @@ export default async function handler(req, res) {
         for (const parent of parentLinks) {
           try {
             await lineClient.pushMessage(parent.line_user_id, lineMessage);
+            const parentName = parent.parents?.parent_name || parent.line_display_id || 'Unknown Parent';
+            const studentName = parent.students?.student_name || 'Unknown Student';
             notificationResults.push({
               lineUserId: parent.line_user_id,
-              parentName: parent.parent_name,
-              studentName: parent.student_name,
+              parentId: parent.parent_id,
+              parentName: parentName,
+              studentName: studentName,
               type: 'parent',
               status: 'success'
             });
-            console.log(`✅ Driver status notification sent to parent ${parent.parent_name} (${parent.line_user_id})`);
+            console.log(`✅ Driver status notification sent to parent ${parentName} (${parent.line_user_id})`);
           } catch (error) {
-            console.error(`❌ Failed to send to parent ${parent.parent_name}:`, error);
+            const parentName = parent.parents?.parent_name || parent.line_display_id || 'Unknown Parent';
+            const studentName = parent.students?.student_name || 'Unknown Student';
+            console.error(`❌ Failed to send to parent ${parentName}:`, error);
             notificationResults.push({
               lineUserId: parent.line_user_id,
-              parentName: parent.parent_name,
-              studentName: parent.student_name,
+              parentId: parent.parent_id,
+              parentName: parentName,
+              studentName: studentName,
               type: 'parent',
               status: 'failed',
               error: error.message
@@ -237,27 +288,7 @@ export default async function handler(req, res) {
       console.error('Database query error:', error);
     }
 
-    // ส่งไปยัง Admin Group (ถ้ามี)
-    const adminGroupId = process.env.LINE_ADMIN_GROUP_ID;
-    if (adminGroupId) {
-      try {
-        await lineClient.pushMessage(adminGroupId, lineMessage);
-        notificationResults.push({
-          lineUserId: adminGroupId,
-          type: 'admin_group',
-          status: 'success'
-        });
-        console.log('✅ Driver status notification sent to admin group');
-      } catch (error) {
-        console.error('❌ Failed to send to admin group:', error);
-        notificationResults.push({
-          lineUserId: adminGroupId,
-          type: 'admin_group',
-          status: 'failed',
-          error: error.message
-        });
-      }
-    }
+
 
     // บันทึก log การส่งข้อความ
     try {

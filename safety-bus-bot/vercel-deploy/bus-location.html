@@ -291,7 +291,7 @@
             
             switch(type) {
                 case 'bus':
-                    iconHtml = '<img src="assets/msu.png" alt="รถบัส" style="width: 24px; height: 24px; object-fit: contain;">';
+                    iconHtml = '🚌';
                     className = 'bus-icon';
                     break;
                 case 'home':
@@ -303,7 +303,7 @@
                     className = 'school-icon';
                     break;
                 default:
-                    iconHtml = '<img src="assets/msu.png" alt="รถบัส" style="width: 24px; height: 24px; object-fit: contain;">';
+                    iconHtml = '🚌';
                     className = 'bus-icon';
             }
 
@@ -397,11 +397,16 @@
         }
 
         // Load bus locations from API
+        let isFirstLoad = true;
+
         async function loadBusLocations() {
             if (isLoading) return;
 
             try {
-                showLoading(true);
+                // Only show loading indicator on first load
+                if (isFirstLoad) {
+                    showLoading(true);
+                }
                 
                 const response = await fetch('/api/get-bus-locations', {
                     method: 'GET',
@@ -436,8 +441,8 @@
                 document.getElementById('last-update-time').textContent = 
                     new Date().toLocaleString('th-TH');
 
-                // Auto-fit map to show all markers
-                if (markers.length > 0) {
+                // Auto-fit map to show all markers (only on first load)
+                if (isFirstLoad && markers.length > 0) {
                     const group = new L.featureGroup(markers);
                     map.fitBounds(group.getBounds().pad(0.1));
                 }
@@ -447,8 +452,16 @@
             } catch (error) {
                 console.error('Error loading bus locations:', error);
                 showError('ไม่สามารถโหลดข้อมูลตำแหน่งได้: ' + error.message);
+                // Show loading indicator when there's an error
+                if (!isFirstLoad) {
+                    showLoading(true);
+                    setTimeout(() => showLoading(false), 1000);
+                }
             } finally {
-                showLoading(false);
+                if (isFirstLoad) {
+                    showLoading(false);
+                    isFirstLoad = false;
+                }
             }
         }
 

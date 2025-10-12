@@ -12,6 +12,7 @@ BEGIN
     SELECT 
         driver_id,
         driver_name,
+        phone_number,
         trip_phase,
         current_status,
         is_active,
@@ -37,6 +38,7 @@ BEGIN
         'success', true,
         'driver_id', v_driver_record.driver_id,
         'driver_name', v_driver_record.driver_name,
+        'phone_number', v_driver_record.phone_number,
         'trip_phase', v_driver_record.trip_phase,
         'current_status', v_driver_record.current_status,
         'is_active', v_driver_record.is_active,

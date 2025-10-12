@@ -2,7 +2,7 @@
 import { supabase } from '../src/services/supabaseClient';
 import LineNotificationService from './LineNotificationService';
 
-const API_BASE_URL = 'https://safety-bus-bot-vercel-deploy.vercel.app';
+const API_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL || 'https://safety-bus-liff-v4-new.vercel.app';
 
 export class EmergencyService {
   // ดึงข้อมูลเหตุการณ์ฉุกเฉินทั้งหมด

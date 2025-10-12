@@ -24,17 +24,17 @@ const STUDENT_STATUS_MESSAGES = {
   onboard: {
     emoji: '🚌',
     title: 'นักเรียนขึ้นรถแล้ว',
-    message: 'ได้ขึ้นรถโดยสารเรียบร้อยแล้ว'
+    message: 'ขึ้นรถแล้ว'
   },
   offboard: {
     emoji: '🏠',
     title: 'นักเรียนลงรถแล้ว',
-    message: 'ได้ลงจากรถโดยสารเรียบร้อยแล้ว'
+    message: 'ลงรถแล้ว'
   },
   absent: {
-    emoji: '❌',
-    title: 'นักเรียนขาดเรียน',
-    message: 'ไม่ได้ขึ้นรถโดยสาร (ขาดเรียน)'
+    emoji: '📝',
+    title: 'นักเรียนทำการแจ้งลา',
+    message: 'ทำการแจ้งลาไม่ประสงค์ขึ้นรถรับส่ง คนขับยืนยันแล้ว'
   },
   stop: {
     emoji: '⏸️',
@@ -44,6 +44,10 @@ const STUDENT_STATUS_MESSAGES = {
 };
 
 export default async function handler(req, res) {
+  console.log('🔥 Student Status Notification API called!');
+  console.log('📨 Request method:', req.method);
+  console.log('📋 Request body:', req.body);
+  
   // ตั้งค่า CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -83,19 +87,24 @@ export default async function handler(req, res) {
     }
 
     // ดึงข้อมูลนักเรียน
+    console.log('🔍 Querying student with ID:', student_id);
     const { data: studentData, error: studentError } = await supabase
       .from('students')
       .select(`
         student_id,
         student_name,
         grade,
-        pickup_location,
-        dropoff_location
+        parent_id,
+        home_latitude,
+        home_longitude
       `)
       .eq('student_id', student_id)
       .single();
 
+    console.log('📊 Student query result:', { studentData, studentError });
+
     if (studentError || !studentData) {
+      console.log('❌ Student not found or error occurred');
       return res.status(404).json({ 
         error: 'Student not found' 
       });
@@ -151,12 +160,6 @@ export default async function handler(req, res) {
     
     if (location) {
       messageText += `\n📍 ตำแหน่ง: ${location}`;
-    } else {
-      // ใช้ตำแหน่งจากข้อมูลนักเรียน
-      const studentLocation = phase === 'pickup' ? studentData.pickup_location : studentData.dropoff_location;
-      if (studentLocation) {
-        messageText += `\n📍 ตำแหน่ง: ${studentLocation}`;
-      }
     }
     
     if (notes) {
@@ -176,8 +179,9 @@ export default async function handler(req, res) {
     try {
       const { data: studentLink, error: studentLinkError } = await supabase
         .from('student_line_links')
-        .select('line_user_id, student_name')
+        .select('line_user_id, line_display_id')
         .eq('student_id', student_id)
+        .eq('active', true)
         .not('line_user_id', 'is', null)
         .neq('line_user_id', '')
         .single();
@@ -187,16 +191,16 @@ export default async function handler(req, res) {
           await lineClient.pushMessage(studentLink.line_user_id, lineMessage);
           notificationResults.push({
             lineUserId: studentLink.line_user_id,
-            studentName: studentLink.student_name,
+            studentName: studentData.student_name,
             type: 'student',
             status: 'success'
           });
-          console.log(`✅ Student status notification sent to student ${studentLink.student_name} (${studentLink.line_user_id})`);
+          console.log(`✅ Student status notification sent to student ${studentData.student_name} (${studentLink.line_user_id})`);
         } catch (error) {
-          console.error(`❌ Failed to send to student ${studentLink.student_name}:`, error);
+          console.error(`❌ Failed to send to student ${studentData.student_name}:`, error);
           notificationResults.push({
             lineUserId: studentLink.line_user_id,
-            studentName: studentLink.student_name,
+            studentName: studentData.student_name,
             type: 'student',
             status: 'failed',
             error: error.message
@@ -213,29 +217,33 @@ export default async function handler(req, res) {
     try {
       const { data: parentLinks, error: parentLinkError } = await supabase
         .from('parent_line_links')
-        .select('line_user_id, parent_name, student_name')
-        .eq('student_id', student_id)
+        .select(`
+          line_user_id,
+          parents!inner(parent_name)
+        `)
+        .eq('parent_id', studentData.parent_id)
+        .eq('active', true)
         .not('line_user_id', 'is', null)
         .neq('line_user_id', '');
 
       if (!parentLinkError && parentLinks && parentLinks.length > 0) {
-        for (const parent of parentLinks) {
+        for (const parentLink of parentLinks) {
           try {
-            await lineClient.pushMessage(parent.line_user_id, lineMessage);
+            await lineClient.pushMessage(parentLink.line_user_id, lineMessage);
             notificationResults.push({
-              lineUserId: parent.line_user_id,
-              parentName: parent.parent_name,
-              studentName: parent.student_name,
+              lineUserId: parentLink.line_user_id,
+              parentName: parentLink.parents.parent_name,
+              studentName: studentData.student_name,
               type: 'parent',
               status: 'success'
             });
-            console.log(`✅ Student status notification sent to parent ${parent.parent_name} (${parent.line_user_id})`);
+            console.log(`✅ Student status notification sent to parent ${parentLink.parents.parent_name} (${parentLink.line_user_id})`);
           } catch (error) {
-            console.error(`❌ Failed to send to parent ${parent.parent_name}:`, error);
+            console.error(`❌ Failed to send to parent ${parentLink.parents.parent_name}:`, error);
             notificationResults.push({
-              lineUserId: parent.line_user_id,
-              parentName: parent.parent_name,
-              studentName: parent.student_name,
+              lineUserId: parentLink.line_user_id,
+              parentName: parentLink.parents.parent_name,
+              studentName: studentData.student_name,
               type: 'parent',
               status: 'failed',
               error: error.message

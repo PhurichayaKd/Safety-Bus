@@ -331,34 +331,14 @@ app.post('/api/submit-leave', async (req, res) => {
     }
 });
 
-// Mock API endpoint for student-status-notification
+// Student Status Notification API endpoint
 app.post('/api/student-status-notification', async (req, res) => {
     try {
-        console.log('📨 Received student status notification:', req.body);
+        // Import the handler function
+        const { default: studentStatusHandler } = await import('./api/student-status-notification.js');
         
-        const { student_id, status, driver_id, phase, location } = req.body;
-        
-        // Validate required fields
-        if (!student_id || !status || !driver_id) {
-            return res.status(400).json({
-                ok: false,
-                error: 'ข้อมูลไม่ครบถ้วน'
-            });
-        }
-        
-        // Mock successful notification
-        console.log('✅ Student status notification processed successfully');
-        console.log('👤 Student ID:', student_id);
-        console.log('📊 Status:', status);
-        console.log('🚌 Driver ID:', driver_id);
-        console.log('📍 Phase:', phase);
-        console.log('🗺️ Location:', location);
-        
-        return res.json({
-            ok: true,
-            message: 'ส่งแจ้งเตือนเรียบร้อยแล้ว'
-        });
-        
+        // Call the handler
+        await studentStatusHandler(req, res);
     } catch (error) {
         console.error('❌ Student Status Notification API Error:', error);
         return res.status(500).json({

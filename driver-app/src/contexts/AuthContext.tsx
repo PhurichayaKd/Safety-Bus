@@ -1,7 +1,7 @@
 import { Session, AuthChangeEvent } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase, authWithRetry } from '../../src/services/supabaseClient';
+import { supabase, authWithRetry, recoverSession } from '../../src/services/supabaseClient';
 interface AuthContextType {
   session: Session | null;
   loading: boolean;
@@ -17,19 +17,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
     
-    // ตรวจสอบ session ปัจจุบันด้วย retry logic
-    authWithRetry.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-      if (mounted) {
-        setSession(session);
-        setLoading(false);
+    // ตรวจสอบและกู้คืน session ด้วย retry logic
+    const initializeSession = async () => {
+      try {
+        // พยายามกู้คืน session ก่อน
+        const sessionRecovered = await authWithRetry.recoverSession();
+        
+        if (sessionRecovered) {
+          // ถ้ากู้คืนสำเร็จ ให้ดึง session ปัจจุบัน
+          const { data: { session }, error } = await authWithRetry.getSession();
+          if (mounted) {
+            if (error) {
+              console.warn('Session retrieval error after recovery:', error.message);
+              setSession(null);
+            } else {
+              setSession(session);
+            }
+            setLoading(false);
+          }
+        } else {
+          // ถ้ากู้คืนไม่สำเร็จ ให้ลองดึง session ปกติ
+          const { data: { session }, error } = await authWithRetry.getSession();
+          if (mounted) {
+            if (error) {
+              console.warn('Session retrieval error:', error.message);
+            }
+            setSession(session);
+            setLoading(false);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize session:', error);
+        if (mounted) {
+          setSession(null);
+          setLoading(false);
+        }
       }
-    }).catch((error) => {
-      console.error('Failed to get session after retries:', error);
-      if (mounted) {
-        setSession(null);
-        setLoading(false);
-      }
-    });
+    };
+    
+    initializeSession();
 
     // ฟังการเปลี่ยนแปลงของ auth state
     const {

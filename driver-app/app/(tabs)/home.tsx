@@ -104,36 +104,7 @@ async function getTodayProgress() {
   }
 }
 
-// ฟังก์ชันสำหรับรีเซ็ตสถิติเมื่อเปลี่ยนเป็นขากลับ
-async function resetStatsForReturn() {
-  try {
-    // รีเซ็ตเฉพาะสถิติขากลับ แต่เก็บสถิติขาไปไว้
-    const currentStats = await AsyncStorage.getItem('passenger_stats');
-    let stats = {
-      pickupGo: 0,
-      dropGo: 0,
-      pickupRet: 0,
-      dropRet: 0
-    };
-    
-    if (currentStats) {
-      const parsed = JSON.parse(currentStats);
-      stats = {
-        pickupGo: parsed.pickupGo || 0,
-        dropGo: parsed.dropGo || 0,
-        pickupRet: 0, // รีเซ็ตขากลับ
-        dropRet: 0    // รีเซ็ตขากลับ
-      };
-    }
-    
-    await AsyncStorage.setItem('passenger_stats', JSON.stringify(stats));
-    console.log('รีเซ็ตสถิติสำหรับขากลับเรียบร้อยแล้ว');
-  } catch (error) {
-    console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถิติ:', error);
-  }
-}
-
-// ฟังก์ชันสำหรับอัพเดตสถานะนักเรียนลงรถที่โรงเรียนลับรับกลับ
+// ฟังก์ชันสำหรับรีเซ็ตสถานะนักเรียนลงรถที่โรงเรียนลับรับกลับ
 async function updateSchoolDropoffStatus() {
   try {
     const studentsData = await AsyncStorage.getItem('students_data');
@@ -180,6 +151,121 @@ async function getMyDriverId(): Promise<number | null> {
   } catch (error) {
     console.warn('Error getting driver_id:', error);
     return null;
+  }
+}
+
+// ฟังก์ชันสำหรับรีเซ็ตสถานะนักเรียนในฐานข้อมูลเมื่อเริ่มขากลับ
+async function resetStudentStatusForReturn() {
+  try {
+    const driverId = await getMyDriverId();
+    if (!driverId) {
+      console.warn('ไม่พบ driver_id สำหรับการรีเซ็ตสถานะนักเรียน');
+      return;
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    
+    // รีเซ็ตสถานะนักเรียนทั้งหมดที่อยู่ในรถให้กลับเป็น inactive สำหรับขากลับ
+    const { error } = await supabase
+      .from('student_status')
+      .update({ 
+        current_status: 'inactive',
+        last_updated: new Date().toISOString()
+      })
+      .eq('driver_id', driverId)
+      .eq('trip_phase', 'go')
+      .eq('current_status', 'active')
+      .gte('last_updated', `${today}T00:00:00.000Z`)
+      .lt('last_updated', `${today}T23:59:59.999Z`);
+
+    if (error) {
+      console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถานะนักเรียนสำหรับขากลับ:', error);
+    } else {
+      console.log('รีเซ็ตสถานะนักเรียนสำหรับขากลับเรียบร้อยแล้ว');
+    }
+  } catch (error) {
+    console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถานะนักเรียน:', error);
+  }
+}
+
+// ฟังก์ชันสำหรับรีเซ็ตสถานะนักเรียนในฐานข้อมูลเมื่อจบการเดินทาง
+async function resetStudentStatusForNewDay() {
+  try {
+    const driverId = await getMyDriverId();
+    if (!driverId) {
+      console.warn('ไม่พบ driver_id สำหรับการรีเซ็ตสถานะนักเรียน');
+      return;
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    
+    // รีเซ็ตสถานะนักเรียนทั้งหมดให้กลับเป็น inactive เมื่อจบการเดินทาง
+    const { error } = await supabase
+      .from('student_status')
+      .update({ 
+        current_status: 'inactive',
+        last_updated: new Date().toISOString()
+      })
+      .eq('driver_id', driverId)
+      .eq('current_status', 'active')
+      .gte('last_updated', `${today}T00:00:00.000Z`)
+      .lt('last_updated', `${today}T23:59:59.999Z`);
+
+    if (error) {
+      console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถานะนักเรียนเมื่อจบการเดินทาง:', error);
+    } else {
+      console.log('รีเซ็ตสถานะนักเรียนเมื่อจบการเดินทางเรียบร้อยแล้ว');
+    }
+  } catch (error) {
+    console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถานะนักเรียน:', error);
+  }
+}
+
+// ฟังก์ชันสำหรับรีเซ็ตสถิติเมื่อเปลี่ยนเป็นขากลับ
+async function resetStatsForReturn() {
+  try {
+    // รีเซ็ตเฉพาะสถิติขากลับ แต่เก็บสถิติขาไปไว้
+    const currentStats = await AsyncStorage.getItem('passenger_stats');
+    let stats = {
+      pickupGo: 0,
+      dropGo: 0,
+      pickupRet: 0,
+      dropRet: 0
+    };
+    
+    if (currentStats) {
+      const parsed = JSON.parse(currentStats);
+      stats = {
+        pickupGo: parsed.pickupGo || 0,
+        dropGo: parsed.dropGo || 0,
+        pickupRet: 0, // รีเซ็ตขากลับ
+        dropRet: 0    // รีเซ็ตขากลับ
+      };
+    }
+    
+    await AsyncStorage.setItem('passenger_stats', JSON.stringify(stats));
+    
+    // รีเซ็ตข้อมูลการขึ้นรถ-ลงรถของนักเรียนสำหรับรอบเย็น
+    await resetStudentBoardingDataForReturn();
+    
+    console.log('รีเซ็ตสถิติและข้อมูลการขึ้นรถ-ลงรถสำหรับขากลับเรียบร้อยแล้ว');
+  } catch (error) {
+    console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถิติ:', error);
+  }
+}
+
+// ฟังก์ชันสำหรับรีเซ็ตข้อมูลการขึ้นรถ-ลงรถของนักเรียนสำหรับรอบเย็น
+async function resetStudentBoardingDataForReturn() {
+  try {
+    // สร้าง timestamp สำหรับการรีเซ็ต
+    const resetTimestamp = Date.now();
+    
+    // บันทึก timestamp การรีเซ็ตเพื่อให้ passenger-list.tsx รู้ว่าต้องรีเฟรชข้อมูล
+    await AsyncStorage.setItem('return_phase_reset_timestamp', resetTimestamp.toString());
+    
+    console.log('รีเซ็ตข้อมูลการขึ้นรถ-ลงรถสำหรับรอบเย็นเรียบร้อยแล้ว');
+  } catch (error) {
+    console.error('เกิดข้อผิดพลาดในการรีเซ็ตข้อมูลการขึ้นรถ-ลงรถ:', error);
   }
 }
 
@@ -304,6 +390,9 @@ const HomePage = () => {
         // รีเซ็ตสถิติเมื่อเปลี่ยนเป็นขากลับ
         await resetStatsForReturn();
         await AsyncStorage.setItem('trip_phase', 'return');
+        
+        // รีเซ็ตสถานะนักเรียนในฐานข้อมูลสำหรับขากลับ
+        await resetStudentStatusForReturn();
       }
 
       if (next === 'finished') {
@@ -325,12 +414,18 @@ const HomePage = () => {
           return;
         }
         await markNewDayReset();
+        
+        // รีเซ็ตสถานะนักเรียนในฐานข้อมูลเมื่อจบการเดินทาง
+        await resetStudentStatusForNewDay();
       }
 
       if (next === 'enroute') {
         // รีเซ็ตทุกอย่างเมื่อเริ่มเดินทาง (ยกเว้นคนลา)
         await markNewDayReset();
         await resetStatsForReturn(); // รีเซ็ตสถิติด้วย
+        
+        // รีเซ็ตสถานะนักเรียนในฐานข้อมูลเมื่อเริ่มเดินทางใหม่
+        await resetStudentStatusForNewDay();
       }
 
       setStatus(next);
@@ -342,29 +437,42 @@ const HomePage = () => {
         try {
           const driverId = await getMyDriverId();
           if (driverId) {
-            const response = await fetch('https://safety-bus-liff-v4-new.vercel.app/api/driver-status-notification', {
+            // กำหนด trip_phase ที่ถูกต้องตาม API
+            const currentTripPhase = await AsyncStorage.getItem('trip_phase') || 'go';
+            
+            const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://safety-bus-liff-v4-new.vercel.app/api';
+            console.log('🔍 API Base URL:', apiBaseUrl);
+            console.log('🔍 Full API URL:', `${apiBaseUrl}/driver-status-notification`);
+            const response = await fetch(`${apiBaseUrl}/driver-status-notification`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
                 driver_id: driverId,
-                trip_phase: next,
+                trip_phase: currentTripPhase,
                 current_status: next,
+                location: 'อัปเดตจากแอปคนขับ',
+                notes: `คนขับอัปเดตสถานะเป็น ${STATUS_LABEL[next]} เวลา ${new Date().toLocaleString('th-TH')}`,
                 timestamp: new Date().toISOString(),
               }),
             });
 
             if (!response.ok) {
-              console.warn('Failed to send LINE notification:', response.status);
+              const errorText = await response.text();
+              console.warn('❌ Failed to send LINE notification:', response.status, errorText);
             } else {
-              console.log('LINE notification sent successfully');
+              console.log('✅ LINE notification sent successfully');
             }
           } else {
             console.warn('Could not get driver_id for LINE notification');
           }
         } catch (error) {
-          console.warn('Error sending LINE notification:', error);
+          console.error('❌ Error sending LINE notification:', error);
+          if (error instanceof Error) {
+            console.error('❌ Error message:', error.message);
+            console.error('❌ Error stack:', error.stack);
+          }
         }
       }
       

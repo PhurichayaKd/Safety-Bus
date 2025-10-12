@@ -12,10 +12,26 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // เพิ่มการตั้งค่าสำหรับ token refresh
+    flowType: 'pkce',
+    storage: undefined, // ใช้ default storage ของ React Native
   },
   global: {
     headers: {
       'X-Client-Info': 'driver-app',
+    },
+    // เพิ่ม timeout และ retry settings
+    fetch: (url, options = {}) => {
+      // สร้าง AbortController สำหรับ timeout ที่รองรับใน React Native
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+      
+      return fetch(url, {
+        ...options,
+        signal: controller.signal,
+      }).finally(() => {
+        clearTimeout(timeoutId);
+      });
     },
   },
   // เพิ่มการตั้งค่า realtime
@@ -23,6 +39,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     params: {
       eventsPerSecond: 10,
     },
+  },
+  // เพิ่มการตั้งค่า database
+  db: {
+    schema: 'public',
   },
 });
 
@@ -42,12 +62,21 @@ export const withRetry = async <T>(
       
       // ตรวจสอบว่าเป็น network error หรือไม่
       const isNetworkError = 
-        error instanceof TypeError && error.message.includes('fetch') ||
+        error instanceof TypeError && (
+          error.message.includes('fetch') ||
+          error.message.includes('Failed to fetch')
+        ) ||
         error instanceof Error && (
           error.message.includes('ERR_NETWORK') ||
           error.message.includes('ERR_INTERNET_DISCONNECTED') ||
           error.message.includes('ERR_QUIC_PROTOCOL_ERROR') ||
-          error.message.includes('ERR_NETWORK_IO_SUSPENDED')
+          error.message.includes('ERR_NETWORK_IO_SUSPENDED') ||
+          error.message.includes('ERR_NETWORK_CHANGED') ||
+          error.message.includes('ERR_NAME_NOT_RESOLVED') ||
+          error.message.includes('net::ERR_QUIC_PROTOCOL_ERROR') ||
+          error.message.includes('net::ERR_NETWORK_CHANGED') ||
+          error.message.includes('net::ERR_NETWORK_IO_SUSPENDED') ||
+          error.message.includes('net::ERR_NAME_NOT_RESOLVED')
         );
       
       if (isNetworkError && attempt < maxRetries) {
@@ -62,6 +91,47 @@ export const withRetry = async <T>(
   }
   
   throw lastError!;
+};
+
+// Session recovery utility
+export const recoverSession = async (): Promise<boolean> => {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      console.warn('Session recovery error:', error.message);
+      return false;
+    }
+    
+    if (!session) {
+      console.log('No session to recover');
+      return false;
+    }
+    
+    // ตรวจสอบว่า session ยังใช้งานได้หรือไม่
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = session.expires_at || 0;
+    
+    if (expiresAt <= now) {
+      console.log('Session expired, attempting refresh...');
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError) {
+        console.warn('Session refresh failed:', refreshError.message);
+        return false;
+      }
+      
+      console.log('Session refreshed successfully');
+      return !!refreshData.session;
+    }
+    
+    console.log('Session is valid');
+    return true;
+    
+  } catch (error) {
+    console.warn('Session recovery failed:', error);
+    return false;
+  }
 };
 
 // Enhanced auth methods with retry logic
@@ -80,6 +150,10 @@ export const authWithRetry = {
   
   refreshSession: () =>
     withRetry(() => supabase.auth.refreshSession()),
+  
+  // เพิ่มฟังก์ชันสำหรับ session recovery
+  recoverSession: () =>
+    withRetry(() => recoverSession()),
 };
 
 // Export types for TypeScript

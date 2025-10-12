@@ -19,72 +19,77 @@ try {
   console.error('Failed to initialize LINE client:', error);
 }
 
-// ข้อความสำหรับสถานะต่างๆ ของคนขับ
+// ข้อความสำหรับสถานะต่างๆ ของคนขับ (แบบสั้นและกระชับ)
 const DRIVER_STATUS_MESSAGES = {
   // เริ่มออกเดินทาง
   start_journey: {
     emoji: '🚌',
-    title: 'คนขับเริ่มออกเดินทาง',
-    message: 'คนขับได้เริ่มออกเดินทางแล้ว กรุณาเตรียมตัวให้พร้อม'
+    title: 'เริ่มออกเดินทาง',
+    message: 'กรุณาเตรียมตัวให้พร้อม'
   },
   go: {
     emoji: '🚌',
-    title: 'คนขับเริ่มออกเดินทาง',
-    message: 'คนขับได้เริ่มออกเดินทางแล้ว กรุณาเตรียมตัวให้พร้อม'
+    title: 'เริ่มออกเดินทาง',
+    message: 'กรุณาเตรียมตัวให้พร้อม'
+  },
+  enroute: {
+    emoji: '🚌',
+    title: 'เริ่มออกเดินทาง',
+    message: 'กรุณาเตรียมตัวให้พร้อม'
   },
   // ถึงโรงเรียน
   arrived_school: {
     emoji: '🏫',
-    title: 'คนขับถึงโรงเรียนแล้ว',
-    message: 'คนขับได้มาถึงโรงเรียนเรียบร้อยแล้ว นักเรียนสามารถลงรถได้'
+    title: 'ถึงโรงเรียนแล้ว',
+    message: 'นักเรียนสามารถลงรถได้'
   },
   arrive_school: {
     emoji: '🏫',
-    title: 'คนขับถึงโรงเรียนแล้ว',
-    message: 'คนขับได้มาถึงโรงเรียนเรียบร้อยแล้ว นักเรียนสามารถลงรถได้'
+    title: 'ถึงโรงเรียนแล้ว',
+    message: 'นักเรียนสามารถลงรถได้'
   },
   // รอรับกลับบ้าน
   waiting_return: {
     emoji: '⏰',
-    title: 'คนขับรอรับกลับบ้าน',
-    message: 'คนขับกำลังรอรับนักเรียนกลับบ้าน กรุณาเตรียมตัวให้พร้อม'
+    title: 'รอรับกลับบ้าน',
+    message: 'กรุณาเตรียมตัวให้พร้อม'
   },
   wait_pickup: {
     emoji: '⏰',
-    title: 'คนขับรอรับกลับบ้าน',
-    message: 'คนขับกำลังรอรับนักเรียนกลับบ้าน กรุณาเตรียมตัวให้พร้อม'
+    title: 'รอรับกลับบ้าน',
+    message: 'กรุณาเตรียมตัวให้พร้อม'
   },
   // จบการเดินทาง
   finished: {
     emoji: '✅',
-    title: 'คนขับจบการเดินทาง',
-    message: 'คนขับได้เสร็จสิ้นการเดินทางแล้ว นักเรียนทุกคนได้กลับถึงบ้านเรียบร้อย'
+    title: 'จบการเดินทาง',
+    message: 'นักเรียนทุกคนกลับถึงบ้านเรียบร้อย'
   },
   finish_journey: {
     emoji: '✅',
-    title: 'คนขับจบการเดินทาง',
-    message: 'คนขับได้เสร็จสิ้นการเดินทางแล้ว นักเรียนทุกคนได้กลับถึงบ้านเรียบร้อย'
+    title: 'จบการเดินทาง',
+    message: 'นักเรียนทุกคนกลับถึงบ้านเรียบร้อย'
   },
-  // สถานะเพิ่มเติม (เก็บไว้เพื่อความเข้ากันได้)
+  // สถานะเพิ่มเติม
   return: {
     emoji: '🏠',
-    title: 'คนขับเริ่มเส้นทางส่งกลับบ้าน',
-    message: 'คนขับได้เริ่มเส้นทางส่งนักเรียนกลับบ้านแล้ว'
+    title: 'เส้นทางกลับบ้าน',
+    message: 'เริ่มส่งนักเรียนกลับบ้าน'
   },
   pickup: {
     emoji: '📍',
-    title: 'คนขับกำลังรับนักเรียน',
-    message: 'คนขับกำลังอยู่ในช่วงรับนักเรียนขึ้นรถ'
+    title: 'กำลังรับนักเรียน',
+    message: 'อยู่ในช่วงรับนักเรียนขึ้นรถ'
   },
   dropoff: {
     emoji: '🏫',
-    title: 'คนขับกำลังส่งนักเรียน',
-    message: 'คนขับกำลังอยู่ในช่วงส่งนักเรียนลงรถ'
+    title: 'กำลังส่งนักเรียน',
+    message: 'อยู่ในช่วงส่งนักเรียนลงรถ'
   },
   driving: {
     emoji: '🛣️',
-    title: 'คนขับกำลังเดินทาง',
-    message: 'คนขับกำลังเดินทางไปยังจุดหมายปลายทาง'
+    title: 'กำลังเดินทาง',
+    message: 'เดินทางไปยังจุดหมายปลายทาง'
   }
 };
 
@@ -155,31 +160,21 @@ export default async function handler(req, res) {
       };
     }
 
-    // สร้างข้อความ
+    // สร้างข้อความแบบสั้นและกระชับ
     const currentTime = new Date().toLocaleString('th-TH', {
       timeZone: 'Asia/Bangkok',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+      minute: '2-digit'
     });
 
-    let messageText = `${messageInfo.emoji} ${messageInfo.title}\n\n${messageInfo.message}`;
+    // ข้อความสั้นและกระชับ
+    let messageText = `${messageInfo.emoji} ${messageInfo.title}`;
+    messageText += `\n🚌 ${driverData.license_plate} | ⏰ ${currentTime}`;
     
-    messageText += `\n\n👨‍✈️ คนขับ: ${driverData.driver_name}`;
-    messageText += `\n🚌 รถเมล์: ${driverData.license_plate}`;
-    
-    if (location) {
-      messageText += `\n📍 ตำแหน่ง: ${location}`;
+    // เพิ่มข้อความหลักแบบสั้น
+    if (messageInfo.message) {
+      messageText += `\n${messageInfo.message}`;
     }
-    
-    if (notes) {
-      messageText += `\n📝 หมายเหตุ: ${notes}`;
-    }
-    
-    messageText += `\n\n⏰ เวลา: ${currentTime}`;
 
     const lineMessage = {
       type: 'text',
@@ -190,99 +185,151 @@ export default async function handler(req, res) {
 
     // ส่งแจ้งเตือนไปยัง student_line_links และ parent_line_links
     try {
-      // ดึงข้อมูลจาก student_line_links พร้อม join กับตาราง students
-      const { data: studentLinks, error: studentError } = await supabase
-        .from('student_line_links')
-        .select(`
-          line_user_id, 
-          student_id,
-          line_display_id,
-          students!inner(student_name)
-        `)
-        .not('line_user_id', 'is', null)
-        .neq('line_user_id', '');
+      // ขั้นตอนที่ 1: หา route ของ driver นี้
+      const { data: driverRoutes, error: routeError } = await supabase
+        .from('driver_bus')
+        .select('route_id')
+        .eq('driver_id', driver_id)
+        .single();
 
-      if (studentError) {
-        console.error('Error fetching student links:', studentError);
-      } else if (studentLinks && studentLinks.length > 0) {
-        // ส่งข้อความไปยังนักเรียนทุกคน
-        for (const student of studentLinks) {
-          try {
-            await lineClient.pushMessage(student.line_user_id, lineMessage);
-            const studentName = student.students?.student_name || student.line_display_id || 'Unknown Student';
-            notificationResults.push({
-              lineUserId: student.line_user_id,
-              studentId: student.student_id,
-              studentName: studentName,
-              type: 'student',
-              status: 'success'
-            });
-            console.log(`✅ Driver status notification sent to student ${studentName} (${student.line_user_id})`);
-          } catch (error) {
-            const studentName = student.students?.student_name || student.line_display_id || 'Unknown Student';
-            console.error(`❌ Failed to send to student ${studentName}:`, error);
-            notificationResults.push({
-              lineUserId: student.line_user_id,
-              studentId: student.student_id,
-              studentName: studentName,
-              type: 'student',
-              status: 'failed',
-              error: error.message
-            });
+      if (routeError || !driverRoutes?.route_id) {
+        console.log('No route found for driver:', driver_id);
+      } else {
+        // ขั้นตอนที่ 2: หา students ใน route นี้
+        const { data: routeStudents, error: studentsError } = await supabase
+          .from('route_students')
+          .select('student_id')
+          .eq('route_id', driverRoutes.route_id);
+
+        if (studentsError) {
+          console.error('Error fetching route students:', studentsError);
+        } else {
+          const studentIds = routeStudents.map(rs => rs.student_id);
+
+          if (studentIds.length > 0) {
+            // ขั้นตอนที่ 3: ดึงข้อมูล student_line_links สำหรับ students เหล่านี้
+            const { data: studentLinks, error: studentError } = await supabase
+              .from('student_line_links')
+              .select(`
+                line_user_id, 
+                student_id,
+                line_display_id,
+                students!inner(student_name)
+              `)
+              .in('student_id', studentIds)
+              .not('line_user_id', 'is', null)
+              .neq('line_user_id', '')
+              .eq('active', true);
+
+            // กรองเฉพาะ LINE User ID ที่ถูกต้อง (ขึ้นต้นด้วย U และมี 33 ตัวอักษร)
+            const validStudentLinks = studentLinks?.filter(link => 
+              link.line_user_id && 
+              link.line_user_id.startsWith('U') && 
+              link.line_user_id.length === 33
+            ) || [];
+
+            if (studentError) {
+              console.error('Error fetching student links:', studentError);
+            } else if (validStudentLinks && validStudentLinks.length > 0) {
+              // ส่งข้อความไปยังนักเรียนทุกคน
+              for (const student of validStudentLinks) {
+                try {
+                  await lineClient.pushMessage(student.line_user_id, lineMessage);
+                  const studentName = student.students?.student_name || student.line_display_id || 'Unknown Student';
+                  notificationResults.push({
+                    lineUserId: student.line_user_id,
+                    studentId: student.student_id,
+                    studentName: studentName,
+                    type: 'student',
+                    status: 'success'
+                  });
+                  console.log(`✅ Driver status notification sent to student ${studentName} (${student.line_user_id})`);
+                } catch (error) {
+                  const studentName = student.students?.student_name || student.line_display_id || 'Unknown Student';
+                  console.error(`❌ Failed to send to student ${studentName}:`, error);
+                  notificationResults.push({
+                    lineUserId: student.line_user_id,
+                    studentId: student.student_id,
+                    studentName: studentName,
+                    type: 'student',
+                    status: 'failed',
+                    error: error.message
+                  });
+                }
+              }
+            } else {
+              console.log('No student LINE links found');
+            }
+
+            // ขั้นตอนที่ 4: หา parents ของ students เหล่านี้ผ่าน student_guardians
+            const { data: parentIds, error: guardianError } = await supabase
+              .from('student_guardians')
+              .select('parent_id')
+              .in('student_id', studentIds);
+
+            if (guardianError) {
+              console.error('Error fetching student guardians:', guardianError);
+            } else {
+              const uniqueParentIds = [...new Set(parentIds.map(pg => pg.parent_id))];
+
+              if (uniqueParentIds.length > 0) {
+                // ขั้นตอนที่ 5: ดึงข้อมูล parent_line_links สำหรับ parents เหล่านี้
+                const { data: parentLinks, error: parentError } = await supabase
+                  .from('parent_line_links')
+                  .select(`
+                    line_user_id, 
+                    parent_id,
+                    line_display_id,
+                    parents!inner(parent_name)
+                  `)
+                  .in('parent_id', uniqueParentIds)
+                  .not('line_user_id', 'is', null)
+                  .neq('line_user_id', '')
+                  .eq('active', true);
+
+                // กรองเฉพาะ LINE User ID ที่ถูกต้อง (ขึ้นต้นด้วย U และมี 33 ตัวอักษร)
+                const validParentLinks = parentLinks?.filter(link => 
+                  link.line_user_id && 
+                  link.line_user_id.startsWith('U') && 
+                  link.line_user_id.length === 33
+                ) || [];
+
+                if (parentError) {
+                  console.error('Error fetching parent links:', parentError);
+                } else if (validParentLinks && validParentLinks.length > 0) {
+                  // ส่งข้อความไปยังผู้ปกครองทุกคน
+                  for (const parent of validParentLinks) {
+                    try {
+                      await lineClient.pushMessage(parent.line_user_id, lineMessage);
+                      const parentName = parent.parents?.parent_name || parent.line_display_id || 'Unknown Parent';
+                      notificationResults.push({
+                        lineUserId: parent.line_user_id,
+                        parentId: parent.parent_id,
+                        parentName: parentName,
+                        type: 'parent',
+                        status: 'success'
+                      });
+                      console.log(`✅ Driver status notification sent to parent ${parentName} (${parent.line_user_id})`);
+                    } catch (error) {
+                      const parentName = parent.parents?.parent_name || parent.line_display_id || 'Unknown Parent';
+                      console.error(`❌ Failed to send to parent ${parentName}:`, error);
+                      notificationResults.push({
+                        lineUserId: parent.line_user_id,
+                        parentId: parent.parent_id,
+                        parentName: parentName,
+                        type: 'parent',
+                        status: 'failed',
+                        error: error.message
+                      });
+                    }
+                  }
+                } else {
+                  console.log('No parent LINE links found');
+                }
+              }
+            }
           }
         }
-      } else {
-        console.log('No student LINE links found');
-      }
-
-      // ดึงข้อมูลจาก parent_line_links พร้อม join กับตาราง parents และ students
-      const { data: parentLinks, error: parentError } = await supabase
-        .from('parent_line_links')
-        .select(`
-          line_user_id, 
-          parent_id,
-          line_display_id,
-          parents!inner(parent_name),
-          students!inner(student_name)
-        `)
-        .not('line_user_id', 'is', null)
-        .neq('line_user_id', '');
-
-      if (parentError) {
-        console.error('Error fetching parent links:', parentError);
-      } else if (parentLinks && parentLinks.length > 0) {
-        // ส่งข้อความไปยังผู้ปกครองทุกคน
-        for (const parent of parentLinks) {
-          try {
-            await lineClient.pushMessage(parent.line_user_id, lineMessage);
-            const parentName = parent.parents?.parent_name || parent.line_display_id || 'Unknown Parent';
-            const studentName = parent.students?.student_name || 'Unknown Student';
-            notificationResults.push({
-              lineUserId: parent.line_user_id,
-              parentId: parent.parent_id,
-              parentName: parentName,
-              studentName: studentName,
-              type: 'parent',
-              status: 'success'
-            });
-            console.log(`✅ Driver status notification sent to parent ${parentName} (${parent.line_user_id})`);
-          } catch (error) {
-            const parentName = parent.parents?.parent_name || parent.line_display_id || 'Unknown Parent';
-            const studentName = parent.students?.student_name || 'Unknown Student';
-            console.error(`❌ Failed to send to parent ${parentName}:`, error);
-            notificationResults.push({
-              lineUserId: parent.line_user_id,
-              parentId: parent.parent_id,
-              parentName: parentName,
-              studentName: studentName,
-              type: 'parent',
-              status: 'failed',
-              error: error.message
-            });
-          }
-        }
-      } else {
-        console.log('No parent LINE links found');
       }
     } catch (error) {
       console.error('Database query error:', error);

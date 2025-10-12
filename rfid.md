@@ -278,7 +278,7 @@ bool sendScanToAPI(const String& uid, int driverId, float lat, float lng) {
         String studentName = responseDoc["student_name"] | "";
         
         // ตรวจสอบว่าเป็น duplicate scan หรือไม่
-        if (alreadyScanned || errorMsg.indexOf("duplicate key") >= 0 || errorMsg.indexOf("uniq_daily_pickup_per_student_phase") >= 0) {
+        if (alreadyScanned || errorMsg.indexOf("duplicate key") >= 0 || errorMsg.indexOf("student_boarding_unique_daily_phase") >= 0) {
           Serial.printf("[API] ⚠️  Already Scanned: %s\n", studentName.length() > 0 ? studentName.c_str() : "นักเรียนคนนี้");
           Serial.printf("[API] ℹ️  นักเรียนได้สแกนบัตรในเส้นทาง %s แล้ววันนี้\n", CURRENT_TRIP_PHASE.c_str());
           return true; // ถือว่าสำเร็จเพราะนักเรียนได้ขึ้นรถแล้ว

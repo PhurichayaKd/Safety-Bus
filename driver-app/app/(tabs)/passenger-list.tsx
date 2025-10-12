@@ -326,42 +326,6 @@ window.addEventListener('message',e=>handle(e.data));
     })();
   }, []);
 
-  // Phase from AsyncStorage
-  useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        const p = (await AsyncStorage.getItem(STORAGE_KEYS.phase)) as TripPhase | null;
-        setPhase(p === 'return' ? 'return' : 'go');
-
-        const flag = await AsyncStorage.getItem(STORAGE_KEYS.resetFlag);
-        if (flag) {
-          softResetSets();
-          // Refresh student list to include all students (reset leave status)
-          await fetchStudents();
-          await AsyncStorage.removeItem(STORAGE_KEYS.resetFlag);
-        }
-      })();
-    }, [])
-  );
-
-  // Driver ID setup
-  useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      
-      const { data } = await supabase.from('driver_bus')
-        .select('driver_id')
-        .eq('auth_user_id', user.id)
-        .single();
-      
-      if (data?.driver_id) {
-        setDriverId(data.driver_id);
-        setDriverReady(true);
-      }
-    })();
-  }, []);
-
   const softResetSets = () => {
     setBoardedGoSet(new Set());
     setBoardedReturnSet(new Set());
@@ -526,6 +490,85 @@ window.addEventListener('message',e=>handle(e.data));
     setDroppedReturnSet(rDrop);
     setAbsentSet(ab);
   }, [startOfTodayISO, driverId]);
+
+  // ตรวจสอบการรีเซ็ตสำหรับรอบเย็น
+  const checkReturnPhaseReset = useCallback(async () => {
+    try {
+      const resetTimestamp = await AsyncStorage.getItem('return_phase_reset_timestamp');
+      const lastCheckedTimestamp = await AsyncStorage.getItem('last_checked_reset_timestamp');
+      
+      if (resetTimestamp && resetTimestamp !== lastCheckedTimestamp) {
+        // มีการรีเซ็ตใหม่ ให้รีเซ็ตข้อมูลการขึ้นรถ-ลงรถสำหรับรอบเย็น
+        setBoardedReturnSet(new Set());
+        setDroppedReturnSet(new Set());
+        
+        // บันทึก timestamp ที่ตรวจสอบแล้ว
+        await AsyncStorage.setItem('last_checked_reset_timestamp', resetTimestamp);
+        
+        console.log('รีเซ็ตข้อมูลการขึ้นรถ-ลงรถสำหรับรอบเย็นเรียบร้อยแล้ว');
+      }
+
+      // ตรวจสอบการรีเซ็ตสำหรับวันใหม่
+      const newDayResetTimestamp = await AsyncStorage.getItem('new_day_reset_timestamp');
+      const lastCheckedNewDayTimestamp = await AsyncStorage.getItem('last_checked_new_day_reset_timestamp');
+      
+      if (newDayResetTimestamp && newDayResetTimestamp !== lastCheckedNewDayTimestamp) {
+        // มีการรีเซ็ตสำหรับวันใหม่ ให้รีเซ็ตข้อมูลทั้งหมด
+        softResetSets();
+        
+        // รีเฟรชข้อมูลจากฐานข้อมูล
+        await fetchTodayEvents();
+        
+        // บันทึก timestamp ที่ตรวจสอบแล้ว
+        await AsyncStorage.setItem('last_checked_new_day_reset_timestamp', newDayResetTimestamp);
+        
+        console.log('รีเซ็ตข้อมูลสำหรับวันใหม่เรียบร้อยแล้ว');
+      }
+    } catch (error) {
+      console.error('เกิดข้อผิดพลาดในการตรวจสอบการรีเซ็ต:', error);
+    }
+  }, [fetchTodayEvents]);
+
+  // Phase from AsyncStorage
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const p = (await AsyncStorage.getItem(STORAGE_KEYS.phase)) as TripPhase | null;
+        setPhase(p === 'return' ? 'return' : 'go');
+
+        const flag = await AsyncStorage.getItem(STORAGE_KEYS.resetFlag);
+        if (flag) {
+          softResetSets();
+          // Refresh student list to include all students (reset leave status)
+          await fetchStudents();
+          // รีเฟรชข้อมูลสถานะจากฐานข้อมูลหลังจากรีเซ็ต
+          await fetchTodayEvents();
+          await AsyncStorage.removeItem(STORAGE_KEYS.resetFlag);
+        }
+
+        // ตรวจสอบการรีเซ็ตสำหรับรอบเย็น
+        await checkReturnPhaseReset();
+      })();
+    }, [fetchStudents, fetchTodayEvents, checkReturnPhaseReset])
+  );
+
+  // Driver ID setup
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data } = await supabase.from('driver_bus')
+        .select('driver_id')
+        .eq('auth_user_id', user.id)
+        .single();
+      
+      if (data?.driver_id) {
+        setDriverId(data.driver_id);
+        setDriverReady(true);
+      }
+    })();
+  }, []);
 
   // Load emergency logs
   const fetchEmergencyLogs = useCallback(async () => {
@@ -895,48 +938,69 @@ window.addEventListener('message',e=>handle(e.data));
           return;
         }
       } else {
-        // For pickup/dropoff, check if record exists first
+        // For pickup/dropoff, use upsert to handle existing records
         const today = new Date().toISOString().split('T')[0];
-        const { data: existingRecord } = await supabase
+        
+        // First, delete any existing records for today with same student_id, location_type, and event_type
+        // This ensures we don't violate the unique constraint
+        const { error: deleteError } = await supabase
           .from('pickup_dropoff')
-          .select('id')
+          .delete()
           .eq('student_id', selected.student_id)
-          .gte('event_time', `${today}T00:00:00.000Z`)
-          .lt('event_time', `${today}T23:59:59.999Z`)
           .eq('location_type', location)
-          .single();
+          .eq('event_type', eventType)
+          .gte('event_time', `${today}T00:00:00.000Z`)
+          .lt('event_time', `${today}T23:59:59.999Z`);
 
-        let error;
-        if (existingRecord) {
-          // Update existing record
-          const { error: updateError } = await supabase
-            .from('pickup_dropoff')
-            .update({
-              event_type: eventType,
-              event_time: now,
-              driver_id: driverId,
-            })
-            .eq('id', existingRecord.id);
-          error = updateError;
-        } else {
-          // Insert new record
-          const { error: insertError } = await supabase
-            .from('pickup_dropoff')
-            .insert({
-              student_id: selected.student_id,
-              driver_id: driverId,
-              event_type: eventType,
-              event_time: now,
-              location_type: location,
-            });
-          error = insertError;
+        if (deleteError) {
+          console.error('Error deleting existing records:', deleteError);
+          // Continue anyway - the error might be because no records exist
         }
+
+        // Insert new record
+        const { error } = await supabase
+          .from('pickup_dropoff')
+          .insert({
+            student_id: selected.student_id,
+            driver_id: driverId,
+            event_type: eventType,
+            event_time: now,
+            location_type: location,
+          });
 
         if (error) {
           console.error('Error updating status:', error);
           Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปเดตสถานะได้');
           return;
         }
+      }
+
+      // Send LINE notification
+      try {
+        const notificationResponse = await fetch('https://safety-bus-bot-vercel-deploy.vercel.app/api/student-status-notification', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            student_id: selected.student_id,
+            status: eventType === 'pickup' ? 'onboard' : 
+                   eventType === 'dropoff' ? 'offboard' : 
+                   eventType === 'absent' ? 'absent' : 'stop',
+            driver_id: driverId,
+            location: location,
+            notes: '',
+            phase: phase
+          }),
+        });
+
+        if (!notificationResponse.ok) {
+          console.warn('Failed to send notification:', await notificationResponse.text());
+        } else {
+          console.log('Notification sent successfully');
+        }
+      } catch (notificationError) {
+        console.error('Error sending notification:', notificationError);
       }
 
       // Update local state

@@ -15,10 +15,10 @@ DECLARE
     v_driver_name text;
 BEGIN
     -- ตรวจสอบว่า trip_phase ถูกต้อง
-    IF p_trip_phase NOT IN ('pickup', 'dropoff') THEN
+    IF p_trip_phase NOT IN ('go', 'return') THEN
         RETURN json_build_object(
             'success', false,
-            'error', 'Invalid trip_phase. Must be pickup or dropoff'
+            'error', 'Invalid trip_phase. Must be go or return'
         );
     END IF;
 

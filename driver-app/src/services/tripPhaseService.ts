@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Base URL สำหรับ API
-const API_BASE_URL = 'https://safety-bus-liff-v4-new.vercel.app/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://safety-bus-liff-v4-new.vercel.app/api';
 
 // Interface สำหรับ response
 interface TripPhaseUpdateResponse {

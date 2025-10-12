@@ -1,3 +1,7 @@
+-- ลบฟังก์ชันเก่า (ถ้ามี)
+DROP FUNCTION IF EXISTS record_rfid_scan(VARCHAR, INTEGER, NUMERIC, NUMERIC, VARCHAR);
+
+-- สร้างฟังก์ชันใหม่
 -- Supabase Function สำหรับบันทึกการสแกน RFID และส่งแจ้งเตือน LINE (ใช้ driver_bus)
 CREATE OR REPLACE FUNCTION record_rfid_scan(
   p_rfid_code VARCHAR,

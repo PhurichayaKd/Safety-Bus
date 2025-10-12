@@ -43,7 +43,7 @@ async function createStudentBoardingStatusTable() {
       -- สร้างตาราง student_boarding_status
       CREATE TABLE IF NOT EXISTS public.student_boarding_status (
         status_id bigserial NOT NULL,
-        student_id text NOT NULL,
+        student_id integer NOT NULL,
         driver_id integer NOT NULL,
         trip_date date NOT NULL,
         trip_phase character varying(10) NOT NULL DEFAULT 'go'::character varying,

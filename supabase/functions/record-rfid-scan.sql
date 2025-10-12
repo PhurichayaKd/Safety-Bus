@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION record_rfid_scan(
   p_location_type VARCHAR DEFAULT 'pickup'
 ) RETURNS JSON AS $$
 DECLARE
-  v_student_id TEXT;
+  v_student_id INTEGER;
   v_line_user_id TEXT;
   v_student_name VARCHAR;
   v_driver_name VARCHAR;
@@ -28,11 +28,11 @@ BEGIN
   
   -- กำหนด trip_phase จาก location_type
   v_trip_phase := CASE 
-    WHEN p_location_type = 'pickup' THEN 'pickup'
-    WHEN p_location_type = 'dropoff' THEN 'dropoff'
-    WHEN p_location_type IN ('go') THEN 'pickup'  -- backward compatibility
-    WHEN p_location_type IN ('return') THEN 'dropoff'  -- backward compatibility
-    ELSE 'pickup'
+    WHEN p_location_type = 'pickup' THEN 'go'
+    WHEN p_location_type = 'dropoff' THEN 'return'
+    WHEN p_location_type IN ('go') THEN 'go'  -- backward compatibility
+    WHEN p_location_type IN ('return') THEN 'return'  -- backward compatibility
+    ELSE 'go'
   END;
   
   -- ค้นหา student_id จาก RFID code
@@ -110,6 +110,7 @@ BEGIN
   ) RETURNING scan_id INTO v_scan_id;
 
   -- บันทึกการสแกนในตาราง pickup_dropoff (เพื่อความเข้ากันได้)
+  -- ไม่ส่ง event_local_date เพราะคำนวณอัตโนมัติจาก event_time
   INSERT INTO pickup_dropoff (
     student_id, 
     driver_id, 
@@ -118,8 +119,7 @@ BEGIN
     gps_longitude,
     location_type, 
     rfid_code, 
-    scan_method,
-    event_local_date
+    scan_method
   ) VALUES (
     v_student_id, 
     p_driver_id, 
@@ -128,8 +128,7 @@ BEGIN
     p_longitude,
     p_location_type, 
     p_rfid_code, 
-    'rfid',
-    v_today
+    'rfid'
   ) RETURNING record_id INTO v_record_id;
 
   -- อัปเดตหรือสร้างสถานะการขึ้นรถของนักเรียน

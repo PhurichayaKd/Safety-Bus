@@ -34,7 +34,7 @@ CREATE OR REPLACE FUNCTION record_rfid_scan(
   p_location_type VARCHAR DEFAULT 'pickup'
 ) RETURNS JSON AS $$
 DECLARE
-  v_student_id TEXT;
+  v_student_id INTEGER;
   v_line_user_id TEXT;
   v_student_name VARCHAR;
   v_driver_name VARCHAR;

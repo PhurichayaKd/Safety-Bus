@@ -1,14 +1,15 @@
 {
-  "name": "supabase",
+  "name": "supabase-scripts",
   "version": "1.0.0",
-  "main": "comprehensive-database-analysis.js",
+  "description": "Scripts for Supabase database management",
+  "type": "module",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@supabase/supabase-js": "^2.58.0",
     "dotenv": "^17.2.3",

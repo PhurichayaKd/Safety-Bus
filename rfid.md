@@ -4,7 +4,7 @@
  * การเปลี่ยนแปลงสำคัญ:
  * 1. ใช้ตาราง driver_bus แทน driver_status
  * 2. API endpoint: /rest/v1/rpc/get_driver_current_status
- * 3. รองรับ trip_phase: 'pickup' และ 'dropoff'
+ * 3. รองรับ trip_phase: 'go' และ 'return'
  * 4. ป้องกันการสแกนซ้ำในเส้นทางเดียวกันต่อวัน
  * 
  * ฟังก์ชันใหม่ที่ใช้:
@@ -31,9 +31,9 @@ const char* SUPABASE_ANON_KEY =
 
 /* ===== การตั้งค่าระบบ ===== */
 const int DRIVER_ID = 1;                    // รหัสคนขับ (ต้องตั้งค่าให้ถูกต้อง)
-String CURRENT_TRIP_PHASE = "pickup";       // "pickup" หรือ "dropoff" - จะอัปเดตจาก API
-                                             // pickup = เส้นทางรับนักเรียน (บ้าน -> โรงเรียน)
-                                             // dropoff = เส้นทางส่งนักเรียน (โรงเรียน -> บ้าน)
+String CURRENT_TRIP_PHASE = "go";            // "go" หรือ "return" - จะอัปเดตจาก API
+                                             // go = เส้นทางรับนักเรียน (บ้าน -> โรงเรียน)
+                                             // return = เส้นทางส่งนักเรียน (โรงเรียน -> บ้าน)
 const bool ENABLE_GPS = false;              // เปิด/ปิดการใช้ GPS
 const float DEFAULT_LAT = 13.7563;          // ตำแหน่งเริ่มต้น (กรุงเทพฯ)
 const float DEFAULT_LNG = 100.5018;

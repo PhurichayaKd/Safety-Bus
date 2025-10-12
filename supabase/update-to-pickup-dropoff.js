@@ -100,10 +100,10 @@ BEGIN
 
     INSERT INTO pickup_dropoff (
         student_id, driver_id, event_time, event_type, gps_latitude, gps_longitude,
-        last_scan_time, location_type, pickup_source, event_local_date
+        last_scan_time, location_type, pickup_source
     ) VALUES (
-        v_student_id, p_driver_id, v_scan_time, 'rfid_scan', p_latitude, p_longitude,
-        v_scan_time, p_location_type, 'rfid_device', v_event_local_date
+        v_student_id, p_driver_id, v_scan_time, 'pickup', p_latitude, p_longitude,
+        v_scan_time, p_location_type, 'rfid_device'
     );
 
     UPDATE rfid_cards SET last_seen_at = v_scan_time WHERE rfid_code = p_rfid_code;

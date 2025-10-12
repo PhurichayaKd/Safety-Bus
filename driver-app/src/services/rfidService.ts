@@ -231,6 +231,7 @@ export async function assignRfidCard(studentId: number, cardId: number, assigned
       .from('rfid_card_assignments')
       .select('card_id, student_id')
       .eq('card_id', cardId)
+      .eq('is_active', true)
       .is('valid_to', null)
       .single();
 
@@ -247,6 +248,7 @@ export async function assignRfidCard(studentId: number, cardId: number, assigned
       .from('rfid_card_assignments')
       .select('card_id')
       .eq('student_id', studentId)
+      .eq('is_active', true)
       .is('valid_to', null)
       .single();
 
@@ -254,26 +256,47 @@ export async function assignRfidCard(studentId: number, cardId: number, assigned
       throw studentError;
     }
 
+    const currentTime = new Date().toISOString();
+
     // ถ้านักเรียนมีบัตรอยู่แล้ว ให้ยกเลิกการ assign บัตรเก่าก่อน
+    // ใช้วิธีการที่ปลอดภัยกับ unique constraint
     if (studentAssignment) {
-      await supabase
+      console.log('Deactivating old card assignment for student:', studentId);
+      
+      // ขั้นตอนที่ 1: ตั้งค่า is_active = false ก่อน (เพื่อหลีกเลี่ยง constraint conflict)
+      const { error: deactivateError } = await supabase
         .from('rfid_card_assignments')
-        .update({ valid_to: new Date().toISOString() })
+        .update({ 
+          is_active: false,
+          valid_to: currentTime 
+        })
         .eq('student_id', studentId)
+        .eq('is_active', true)
         .is('valid_to', null);
 
+      if (deactivateError) {
+        console.error('Error deactivating old assignment:', deactivateError);
+        throw deactivateError;
+      }
+
       // อัปเดตสถานะบัตรเก่าเป็น available
-      await supabase
+      const { error: oldCardError } = await supabase
         .from('rfid_cards')
         .update({ status: 'available' })
         .eq('card_id', studentAssignment.card_id);
+
+      if (oldCardError) {
+        console.error('Error updating old card status:', oldCardError);
+        // ไม่ throw error เพราะไม่ critical
+      }
     }
 
-    // สร้าง assignment ใหม่ - ไม่ใส่ is_active เพราะ default เป็น true อยู่แล้ว
+    // สร้าง assignment ใหม่
     const insertData: any = {
       card_id: cardId,
       student_id: studentId,
-      valid_from: new Date().toISOString()
+      valid_from: currentTime,
+      is_active: true
     };
 
     // เพิ่ม assigned_by เฉพาะเมื่อมีค่า
@@ -281,7 +304,7 @@ export async function assignRfidCard(studentId: number, cardId: number, assigned
       insertData.assigned_by = assignedBy;
     }
 
-    console.log('Inserting assignment data:', insertData);
+    console.log('Inserting new assignment data:', insertData);
 
     const { error: insertError } = await supabase
       .from('rfid_card_assignments')
@@ -292,7 +315,7 @@ export async function assignRfidCard(studentId: number, cardId: number, assigned
       throw insertError;
     }
 
-    // อัปเดตสถานะบัตรเป็น assigned
+    // อัปเดตสถานะบัตรใหม่เป็น assigned
     const { error: updateError } = await supabase
       .from('rfid_cards')
       .update({ status: 'assigned' })
@@ -311,7 +334,7 @@ export async function assignRfidCard(studentId: number, cardId: number, assigned
       card_id: cardId,
       student_id: studentId,
       assigned_by: assignedBy,
-      assigned_at: new Date().toISOString()
+      assigned_at: currentTime
     };
 
   } catch (error) {

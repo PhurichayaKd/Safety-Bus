@@ -165,26 +165,11 @@ async function resetStudentStatusForReturn() {
 
     const today = new Date().toISOString().split('T')[0];
     
-    // รีเซ็ตสถานะนักเรียนทั้งหมดที่อยู่ในรถให้กลับเป็น inactive สำหรับขากลับ
-    const { error } = await supabase
-      .from('student_status')
-      .update({ 
-        current_status: 'inactive',
-        last_updated: new Date().toISOString()
-      })
-      .eq('driver_id', driverId)
-      .eq('trip_phase', 'go')
-      .eq('current_status', 'active')
-      .gte('last_updated', `${today}T00:00:00.000Z`)
-      .lt('last_updated', `${today}T23:59:59.999Z`);
-
-    if (error) {
-      console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถานะนักเรียนสำหรับขากลับ:', error);
-    } else {
-      console.log('รีเซ็ตสถานะนักเรียนสำหรับขากลับเรียบร้อยแล้ว');
-    }
+    // ไม่ต้องรีเซ็ตข้อมูลในฐานข้อมูล เพราะข้อมูลการขึ้นรถ-ลงรถจะถูกจัดการแยกตาม trip_phase
+    // แค่ log ว่าเสร็จสิ้นการเตรียมพร้อมสำหรับขากลับ
+    console.log('เตรียมพร้อมสำหรับขากลับเรียบร้อยแล้ว');
   } catch (error) {
-    console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถานะนักเรียน:', error);
+    console.error('เกิดข้อผิดพลาดในการเตรียมพร้อมสำหรับขากลับ:', error);
   }
 }
 
@@ -197,27 +182,11 @@ async function resetStudentStatusForNewDay() {
       return;
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    
-    // รีเซ็ตสถานะนักเรียนทั้งหมดให้กลับเป็น inactive เมื่อจบการเดินทาง
-    const { error } = await supabase
-      .from('student_status')
-      .update({ 
-        current_status: 'inactive',
-        last_updated: new Date().toISOString()
-      })
-      .eq('driver_id', driverId)
-      .eq('current_status', 'active')
-      .gte('last_updated', `${today}T00:00:00.000Z`)
-      .lt('last_updated', `${today}T23:59:59.999Z`);
-
-    if (error) {
-      console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถานะนักเรียนเมื่อจบการเดินทาง:', error);
-    } else {
-      console.log('รีเซ็ตสถานะนักเรียนเมื่อจบการเดินทางเรียบร้อยแล้ว');
-    }
+    // ไม่ต้องรีเซ็ตข้อมูลในฐานข้อมูล เพราะข้อมูลการขึ้นรถ-ลงรถจะถูกจัดการตามวันที่และ trip_phase
+    // แค่ log ว่าเสร็จสิ้นการเตรียมพร้อมสำหรับวันใหม่
+    console.log('เตรียมพร้อมสำหรับวันใหม่เรียบร้อยแล้ว');
   } catch (error) {
-    console.error('เกิดข้อผิดพลาดในการรีเซ็ตสถานะนักเรียน:', error);
+    console.error('เกิดข้อผิดพลาดในการเตรียมพร้อมสำหรับวันใหม่:', error);
   }
 }
 
@@ -282,6 +251,11 @@ const HomePage = () => {
   const [estimatedTime, setEstimatedTime] = useState<string>('25 นาที');
   const [loading, setLoading] = useState(true);
 
+  // เพิ่ม state สำหรับ emergency
+  const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
+  const [currentEmergency, setCurrentEmergency] = useState<any>(null);
+  const [processingEmergency, setProcessingEmergency] = useState(false);
+
   useEffect(() => {
     (async () => {
       const phase = await AsyncStorage.getItem('trip_phase');
@@ -295,6 +269,9 @@ const HomePage = () => {
         // เริ่มต้นด้วยค่าว่าง ให้คนขับเลือกเอง
         setStatus(null);
       }
+      
+      // ตรวจสอบ emergency logs
+      await checkEmergencyLogs();
     })();
   }, []);
 
@@ -332,6 +309,117 @@ const HomePage = () => {
 
     return () => clearInterval(timer);
   }, []);
+
+  // เพิ่ม useEffect สำหรับตรวจสอบ emergency_logs ทุก 10 วินาที
+  useEffect(() => {
+    const emergencyTimer = setInterval(() => {
+      checkEmergencyLogs();
+    }, 10000); // ตรวจสอบทุก 10 วินาที
+
+    return () => clearInterval(emergencyTimer);
+  }, []);
+
+  // ฟังก์ชันตรวจสอบ emergency_logs
+  const checkEmergencyLogs = async () => {
+    try {
+      const driverId = await getMyDriverId();
+      if (!driverId) return;
+
+      const { data: emergencyLogs, error } = await supabase
+        .from('emergency_logs')
+        .select('*')
+        .eq('triggered_by', 'driver')
+        .eq('driver_id', driverId)
+        .is('driver_response_type', null) // ยังไม่ได้ตอบสนอง
+        .order('event_time', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking emergency logs:', error);
+        return;
+      }
+
+      if (emergencyLogs && emergencyLogs.length > 0) {
+        const emergency = emergencyLogs[0];
+        setCurrentEmergency(emergency);
+        setEmergencyModalVisible(true);
+      }
+    } catch (error) {
+      console.error('Error in checkEmergencyLogs:', error);
+    }
+  };
+
+  // ฟังก์ชันจัดการการตอบสนองเหตุฉุกเฉิน
+  const handleEmergencyResponse = async (responseType: 'EMERGENCY' | 'CONFIRMED_NORMAL') => {
+    if (!currentEmergency) return;
+
+    setProcessingEmergency(true);
+    try {
+      // อัปเดต emergency_log
+      const { error: updateError } = await supabase
+        .from('emergency_logs')
+        .update({
+          driver_response_type: responseType,
+          driver_response_time: new Date().toISOString(),
+          driver_response_notes: responseType === 'EMERGENCY' 
+            ? 'คนขับยืนยันเหตุฉุกเฉิน' 
+            : 'คนขับยืนยันสถานการณ์กลับสู่ปกติ'
+        })
+        .eq('event_id', currentEmergency.event_id);
+
+      if (updateError) {
+        console.error('Error updating emergency log:', updateError);
+        Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกการตอบสนองได้');
+        return;
+      }
+
+      if (responseType === 'EMERGENCY') {
+        // ส่งการแจ้งเตือนไปยัง LINE
+        try {
+          const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://safety-bus-liff-v4-new.vercel.app/api';
+          const response = await fetch(`${apiBaseUrl}/emergency-notification`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              emergency_id: currentEmergency.id,
+              driver_id: currentEmergency.driver_id,
+              message: 'คนขับได้ยืนยันเหตุฉุกเฉินแล้ว กำลังส่งแจ้งเตือนไปยังผู้ใช้ทุกคน',
+              timestamp: new Date().toISOString(),
+            }),
+          });
+
+          if (!response.ok) {
+            console.warn('Failed to send emergency notification:', response.status);
+          } else {
+            console.log('Emergency notification sent successfully');
+          }
+        } catch (notificationError) {
+          console.error('Error sending emergency notification:', notificationError);
+        }
+
+        Alert.alert(
+          'ส่งสัญญาณฉุกเฉินเรียบร้อย',
+          'กรุณายืนยันเมื่อสถานการณ์กลับมาปกติ',
+          [{ text: 'ตกลง' }]
+        );
+      } else {
+        Alert.alert(
+          'ยืนยันสถานการณ์ปกติ',
+          'บันทึกการยืนยันสถานการณ์กลับสู่ปกติเรียบร้อยแล้ว',
+          [{ text: 'ตกลง' }]
+        );
+        setEmergencyModalVisible(false);
+        setCurrentEmergency(null);
+      }
+    } catch (error) {
+      console.error('Error handling emergency response:', error);
+      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถดำเนินการได้');
+    } finally {
+      setProcessingEmergency(false);
+    }
+  };
 
   const handleSignOut = async () => {
     await Haptics.selectionAsync();
@@ -417,6 +505,37 @@ const HomePage = () => {
         
         // รีเซ็ตสถานะนักเรียนในฐานข้อมูลเมื่อจบการเดินทาง
         await resetStudentStatusForNewDay();
+        
+        // ตั้งเวลา auto-reset หลังจาก 5 วินาที
+        setTimeout(async () => {
+          try {
+            console.log('เริ่ม auto-reset สถานะหลังจาก 5 วินาที');
+            
+            // รีเซ็ตสถานะกลับเป็น waiting_departure
+            setStatus('waiting_departure');
+            await AsyncStorage.setItem('current_bus_status', 'waiting_departure');
+            
+            // อัพเดต trip_phase กลับเป็น go
+            const driverId = await getMyDriverId();
+            if (driverId) {
+              const { error } = await supabase
+                .from('driver_bus')
+                .update({ trip_phase: 'go' })
+                .eq('driver_id', 1);
+                
+              if (error) {
+                console.error('เกิดข้อผิดพลาดในการรีเซ็ต trip_phase:', error);
+              } else {
+                console.log('รีเซ็ต trip_phase เป็น go เรียบร้อยแล้ว');
+              }
+            }
+            
+            console.log('Auto-reset สถานะเรียบร้อยแล้ว');
+            AccessibilityInfo.announceForAccessibility?.('รีเซ็ตสถานะเรียบร้อยแล้ว พร้อมสำหรับวันใหม่');
+          } catch (error) {
+            console.error('เกิดข้อผิดพลาดในการ auto-reset:', error);
+          }
+        }, 5000); // 5 วินาที
       }
 
       if (next === 'enroute') {
@@ -431,6 +550,35 @@ const HomePage = () => {
       setStatus(next);
       await persistTripPhase(next);
       await AsyncStorage.setItem('current_bus_status', next);
+      
+      // อัพเดต trip_phase ในตาราง driver_bus
+      try {
+        const driverId = await getMyDriverId();
+        if (driverId) {
+          let tripPhase = 'go'; // ค่าเริ่มต้น
+          
+          if (next === 'enroute') {
+            tripPhase = 'go';
+          } else if (next === 'waiting_return') {
+            tripPhase = 'return';
+          } else if (next === 'finished') {
+            tripPhase = 'finished';
+          }
+          
+          const { error } = await supabase
+            .from('driver_bus')
+            .update({ trip_phase: tripPhase })
+            .eq('driver_id', 1); // ใช้เฉพาะ driver_id 1
+            
+          if (error) {
+            console.error('เกิดข้อผิดพลาดในการอัพเดต trip_phase:', error);
+          } else {
+            console.log(`อัพเดต trip_phase เป็น ${tripPhase} เรียบร้อยแล้ว`);
+          }
+        }
+      } catch (error) {
+        console.error('เกิดข้อผิดพลาดในการอัพเดต trip_phase:', error);
+      }
       
       // ส่งแจ้งเตือนไปยัง LINE Bot (ยกเว้นสถานะ waiting_departure)
       if (next !== 'waiting_departure') {
@@ -734,6 +882,66 @@ const HomePage = () => {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* EMERGENCY RESPONSE MODAL */}
+      <Modal transparent visible={emergencyModalVisible} animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.emergencyBackdrop}>
+          <View style={styles.emergencyModal}>
+            <View style={styles.emergencyHeader}>
+              <View style={styles.emergencyIcon}>
+                <Ionicons name="warning" size={32} color={COLORS.danger} />
+              </View>
+              <Text style={styles.emergencyTitle}>ตรวจพบสัญญาณฉุกเฉิน</Text>
+              <Text style={styles.emergencySubtitle}>
+                ระบบตรวจพบสัญญาณฉุกเฉินจากอุปกรณ์ IoT
+              </Text>
+              {currentEmergency && (
+                <Text style={styles.emergencyTime}>
+                  เวลา: {new Date(currentEmergency.created_at).toLocaleString('th-TH')}
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.emergencyActions}>
+              <TouchableOpacity
+                style={[styles.emergencyButton, styles.emergencyButtonDanger]}
+                onPress={() => handleEmergencyResponse('EMERGENCY')}
+                disabled={processingEmergency}
+                activeOpacity={0.8}
+              >
+                {processingEmergency ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="alert-circle" size={20} color="#fff" />
+                    <Text style={styles.emergencyButtonText}>ยืนยันเหตุฉุกเฉิน</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.emergencyButton, styles.emergencyButtonNormal]}
+                onPress={() => handleEmergencyResponse('CONFIRMED_NORMAL')}
+                disabled={processingEmergency}
+                activeOpacity={0.8}
+              >
+                {processingEmergency ? (
+                  <ActivityIndicator color={COLORS.text} size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                    <Text style={styles.emergencyButtonTextNormal}>สถานการณ์ปกติ</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.emergencyNote}>
+              กรุณาเลือกการตอบสนองที่เหมาะสม
+            </Text>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -1154,6 +1362,92 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.text,
     fontWeight: '600',
+  },
+
+  // Emergency Modal Styles
+  emergencyBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  emergencyModal: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    ...shadowElevated,
+  },
+  emergencyHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emergencyIcon: {
+    width: 64,
+    height: 64,
+    backgroundColor: COLORS.dangerSoft,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emergencyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emergencySubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  emergencyTime: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
+  },
+  emergencyActions: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  emergencyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+  },
+  emergencyButtonDanger: {
+    backgroundColor: COLORS.danger,
+  },
+  emergencyButtonNormal: {
+    backgroundColor: COLORS.bgSecondary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  emergencyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  emergencyButtonTextNormal: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  emergencyNote: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });
 

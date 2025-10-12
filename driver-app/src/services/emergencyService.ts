@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { sendEmergencyLineNotification } from './lineNotificationService';
 
 export interface EmergencyLog {
   event_id: number;
@@ -93,7 +94,7 @@ export const getUnresolvedEmergencyLogs = async (driverId: number) => {
       .from('emergency_logs')
       .select('*')
       .eq('driver_id', driverId)
-      .eq('resolved', false)
+      .is('driver_response_type', null)
       .order('event_time', { ascending: false });
 
     if (error) throw error;
@@ -127,8 +128,44 @@ export const recordEmergencyResponse = async (
 
     if (responseError) throw responseError;
 
-    // สถานะจะถูกอัปเดตโดย trigger อัตโนมัติ
-    // แต่เราจะ return ข้อมูลการตอบสนองที่บันทึกแล้ว
+    // อัปเดต driver_response_type ในตาราง emergency_logs
+    const { error: updateError } = await supabase
+      .from('emergency_logs')
+      .update({
+        driver_response_type: responseType,
+        driver_response_time: new Date().toISOString(),
+        driver_response_notes: notes || (responseType === 'CHECKED' 
+          ? 'คนขับตรวจสอบแล้ว' 
+          : responseType === 'EMERGENCY' 
+            ? 'คนขับยืนยันเหตุฉุกเฉิน' 
+            : 'คนขับยืนยันสถานการณ์กลับสู่ปกติ')
+      })
+      .eq('event_id', eventId);
+
+    if (updateError) {
+      console.error('Error updating emergency log:', updateError);
+      // ไม่ให้ error ของการอัปเดต emergency log ทำให้การบันทึกการตอบสนองล้มเหลว
+    }
+
+    // ส่ง LINE notification สำหรับ EMERGENCY และ CONFIRMED_NORMAL
+    if (responseType === 'EMERGENCY' || responseType === 'CONFIRMED_NORMAL') {
+      try {
+        // ดึงข้อมูล emergency log
+        const { data: emergencyData, error: emergencyError } = await supabase
+          .from('emergency_logs')
+          .select('*')
+          .eq('event_id', eventId)
+          .single();
+
+        if (!emergencyError && emergencyData) {
+          await sendEmergencyLineNotification(emergencyData, responseType);
+        }
+      } catch (notificationError) {
+        console.error('Error sending LINE notification:', notificationError);
+        // ไม่ให้ error ของการส่ง notification ทำให้การบันทึกการตอบสนองล้มเหลว
+      }
+    }
+
     return { success: true, error: null, data: responseData };
   } catch (error) {
     console.error('Error recording emergency response:', error);

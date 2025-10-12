@@ -19,8 +19,13 @@ import {
   getEventTypeIcon as getEventTypeIconFromService,
   getEventTypeColor as getEventTypeColorFromService,
   getTriggeredByText as getTriggeredByTextFromService,
-  formatDateTime as formatDateTimeFromService
+  formatDateTime as formatDateTimeFromService,
+  subscribeToEmergencyLogs,
+  getUnresolvedEmergencyLogs,
+  recordEmergencyResponse,
+  EmergencyLog
 } from '../../src/services/emergencyService';
+import EmergencyAlertModal from '../../src/components/EmergencyAlertModal';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -103,15 +108,6 @@ type Student = {
 type StudentWithGeo = Student & { lat: number; lng: number; dist: number };
 type Pt = { lat: number; lng: number };
 
-interface EmergencyLog {
-  event_id: number;
-  driver_id: number;
-  event_time: string;
-  event_type: 'PANIC_BUTTON' | 'SENSOR_ALERT' | 'DRIVER_INCAPACITATED';
-  triggered_by: 'sensor' | 'driver' | 'student';
-  details?: string;
-}
-
 const STORAGE_KEYS = {
   phase: 'trip_phase',
   resetFlag: 'reset_today_flag',
@@ -177,6 +173,11 @@ export default function PassengerMapPage() {
   const [driverId, setDriverId] = useState<number | null>(null);
   const [driverReady, setDriverReady] = useState(false);
   const [emergencyLogs, setEmergencyLogs] = useState<EmergencyLog[]>([]);
+  
+  // Real-time emergency monitoring states
+  const [currentEmergencyAlert, setCurrentEmergencyAlert] = useState<EmergencyLog | null>(null);
+  const [isEmergencyAlertVisible, setIsEmergencyAlertVisible] = useState(false);
+  const [lastCheckedTimestamp, setLastCheckedTimestamp] = useState<string | null>(null);
 
   // Date calculations
   const startOfTodayISO = useMemo(() => {
@@ -325,6 +326,49 @@ window.addEventListener('message',e=>handle(e.data));
       setLocationPermission(status === 'granted');
     })();
   }, []);
+
+  // Real-time emergency monitoring - ตรวจสอบทุก 1 วินาที
+  useEffect(() => {
+    const checkForNewEmergencies = async () => {
+      try {
+        const currentDriverId = await getMyDriverId();
+        if (!currentDriverId) return;
+        
+        const { data: unresolvedLogs, error } = await getUnresolvedEmergencyLogs(currentDriverId);
+        
+        if (error) {
+          console.error('Error fetching unresolved emergency logs:', error);
+          return;
+        }
+
+        if (unresolvedLogs && unresolvedLogs.length > 0) {
+          // หาเหตุการณ์ใหม่ที่ยังไม่ได้แสดง alert
+          const newEmergency = unresolvedLogs.find(log => {
+            if (!lastCheckedTimestamp) return true;
+            return new Date(log.event_time) > new Date(lastCheckedTimestamp);
+          });
+
+          if (newEmergency && !isEmergencyAlertVisible) {
+            setCurrentEmergencyAlert(newEmergency);
+            setIsEmergencyAlertVisible(true);
+          }
+        }
+
+        // อัปเดต timestamp ล่าสุด
+        setLastCheckedTimestamp(new Date().toISOString());
+      } catch (error) {
+        console.error('Error in real-time emergency monitoring:', error);
+      }
+    };
+
+    // เรียกใช้ทันทีเมื่อ component mount
+    checkForNewEmergencies();
+
+    // ตั้ง interval ให้ตรวจสอบทุก 1 วินาที
+    const interval = setInterval(checkForNewEmergencies, 1000);
+
+    return () => clearInterval(interval);
+  }, [lastCheckedTimestamp, isEmergencyAlertVisible]);
 
   const softResetSets = () => {
     setBoardedGoSet(new Set());
@@ -529,6 +573,36 @@ window.addEventListener('message',e=>handle(e.data));
     }
   }, [fetchTodayEvents]);
 
+  // ฟังก์ชันสำหรับจัดการการตอบสนองเหตุฉุกเฉิน
+  const handleEmergencyResponse = async (
+    eventId: number,
+    responseType: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL'
+  ) => {
+    if (!currentEmergencyAlert || !driverId) return;
+
+    try {
+      const result = await recordEmergencyResponse(
+        eventId,
+        responseType,
+        driverId
+      );
+
+      if (result.success) {
+        if (responseType === 'CHECKED' || responseType === 'CONFIRMED_NORMAL') {
+          // ปิด modal เมื่อตรวจสอบแล้วหรือยืนยันสถานการณ์กลับสู่ปกติ
+          setIsEmergencyAlertVisible(false);
+          setCurrentEmergencyAlert(null);
+        }
+        // สำหรับ EMERGENCY จะไม่ปิด modal ทันที จะรอให้กด CONFIRMED_NORMAL
+      } else {
+        Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกการตอบสนองได้');
+      }
+    } catch (error) {
+      console.error('Error handling emergency response:', error);
+      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกการตอบสนองได้');
+    }
+  };
+
   // Phase from AsyncStorage
   useFocusEffect(
     useCallback(() => {
@@ -597,6 +671,20 @@ window.addEventListener('message',e=>handle(e.data));
       await fetchStudents();
       await fetchTodayEvents();
     })();
+  }, [fetchStudents, fetchTodayEvents]);
+
+  // Auto-refresh every 1 second (silent refresh without loading indicator)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      // Silent refresh - don't show loading indicator
+      try {
+        await Promise.all([fetchStudents(), fetchTodayEvents()]);
+      } catch (error) {
+        console.error('Auto-refresh error:', error);
+      }
+    }, 1000); // Refresh every 1 second
+
+    return () => clearInterval(interval);
   }, [fetchStudents, fetchTodayEvents]);
 
   // Fetch emergency logs when alerts modal is opened
@@ -918,18 +1006,20 @@ window.addEventListener('message',e=>handle(e.data));
       const location = phase === 'go' ? 'go' : 'return';
       
       if (eventType === 'absent') {
-        // For absent status, insert into leave_requests table
+        // For absent status, use upsert to handle existing records
         const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
         
         const { error } = await supabase
           .from('leave_requests')
-          .insert({
+          .upsert({
             student_id: selected.student_id,
             leave_date: today,
             status: 'approved',
             leave_type: 'กดโดยคนขับ',
             created_at: now,
             updated_at: now,
+          }, {
+            onConflict: 'student_id,leave_date'
           });
 
         if (error) {
@@ -941,37 +1031,58 @@ window.addEventListener('message',e=>handle(e.data));
         // For pickup/dropoff, use upsert to handle existing records
         const today = new Date().toISOString().split('T')[0];
         
-        // First, delete any existing records for today with same student_id, location_type, and event_type
-        // This ensures we don't violate the unique constraint
-        const { error: deleteError } = await supabase
-          .from('pickup_dropoff')
-          .delete()
-          .eq('student_id', selected.student_id)
-          .eq('location_type', location)
-          .eq('event_type', eventType)
-          .gte('event_time', `${today}T00:00:00.000Z`)
-          .lt('event_time', `${today}T23:59:59.999Z`);
-
-        if (deleteError) {
-          console.error('Error deleting existing records:', deleteError);
-          // Continue anyway - the error might be because no records exist
-        }
-
-        // Insert new record
+        // Use upsert with proper conflict resolution
         const { error } = await supabase
           .from('pickup_dropoff')
-          .insert({
+          .upsert({
             student_id: selected.student_id,
             driver_id: driverId,
             event_type: eventType,
             event_time: now,
             location_type: location,
+          }, {
+            onConflict: 'student_id,event_type,location_type,event_time'
           });
 
         if (error) {
           console.error('Error updating status:', error);
-          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปเดตสถานะได้');
-          return;
+          
+          // If upsert fails, try to delete existing and insert new
+          try {
+            const { error: deleteError } = await supabase
+              .from('pickup_dropoff')
+              .delete()
+              .eq('student_id', selected.student_id)
+              .eq('location_type', location)
+              .eq('event_type', eventType)
+              .gte('event_time', `${today}T00:00:00.000Z`)
+              .lt('event_time', `${today}T23:59:59.999Z`);
+
+            if (deleteError) {
+              console.error('Error deleting existing records:', deleteError);
+            }
+
+            // Try insert again
+            const { error: insertError } = await supabase
+              .from('pickup_dropoff')
+              .insert({
+                student_id: selected.student_id,
+                driver_id: driverId,
+                event_type: eventType,
+                event_time: now,
+                location_type: location,
+              });
+
+            if (insertError) {
+              console.error('Error inserting after delete:', insertError);
+              Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปเดตสถานะได้');
+              return;
+            }
+          } catch (fallbackError) {
+            console.error('Fallback error:', fallbackError);
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปเดตสถานะได้');
+            return;
+          }
         }
       }
 
@@ -1519,6 +1630,18 @@ window.addEventListener('message',e=>handle(e.data));
           </View>
         </View>
       </Modal>
+
+      {/* Real-time Emergency Alert Modal */}
+      <EmergencyAlertModal
+        visible={isEmergencyAlertVisible}
+        emergency={currentEmergencyAlert}
+        driverId={driverId || 0}
+        onResponse={handleEmergencyResponse}
+        onClose={() => {
+          setIsEmergencyAlertVisible(false);
+          setCurrentEmergencyAlert(null);
+        }}
+      />
 
     </SafeAreaView>
   );

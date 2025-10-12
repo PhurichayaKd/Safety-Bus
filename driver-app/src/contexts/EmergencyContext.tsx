@@ -106,8 +106,8 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
       prev.map(e => e.event_id === emergency.event_id ? emergency : e)
     );
 
-    // ถ้าเหตุการณ์ถูกแก้ไขแล้ว ให้ลบออกจากรายการ
-    if (emergency.resolved) {
+    // ถ้าเหตุการณ์ถูกแก้ไขแล้ว หรือคนขับตอบสนองแล้ว ให้ลบออกจากรายการ
+    if (emergency.resolved || emergency.driver_response_type) {
       setEmergencies(prev => prev.filter(e => e.event_id !== emergency.event_id));
       setUnreadCount(prev => Math.max(0, prev - 1));
       

@@ -23,6 +23,47 @@ export interface RfidAssignment {
   is_active: boolean;
 }
 
+export interface CardHistoryEntry {
+  student_id: number;
+  action_type: 'issue' | 'expire' | 'renew' | 'cancel' | 'suspend' | 'reactivate';
+  old_status?: string;
+  new_status: string;
+  reason?: string;
+  performed_by?: string | null;
+  metadata?: any;
+}
+
+/**
+ * บันทึกประวัติการจัดการบัตร RFID ลงตาราง card_history
+ */
+async function logCardHistory(entry: CardHistoryEntry): Promise<void> {
+  try {
+    console.log('Logging card history:', entry);
+    
+    const { error } = await supabase
+      .from('card_history')
+      .insert({
+        student_id: entry.student_id,
+        action_type: entry.action_type,
+        old_status: entry.old_status,
+        new_status: entry.new_status,
+        reason: entry.reason,
+        performed_by: entry.performed_by || null,
+        metadata: entry.metadata || {}
+      });
+
+    if (error) {
+      console.error('Error logging card history:', error);
+      // ไม่ throw error เพราะไม่ควรให้การบันทึกประวัติขัดขวางการทำงานหลัก
+    } else {
+      console.log('Card history logged successfully:', entry.action_type);
+    }
+  } catch (error) {
+    console.error('Failed to log card history:', error);
+    // ไม่ throw error เพราะไม่ควรให้การบันทึกประวัติขัดขวางการทำงานหลัก
+  }
+}
+
 /**
  * ดึงรายการบัตร RFID ที่ยังไม่ได้ผูกกับนักเรียน
  */
@@ -279,16 +320,35 @@ export async function assignRfidCard(studentId: number, cardId: number, assigned
         throw deactivateError;
       }
 
-      // อัปเดตสถานะบัตรเก่าเป็น available
+      // อัปเดตสถานะบัตรเก่าเป็น available และ is_active เป็น false
       const { error: oldCardError } = await supabase
         .from('rfid_cards')
-        .update({ status: 'available' })
+        .update({ 
+          status: 'available',
+          is_active: false
+        })
         .eq('card_id', studentAssignment.card_id);
 
       if (oldCardError) {
         console.error('Error updating old card status:', oldCardError);
         // ไม่ throw error เพราะไม่ critical
       }
+
+      // บันทึกประวัติการยกเลิกบัตรเก่า
+      await logCardHistory({
+        student_id: studentId,
+        action_type: 'cancel',
+        old_status: 'assigned',
+        new_status: 'cancelled',
+        reason: 'Card replaced with new assignment',
+        performed_by: null,
+        metadata: {
+          old_card_id: studentAssignment.card_id,
+          new_card_id: cardId,
+          cancelled_at: currentTime,
+          assigned_by: assignedBy
+        }
+      });
     }
 
     // สร้าง assignment ใหม่
@@ -325,6 +385,22 @@ export async function assignRfidCard(studentId: number, cardId: number, assigned
       console.error('Update error:', updateError);
       throw updateError;
     }
+
+    // บันทึกประวัติการออกบัตรใหม่
+    await logCardHistory({
+      student_id: studentId,
+      action_type: 'issue',
+      old_status: studentAssignment ? 'assigned' : 'none',
+      new_status: 'assigned',
+      reason: studentAssignment ? 'Card renewal/replacement' : 'New card issuance',
+      performed_by: null,
+      metadata: {
+        card_id: cardId,
+        assigned_at: currentTime,
+        previous_card_id: studentAssignment?.card_id || null,
+        assigned_by: assignedBy
+      }
+    });
 
     console.log('RFID assignment completed successfully');
 

@@ -10,7 +10,7 @@ const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 export default function PickMap() {
   const webRef = useRef<WebView>(null);
-  const { returnTo, field, lat, lng } = useLocalSearchParams<{returnTo?:string; field?:string; lat?:string; lng?:string}>();
+  const { returnTo, field, lat, lng, id } = useLocalSearchParams<{returnTo?:string; field?:string; lat?:string; lng?:string; id?:string}>();
   const [picked, setPicked] = useState<Pt | null>(null);
 
   // html แผนที่ (มีแต่ pick-mode)
@@ -52,7 +52,13 @@ ${(lat && lng) ? `setPicked(${Number(lat)},${Number(lng)});` : ''}
     if(!picked) return;
     const base = (typeof returnTo === 'string' && returnTo.length) ? returnTo : '/';
     const sep = base.includes('?') ? '&' : '?';
-    const url = `${base}${sep}field=${field||'home'}&lat=${picked.lat}&lng=${picked.lng}`;
+    const params = new URLSearchParams({
+      field: field || 'home',
+      lat: String(picked.lat),
+      lng: String(picked.lng),
+      ...(id ? { id } : {}),
+    });
+    const url = `${base}${sep}${params.toString()}`;
     router.replace(url as Href);
   };
 

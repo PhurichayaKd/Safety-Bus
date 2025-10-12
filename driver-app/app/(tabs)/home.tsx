@@ -9,6 +9,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../src/services/supabaseClient';
 import COLORS from '../colors';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -135,40 +136,50 @@ async function resetStatsForReturn() {
 // ฟังก์ชันสำหรับอัพเดตสถานะนักเรียนลงรถที่โรงเรียนลับรับกลับ
 async function updateSchoolDropoffStatus() {
   try {
-    const driverId = await AsyncStorage.getItem('driverId');
-    if (!driverId) {
-      console.error('ไม่พบ driverId');
-      return;
-    }
+    const studentsData = await AsyncStorage.getItem('students_data');
+    if (!studentsData) return;
 
-    const response = await fetch('https://safety-bus-liff-v4-new.vercel.app/api/update-school-dropoff', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        driverId: parseInt(driverId),
-      }),
-    });
-
-    const result = await response.json();
+    const students = JSON.parse(studentsData);
     
-    if (response.ok) {
-      console.log('อัพเดตสถานะลงรถที่โรงเรียนสำเร็จ:', result.message);
-      if (result.updatedStudents > 0) {
-        Alert.alert(
-          'อัพเดตสถานะสำเร็จ',
-          `อัพเดตสถานะลงรถที่โรงเรียนสำหรับนักเรียน ${result.updatedStudents} คน`,
-          [{ text: 'ตกลง' }]
-        );
-      }
-    } else {
-      console.error('เกิดข้อผิดพลาดในการอัพเดตสถานะ:', result.error);
-      Alert.alert('เกิดข้อผิดพลาด', result.error || 'ไม่สามารถอัพเดตสถานะได้');
-    }
+    // อัปเดตสถานะนักเรียนทุกคนให้เป็น "ลงรถที่โรงเรียน"
+    const updatedStudents = students.map((student: any) => ({
+      ...student,
+      status_go: student.status_go === 'onboard' ? 'offboard' : student.status_go
+    }));
+
+    await AsyncStorage.setItem('students_data', JSON.stringify(updatedStudents));
+    
+    // อัปเดตสถิติ
+    const stats = await getTodayProgress();
+    const newDropGo = stats.pickupGo; // จำนวนคนที่ลงรถ = จำนวนคนที่ขึ้นรถ
+    
+    await AsyncStorage.setItem('passenger_stats', JSON.stringify({
+      ...stats,
+      dropGo: newDropGo
+    }));
+    
+    console.log('Updated school dropoff status for all students');
   } catch (error) {
-    console.error('เกิดข้อผิดพลาดในการเชื่อมต่อ:', error);
-    Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
+    console.warn('Error updating school dropoff status:', error);
+  }
+}
+
+// ฟังก์ชันสำหรับดึง driver_id ที่ถูกต้องจาก auth_user_id
+async function getMyDriverId(): Promise<number | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    
+    const { data } = await supabase
+      .from('driver_bus')
+      .select('driver_id')
+      .eq('auth_user_id', user.id)
+      .single();
+    
+    return data?.driver_id ?? null;
+  } catch (error) {
+    console.warn('Error getting driver_id:', error);
+    return null;
   }
 }
 
@@ -329,23 +340,28 @@ const HomePage = () => {
       // ส่งแจ้งเตือนไปยัง LINE Bot (ยกเว้นสถานะ waiting_departure)
       if (next !== 'waiting_departure') {
         try {
-          const response = await fetch('https://safety-bus-liff-v4-new.vercel.app/api/driver-status-notification', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              driver_id: session?.user?.id,
-              trip_phase: next,
-              current_status: next,
-              timestamp: new Date().toISOString(),
-            }),
-          });
+          const driverId = await getMyDriverId();
+          if (driverId) {
+            const response = await fetch('https://safety-bus-liff-v4-new.vercel.app/api/driver-status-notification', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                driver_id: driverId,
+                trip_phase: next,
+                current_status: next,
+                timestamp: new Date().toISOString(),
+              }),
+            });
 
-          if (!response.ok) {
-            console.warn('Failed to send LINE notification:', response.status);
+            if (!response.ok) {
+              console.warn('Failed to send LINE notification:', response.status);
+            } else {
+              console.log('LINE notification sent successfully');
+            }
           } else {
-            console.log('LINE notification sent successfully');
+            console.warn('Could not get driver_id for LINE notification');
           }
         } catch (error) {
           console.warn('Error sending LINE notification:', error);

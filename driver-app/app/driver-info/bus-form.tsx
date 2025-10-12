@@ -23,8 +23,16 @@ type RouteRow = {
 };
 
 export default function BusForm() {
-  const { target, lat: qLat, lng: qLng } =
-    useLocalSearchParams<{ target?: string; lat?: string | string[]; lng?: string | string[] }>();
+  const { target, lat: qLat, lng: qLng, home_lat, home_lng, school_lat, school_lng } =
+    useLocalSearchParams<{ 
+      target?: string; 
+      lat?: string | string[]; 
+      lng?: string | string[]; 
+      home_lat?: string;
+      home_lng?: string;
+      school_lat?: string;
+      school_lng?: string;
+    }>();
 
   const [routes, setRoutes] = useState<RouteRow[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(true);
@@ -49,15 +57,41 @@ export default function BusForm() {
 
   // รับค่าพิกัดกลับจาก /map
   useEffect(() => {
+    console.log('Parameters received:', { home_lat, home_lng, school_lat, school_lng, target, qLat, qLng });
+    
+    // รับค่าจากพารามิเตอร์ home_lat, home_lng, school_lat, school_lng
+    if (home_lat && home_lng) {
+      const nHomeLat = Number(home_lat);
+      const nHomeLng = Number(home_lng);
+      if (!Number.isNaN(nHomeLat) && !Number.isNaN(nHomeLng)) {
+        console.log('Updating home coordinates:', nHomeLat, nHomeLng);
+        setHomeLat(nHomeLat);
+        setHomeLng(nHomeLng);
+      }
+    }
+    
+    if (school_lat && school_lng) {
+      const nSchoolLat = Number(school_lat);
+      const nSchoolLng = Number(school_lng);
+      if (!Number.isNaN(nSchoolLat) && !Number.isNaN(nSchoolLng)) {
+        console.log('Updating school coordinates:', nSchoolLat, nSchoolLng);
+        setSchoolLat(nSchoolLat);
+        setSchoolLng(nSchoolLng);
+      }
+    }
+
+    // รับค่าจากพารามิเตอร์ lat, lng (สำหรับ backward compatibility)
     const getOne = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v);
     const latStr = getOne(qLat); const lngStr = getOne(qLng);
-    if (!latStr || !lngStr) return;
-    const nLat = Number(latStr); const nLng = Number(lngStr);
-    if (Number.isNaN(nLat) || Number.isNaN(nLng)) return;
-
-    if (target === 'start') { setHomeLat(nLat); setHomeLng(nLng); }
-    if (target === 'end')   { setSchoolLat(nLat);  setSchoolLng(nLng);  }
-  }, [target, qLat, qLng]);
+    if (latStr && lngStr) {
+      const nLat = Number(latStr); const nLng = Number(lngStr);
+      if (!Number.isNaN(nLat) && !Number.isNaN(nLng)) {
+        console.log('Updating coordinates via target:', target, nLat, nLng);
+        if (target === 'start') { setHomeLat(nLat); setHomeLng(nLng); }
+        if (target === 'end')   { setSchoolLat(nLat);  setSchoolLng(nLng);  }
+      }
+    }
+  }, [target, qLat, qLng, home_lat, home_lng, school_lat, school_lng]);
 
   // โหลด routes + user + ข้อมูล bus ของผู้ใช้
   useEffect(() => {
@@ -160,8 +194,17 @@ export default function BusForm() {
   const openMapPick = (which: 'start' | 'end') => {
     const lat = which === 'start' ? homeLat : schoolLat;
     const lng = which === 'start' ? homeLng : schoolLng;
-    let href = `/map?returnTo=/bus-form&target=${which}`;
+    let href = `/map?returnTo=/driver-info/bus-form&target=${which}`;
     if (lat != null && lng != null) href += `&lat=${lat}&lng=${lng}`;
+    
+    // ส่งข้อมูลตำแหน่งทั้งหมดไปยังแผนที่เพื่อรักษาข้อมูลที่มีอยู่
+    if (homeLat != null && homeLng != null) {
+      href += `&home_lat=${homeLat}&home_lng=${homeLng}`;
+    }
+    if (schoolLat != null && schoolLng != null) {
+      href += `&school_lat=${schoolLat}&school_lng=${schoolLng}`;
+    }
+    
     router.push(href as Href);
   };
 
@@ -217,7 +260,7 @@ export default function BusForm() {
     <SafeAreaView style={styles.screen}>
       {/* Top bar ให้ฟีลเดียวกับฟอร์มนักเรียน */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => safeGoBack('/driver-info')} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => router.replace('/driver-info')} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.topTitle}>ข้อมูลรถบัส</Text>
@@ -290,7 +333,16 @@ export default function BusForm() {
             <ActivityIndicator />
           ) : (
             <View style={styles.pickerWrapper}>
-              <Picker selectedValue={routeId} onValueChange={(v) => setRouteId((v as number) || null)}>
+              <Picker 
+                selectedValue={routeId} 
+                onValueChange={(value) => {
+                  console.log('Picker value changed:', value);
+                  setRouteId(value === null || value === undefined ? null : Number(value));
+                }}
+                style={styles.picker}
+                itemStyle={styles.pickerItem}
+                mode="dropdown"
+              >
                 <Picker.Item label="— ไม่เลือก —" value={null} />
                 {routes.map((r) => (
                   <Picker.Item
@@ -397,9 +449,19 @@ const styles = StyleSheet.create({
   },
 
   pickerWrapper: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, overflow: 'hidden', backgroundColor: '#fff' },
+  picker: { 
+    height: 50, 
+    color: '#0F172A',
+    backgroundColor: '#fff',
+  },
+  pickerItem: {
+    fontSize: 15,
+    color: '#0F172A',
+    height: 50,
+  },
 
   mapBtn: {
-    backgroundColor: '#059669', flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#3B82F6', flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 12, height: 40, borderRadius: 20, marginLeft: 8,
   },
   mapBtnTxt: { color: '#fff', fontWeight: '800', fontSize: 13 },

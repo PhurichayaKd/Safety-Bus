@@ -428,14 +428,14 @@ window.addEventListener('message',e=>handle(e.data));
           route_id
         ),
         rfid_card_assignments!left (
+          is_active,
+          valid_to,
           rfid_cards (
             rfid_code
           )
         )
       `)
       .eq('is_active', true)
-      .eq('rfid_card_assignments.is_active', true)
-      .is('rfid_card_assignments.valid_to', null)
       .order('student_id', { ascending: true });
 
     if (error) {
@@ -450,8 +450,11 @@ window.addEventListener('message',e=>handle(e.data));
         // Find route assignment for this driver's route
         const routeAssignment = student.route_students?.find((rs: any) => rs.route_id === driverBusData.route_id);
         
-        // Get RFID code from assignments
-        const rfidCode = student.rfid_card_assignments?.[0]?.rfid_cards?.rfid_code || null;
+        // Get RFID code from active assignments only
+        const activeRfidAssignment = student.rfid_card_assignments?.find((assignment: any) => 
+          assignment.is_active === true && assignment.valid_to === null
+        );
+        const rfidCode = activeRfidAssignment?.rfid_cards?.rfid_code || null;
         
         return {
           student_id: student.student_id,

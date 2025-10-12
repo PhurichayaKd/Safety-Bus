@@ -201,19 +201,24 @@ export default function DriverMap() {
             // ส่งข้อมูลกลับไปยังหน้าเดิม พร้อมรักษาข้อมูลตำแหน่งอื่นๆ ที่มีอยู่แล้ว
             const params = new URLSearchParams();
             
+            // แปลง target เป็นชื่อพารามิเตอร์ที่ถูกต้อง
+            const targetParam = target === 'start' ? 'home' : target === 'end' ? 'school' : target;
+            
             // เพิ่มตำแหน่งที่เลือกใหม่
-            params.set(`${target}_lat`, picked.lat.toString());
-            params.set(`${target}_lng`, picked.lng.toString());
+            params.set(`${targetParam}_lat`, picked.lat.toString());
+            params.set(`${targetParam}_lng`, picked.lng.toString());
             
             // รักษาข้อมูลตำแหน่งอื่นๆ ที่มีอยู่แล้ว
-            if (target !== 'home' && home_lat && home_lng) {
+            if (targetParam !== 'home' && home_lat && home_lng) {
               params.set('home_lat', home_lat);
               params.set('home_lng', home_lng);
             }
-            if (target !== 'school' && school_lat && school_lng) {
+            if (targetParam !== 'school' && school_lat && school_lng) {
               params.set('school_lat', school_lat);
               params.set('school_lng', school_lng);
             }
+            
+            console.log('Navigating back with params:', params.toString());
             
             if (returnTo) {
               router.push(`${returnTo}?${params.toString()}` as Href);

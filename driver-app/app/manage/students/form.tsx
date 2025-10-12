@@ -257,8 +257,16 @@ export default function StudentFormScreen() {
         setStudentLine(lineDisplayId);
         setStartDate(s.start_date ? new Date(s.start_date) : null);
         setEndDate(s.end_date ? new Date(s.end_date) : null);
-        setLat(toNumberOrNull(s.home_latitude));
-        setLng(toNumberOrNull(s.home_longitude));
+        
+        // ตรวจสอบว่ามี URL parameters สำหรับพิกัดหรือไม่ (กลับจากแผนที่)
+        const one = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v);
+        const hasNewCoordinates = one(qLat) && one(qLng);
+        
+        if (!hasNewCoordinates) {
+          // ใช้พิกัดจากฐานข้อมูลเฉพาะเมื่อไม่มีพิกัดใหม่จาก URL
+          setLat(toNumberOrNull(s.home_latitude));
+          setLng(toNumberOrNull(s.home_longitude));
+        }
 
         // RFID ปัจจุบัน
         const { data: asg } = await supabase
@@ -359,8 +367,9 @@ export default function StudentFormScreen() {
           rfidCode: resolvedRfidCode,
           startDate: s.start_date ?? null,
           endDate: s.end_date ?? null,
-          lat: toNumberOrNull(s.home_latitude),
-          lng: toNumberOrNull(s.home_longitude),
+          // ใช้พิกัดจากฐานข้อมูลเฉพาะเมื่อไม่มีพิกัดใหม่จาก URL
+          lat: hasNewCoordinates ? lat : toNumberOrNull(s.home_latitude),
+          lng: hasNewCoordinates ? lng : toNumberOrNull(s.home_longitude),
           guardians: gList,
         });
       } catch (e: any) {
@@ -830,7 +839,7 @@ export default function StudentFormScreen() {
       Alert.alert('สำเร็จ', isEdit ? 'บันทึกการแก้ไขแล้ว' : 'เพิ่มนักเรียนแล้ว', [
         { text: 'ตกลง', onPress: () => { 
           clearDraft(); 
-          router.replace('/manage/students' as any); 
+          router.push('/manage/students/' as any); 
         } },
       ]);
     } catch (e: any) {
@@ -859,7 +868,7 @@ export default function StudentFormScreen() {
                   .from('students').update({ status: 'inactive' }).eq('student_id', sid);
                 if (e2) throw e2;
                 Alert.alert('เปลี่ยนสถานะแล้ว', 'มีประวัติการใช้งาน จึงเปลี่ยนเป็นไม่ใช้งานแทน', [
-                  { text: 'ตกลง', onPress: () => { clearDraft(); safeGoBack('/manage/students'); } },
+                  { text: 'ตกลง', onPress: () => { clearDraft(); router.push('/manage/students/' as any); } },
                 ]);
               } else {
                 throw error;
@@ -867,7 +876,7 @@ export default function StudentFormScreen() {
             } else {
 
               Alert.alert('สำเร็จ', 'ลบข้อมูลแล้ว', [
-                { text: 'ตกลง', onPress: () => { clearDraft(); safeGoBack('/manage/students'); } },
+                { text: 'ตกลง', onPress: () => { clearDraft(); router.push('/manage/students/' as any); } },
               ]);
             }
           } catch (e: any) {

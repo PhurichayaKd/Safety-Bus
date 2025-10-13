@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator,
   RefreshControl, Linking, Modal, Alert, Platform, Dimensions, Pressable,
-  SafeAreaView, StatusBar
+  SafeAreaView, StatusBar, AppState
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
@@ -178,6 +178,12 @@ export default function PassengerMapPage() {
   const [currentEmergencyAlert, setCurrentEmergencyAlert] = useState<EmergencyLog | null>(null);
   const [isEmergencyAlertVisible, setIsEmergencyAlertVisible] = useState(false);
   const [lastCheckedTimestamp, setLastCheckedTimestamp] = useState<string | null>(null);
+
+  // App state tracking and performance optimization
+  const [isAppActive, setIsAppActive] = useState(true);
+  const [lastRefreshTime, setLastRefreshTime] = useState(Date.now());
+  const [studentsCache, setStudentsCache] = useState<{ data: Student[], timestamp: number } | null>(null);
+  const [eventsCache, setEventsCache] = useState<{ timestamp: number } | null>(null);
 
   // Date calculations
   const startOfTodayISO = useMemo(() => {
@@ -426,11 +432,19 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
     return await attemptFetch();
   }, []);
 
-  // Load students
-  const fetchStudents = useCallback(async () => {
+  // Load students with caching
+  const fetchStudents = useCallback(async (forceRefresh = false) => {
     const driverId = await getMyDriverId();
     if (!driverId) {
       setStudents([]);
+      setLoading(false);
+      return;
+    }
+
+    // Check cache first (cache for 2 minutes)
+    const now = Date.now();
+    if (!forceRefresh && studentsCache && (now - studentsCache.timestamp) < 120000) {
+      setStudents(studentsCache.data);
       setLoading(false);
       return;
     }
@@ -526,6 +540,12 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
         
         setStudents(filteredStudents as Student[]);
         
+        // Update cache
+        setStudentsCache({
+          data: filteredStudents as Student[],
+          timestamp: Date.now()
+        });
+        
         // Update absent set with students on leave
         setAbsentSet(leaveRequestsToday);
 
@@ -558,11 +578,17 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
 
     await attemptFetch();
     setLoading(false);
-  }, [fetchTodayLeaveRequests, getMyDriverId]);
+  }, [fetchTodayLeaveRequests, getMyDriverId, studentsCache]);
 
-  // Load today's events
-  const fetchTodayEvents = useCallback(async () => {
+  // Load today's events with caching
+  const fetchTodayEvents = useCallback(async (forceRefresh = false) => {
     if (!driverId) { softResetSets(); return; }
+
+    // Check cache first (cache for 1 minute for events as they change more frequently)
+    const now = Date.now();
+    if (!forceRefresh && eventsCache && (now - eventsCache.timestamp) < 60000) {
+      return; // Use existing state, don't refetch
+    }
 
     const maxRetries = 3;
     let retryCount = 0;
@@ -604,6 +630,9 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
         setDroppedReturnSet(rDrop);
         setAbsentSet(ab);
 
+        // Update events cache
+        setEventsCache({ timestamp: Date.now() });
+
       } catch (error: any) {
         retryCount++;
         console.error(`Error fetching today events (attempt ${retryCount}/${maxRetries}):`, error);
@@ -629,7 +658,7 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
     };
 
     await attemptFetch();
-  }, [startOfTodayISO, driverId]);
+  }, [startOfTodayISO, driverId, eventsCache]);
 
   // ตรวจสอบการรีเซ็ตสำหรับรอบเย็น
   const checkReturnPhaseReset = useCallback(async () => {
@@ -762,26 +791,52 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
     }
   }, []);
 
+  // App state listener for smart refresh
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      setIsAppActive(nextAppState === 'active');
+      if (nextAppState === 'active') {
+        // Refresh data when app becomes active if it's been more than 30 seconds
+        const timeSinceLastRefresh = Date.now() - lastRefreshTime;
+        if (timeSinceLastRefresh > 30000) {
+          fetchStudents(true); // Force refresh
+          fetchTodayEvents(true); // Force refresh
+          setLastRefreshTime(Date.now());
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [fetchStudents, fetchTodayEvents, lastRefreshTime]);
+
+  // Initial data load
   useEffect(() => {
     (async () => {
       await fetchStudents();
       await fetchTodayEvents();
+      setLastRefreshTime(Date.now());
     })();
   }, [fetchStudents, fetchTodayEvents]);
 
-  // Auto-refresh every 1 second (silent refresh without loading indicator)
+  // Optimized auto-refresh - only when app is active and less frequent
   useEffect(() => {
+    if (!isAppActive) return;
+
     const interval = setInterval(async () => {
-      // Silent refresh - don't show loading indicator
-      try {
-        await Promise.all([fetchStudents(), fetchTodayEvents()]);
-      } catch (error) {
-        console.error('Auto-refresh error:', error);
+      // Only refresh if app is active
+      if (isAppActive) {
+        try {
+          await Promise.all([fetchStudents(), fetchTodayEvents()]);
+          setLastRefreshTime(Date.now());
+        } catch (error) {
+          console.error('Auto-refresh error:', error);
+        }
       }
-    }, 1000); // Refresh every 1 second
+    }, 30000); // Reduced to 30 seconds instead of 1 second
 
     return () => clearInterval(interval);
-  }, [fetchStudents, fetchTodayEvents]);
+  }, [fetchStudents, fetchTodayEvents, isAppActive]);
 
   // Fetch emergency logs when alerts modal is opened
   useEffect(() => {

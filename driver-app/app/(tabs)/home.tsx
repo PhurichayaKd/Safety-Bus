@@ -334,9 +334,19 @@ const HomePage = () => {
     }
   };
 
-  // ฟังก์ชันสำหรับตรวจสอบนักเรียนที่ไม่มาขึ้นรถ
-  const checkMissingStudents = async () => {
+  // ฟังก์ชันสำหรับตรวจสอบนักเรียนที่ไม่มาขึ้นรถ (ปรับปรุงด้วย caching)
+  const checkMissingStudents = async (forceCheck = false) => {
     try {
+      // ตรวจสอบว่าควรทำการตรวจสอบหรือไม่
+      const now = Date.now();
+      const lastCheckKey = 'lastMissingStudentsCheck';
+      const lastCheck = await AsyncStorage.getItem(lastCheckKey);
+      
+      // ถ้าไม่ใช่การบังคับตรวจสอบ และเพิ่งตรวจสอบไปแล้วไม่เกิน 30 วินาที ให้ข้าม
+      if (!forceCheck && lastCheck && (now - parseInt(lastCheck)) < 30000) {
+        return;
+      }
+
       setCheckingStudents(true);
       
       const driverId = await getMyDriverId();
@@ -344,6 +354,9 @@ const HomePage = () => {
         console.error('ไม่พบ driver ID');
         return;
       }
+
+      // บันทึกเวลาที่ตรวจสอบ
+      await AsyncStorage.setItem(lastCheckKey, now.toString());
 
       // ดึงข้อมูลนักเรียนทั้งหมดในระบบ (ไม่รวมที่ลา)
       const today = new Date().toISOString().split('T')[0];
@@ -413,9 +426,9 @@ const HomePage = () => {
     }
 
     const timer = setInterval(async () => {
-      // ตรวจสอบอีกครั้งว่ายังมีนักเรียนที่ไม่สแกนบัตรหรือไม่
-      await checkMissingStudents();
-    }, 10000); // 10 วินาที
+      // ตรวจสอบอีกครั้งว่ายังมีนักเรียนที่ไม่สแกนบัตรหรือไม่ (ไม่บังคับ เพื่อใช้ cache)
+      await checkMissingStudents(false);
+    }, 60000); // เพิ่มเป็น 60 วินาที เพื่อลดการเรียก API
 
     setReminderTimer(timer);
   };
@@ -437,7 +450,7 @@ const HomePage = () => {
 
     // ตั้ง timer 15 วินาที
     const timer = setTimeout(() => {
-      checkMissingStudents();
+      checkMissingStudents(true); // บังคับตรวจสอบเมื่อเริ่มรอรับกลับ
     }, 15000); // 15 วินาที
 
     setWaitingReturnTimer(timer);

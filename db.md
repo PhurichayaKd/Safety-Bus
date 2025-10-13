@@ -251,7 +251,7 @@ CREATE TABLE public.student_guardians (
   parent_id integer NOT NULL,
   relationship character varying,
   is_primary boolean NOT NULL DEFAULT false,
-  CONSTRAINT student_guardians_pkey PRIMARY KEY (parent_id, student_id),
+  CONSTRAINT student_guardians_pkey PRIMARY KEY (student_id, parent_id),
   CONSTRAINT student_guardians_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.parents(parent_id),
   CONSTRAINT fk_student_guardians_student_id FOREIGN KEY (student_id) REFERENCES public.students(student_id)
 );

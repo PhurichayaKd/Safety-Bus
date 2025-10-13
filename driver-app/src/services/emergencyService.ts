@@ -200,7 +200,7 @@ export const sendLineNotification = async (
         return { success: true, error: null }; // ไม่ส่งแจ้งเตือน LINE สำหรับปุ่มฉุกเฉินนักเรียน
       }
       
-      message = `🚨 แจ้งเตือนเหตุการณ์ฉุกเฉิน!\n\nประเภท: ${getEventTypeText(emergencyLog.event_type)}\nแหล่งที่มา: ${getTriggeredByText(emergencyLog.triggered_by)}\nเวลา: ${formatDateTime(emergencyLog.event_time)}\nรหัสคนขับ: ${emergencyLog.driver_id}`;
+      message = `🚨 แจ้งเตือนเหตุการณ์ฉุกเฉิน!\n\nประเภท: ${getEventTypeText(emergencyLog.event_type)}\nเวลา: ${formatDateTime(emergencyLog.event_time)}\nรหัสคนขับ: ${emergencyLog.driver_id}`;
       
       if (emergencyLog.description) {
         message += `\nรายละเอียด: ${emergencyLog.description}`;
@@ -347,7 +347,7 @@ export const parseDetails = (details: any): string => {
   return String(details);
 };
 
-// ฟังก์ชันสำหรับแสดงแหล่งที่มาที่รองรับข้อมูลเซ็นเซอร์
+// ฟังก์ชันสำหรับแสดงผู้แจ้งที่รองรับข้อมูลเซ็นเซอร์
 export const getSourceText = (emergency: EmergencyLog): string => {
   // ถ้าเป็นการแจ้งเตือนเซ็นเซอร์และมี details ให้แสดงข้อมูลจาก details
   if (['SENSOR_ALERT', 'SMOKE_DETECTED', 'HIGH_TEMPERATURE', 'MOVEMENT_DETECTED'].includes(emergency.event_type) && emergency.details) {

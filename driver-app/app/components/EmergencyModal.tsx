@@ -176,7 +176,7 @@ const EmergencyModal: React.FC = () => {
                 <View style={styles.detailRow}>
                   <Ionicons name="person" size={20} color={COLORS.textSecondary} />
                   <View style={styles.detailContent}>
-                    <Text style={styles.detailLabel}>แหล่งที่มา</Text>
+                    <Text style={styles.detailLabel}>ผู้แจ้ง</Text>
                     <Text style={styles.detailValue}>
                       {getTriggeredByText(currentEmergency.triggered_by)}
                     </Text>

@@ -327,7 +327,7 @@ const EmergencyReports: React.FC = () => {
               </View>
               <View style={styles.logDetails}>
                 <Text style={styles.logDetailText}>
-                  แหล่งที่มา: {
+                  {
                     log.event_type === 'SENSOR_ALERT' && log.details
                       ? String(parseDetails(log.details))
                       : getTriggeredByText(log.triggered_by)

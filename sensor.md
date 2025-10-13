@@ -33,13 +33,16 @@ const int DRIVER_ID = 1;
 #define GPS_TX_PIN      17   // ESP32 TX2 → GPS RX (ไม่จำเป็นถ้าอ่านอย่างเดียว)
 
 /* ===== Threshold / Timing ===== */
-const unsigned long PIR_HOLD_MS      = 5000;  // 30 วินาที
-const float  TEMP_HIGH_C             = 24.0;
+const unsigned long PIR_HOLD_MS      = 5000;  // 5 วินาที (ตามความต้องการ)
+const float  TEMP_HIGH_C             = 45.0;
 const int    GAS_RAW_THRESHOLD       = 500;
 const unsigned long SENSOR_READ_MS   = 2000;
 
 /* ===== GPS timing ===== */
-const unsigned long GPS_POST_MS      = 5000;   // รอบส่งสูงสุด
+const unsigned long GPS_POST_MS      = 1000;   // รอบส่งสูงสุด
+
+/* ===== Driver Status Check ===== */
+const unsigned long DRIVER_STATUS_CHECK_MS = 10000;  // ตรวจสอบสถานะคนขับทุก 10 วินาที
 
 /* ===== Objects / States ===== */
 DHT dht(PIN_DHT, DHT_TYPE);
@@ -63,6 +66,11 @@ bool tempOnlyLatched = false;
 HardwareSerial GPSser(2);
 TinyGPSPlus gps;
 unsigned long lastGpsPostAt = 0;
+
+/* Driver Status */
+String currentTripPhase = "go";  // สถานะปัจจุบันของคนขับ
+bool pirSensorEnabled = false;   // เปิด/ปิด PIR Sensor ตามสถานะคนขับ
+unsigned long lastDriverStatusCheckAt = 0;
 
 /* ===== Helpers ===== */
 String jsonEscape(const String& in) {
@@ -209,9 +217,83 @@ bool postLiveLocation(double lat, double lon) {
   return (code >= 200 && code < 300);
 }
 
+/* ===== Supabase: ตรวจสอบสถานะคนขับ ===== */
+bool checkDriverStatus() {
+  ensureWifi();
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[DRIVER_STATUS] No WiFi, skip check.");
+    return false;
+  }
+
+  WiFiClientSecure client; client.setInsecure();
+  HTTPClient https;
+  String url = String(SUPABASE_URL) + "/rest/v1/driver_bus?driver_id=eq." + String(DRIVER_ID) + "&select=trip_phase,current_status";
+
+  if (!https.begin(client, url)) {
+    Serial.println("[DRIVER_STATUS] HTTP begin failed");
+    return false;
+  }
+
+  https.setTimeout(10000);
+  https.addHeader("Accept", "application/json");
+  https.addHeader("apikey", SUPABASE_ANON_KEY);
+  https.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+
+  Serial.printf("[DRIVER_STATUS] GET %s\n", url.c_str());
+  int code = https.GET();
+  String resp = https.getString();
+  https.end();
+
+  Serial.printf("[DRIVER_STATUS] HTTP %d\n", code);
+  if (resp.length()) Serial.printf("[DRIVER_STATUS] Resp: %s\n", resp.c_str());
+
+  if (code >= 200 && code < 300) {
+    // แยกข้อมูล trip_phase จาก JSON response
+    int tripPhaseStart = resp.indexOf("\"trip_phase\":\"") + 14;
+    if (tripPhaseStart > 13) {
+      int tripPhaseEnd = resp.indexOf("\"", tripPhaseStart);
+      if (tripPhaseEnd > tripPhaseStart) {
+        String newTripPhase = resp.substring(tripPhaseStart, tripPhaseEnd);
+        
+        if (newTripPhase != currentTripPhase) {
+          Serial.printf("[DRIVER_STATUS] Trip phase changed: %s → %s\n", 
+                        currentTripPhase.c_str(), newTripPhase.c_str());
+          currentTripPhase = newTripPhase;
+          
+          // เปิด PIR Sensor เฉพาะเมื่อ trip_phase เป็น 'completed'
+          if (currentTripPhase == "completed") {
+            pirSensorEnabled = true;
+            Serial.println("[PIR] PIR Sensor ENABLED - Trip completed, monitoring for motion");
+          } else {
+            pirSensorEnabled = false;
+            Serial.println("[PIR] PIR Sensor DISABLED - Trip not completed");
+            // หยุดไซเรนถ้ากำลังทำงานอยู่
+            if (sirenActive) {
+              sirenStop();
+              pirIsHigh = false;
+            }
+          }
+        }
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /* ===== Logic: PIR ===== */
 void checkMotion() {
   if (millis() < alarmMuteUntil) return;
+
+  // ตรวจสอบเฉพาะเมื่อ PIR Sensor ถูกเปิดใช้งาน (trip_phase = 'completed')
+  if (!pirSensorEnabled) {
+    // ถ้า PIR ถูกปิด แต่ pirIsHigh ยังเป็น true ให้รีเซ็ต
+    if (pirIsHigh) {
+      pirIsHigh = false;
+      Serial.println("[PIR] PIR disabled, reset motion state");
+    }
+    return;
+  }
 
   bool anyHigh = (digitalRead(PIN_PIR1) == HIGH) || (digitalRead(PIN_PIR2) == HIGH);
   unsigned long now = millis();
@@ -220,10 +302,11 @@ void checkMotion() {
     if (!pirIsHigh) {
       pirIsHigh = true;
       pirHighSince = now;
+      Serial.println("[PIR] Motion detected, start timer (Trip completed mode)");
     } else if (!sirenActive && (now - pirHighSince >= PIR_HOLD_MS)) {
       Serial.println("[PIR] Motion held >= 30s → ALARM");
       sirenStart();
-      postSensorAlertMessage("pir", "เซ็นเซอร์ PIR พบการเคลื่อนไหวต่อเนื่อง 30 วินาที");
+      postSensorAlertMessage("motion_detected_after_trip", "ตรวจพบการเคลื่อนไหวผิดปกติหลังจบการเดินทาง ตรวจสอบทันที");
     }
   } else {
     pirIsHigh = false;
@@ -348,6 +431,12 @@ void loop() {
         lastSentLat = lat; lastSentLon = lon;
       }
     }
+  }
+
+  // ตรวจสอบสถานะคนขับทุก 10 วินาที
+  if (millis() - lastDriverStatusCheckAt >= DRIVER_STATUS_CHECK_MS) {
+    lastDriverStatusCheckAt = millis();
+    checkDriverStatus();
   }
 
   // ตรวจเงื่อนไขเซ็นเซอร์

@@ -256,6 +256,13 @@ const HomePage = () => {
   const [currentEmergency, setCurrentEmergency] = useState<any>(null);
   const [processingEmergency, setProcessingEmergency] = useState(false);
 
+  // เพิ่ม state สำหรับระบบตรวจสอบนักเรียนที่ไม่มาขึ้นรถ
+  const [missingStudentsModalVisible, setMissingStudentsModalVisible] = useState(false);
+  const [missingStudents, setMissingStudents] = useState<any[]>([]);
+  const [checkingStudents, setCheckingStudents] = useState(false);
+  const [waitingReturnTimer, setWaitingReturnTimer] = useState<number | null>(null);
+  const [reminderTimer, setReminderTimer] = useState<number | null>(null);
+
   useEffect(() => {
     (async () => {
       const phase = await AsyncStorage.getItem('trip_phase');
@@ -319,8 +326,11 @@ const HomePage = () => {
     return () => clearInterval(emergencyTimer);
   }, []);
 
-  // ฟังก์ชันตรวจสอบ emergency_logs
-  const checkEmergencyLogs = async () => {
+  // ฟังก์ชันตรวจสอบ emergency_logs พร้อม retry mechanism
+  const checkEmergencyLogs = async (retryCount = 0) => {
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 วินาที
+
     try {
       const driverId = await getMyDriverId();
       if (!driverId) return;
@@ -336,6 +346,14 @@ const HomePage = () => {
 
       if (error) {
         console.error('Error checking emergency logs:', error);
+        
+        // ลองใหม่หากยังไม่ถึงจำนวนครั้งสูงสุด
+        if (retryCount < maxRetries) {
+          console.log(`Retrying checkEmergencyLogs... (${retryCount + 1}/${maxRetries})`);
+          setTimeout(() => {
+            checkEmergencyLogs(retryCount + 1);
+          }, retryDelay * (retryCount + 1)); // เพิ่มเวลาหน่วงในแต่ละครั้ง
+        }
         return;
       }
 
@@ -346,6 +364,18 @@ const HomePage = () => {
       }
     } catch (error) {
       console.error('Error in checkEmergencyLogs:', error);
+      
+      // ลองใหม่หากเกิด network error หรือ connection error
+      if (retryCount < maxRetries && (
+        (error as Error).message?.includes('Failed to fetch') || 
+        (error as Error).message?.includes('ERR_ABORTED') ||
+        (error as Error).message?.includes('Network request failed')
+      )) {
+        console.log(`Retrying checkEmergencyLogs after network error... (${retryCount + 1}/${maxRetries})`);
+        setTimeout(() => {
+          checkEmergencyLogs(retryCount + 1);
+        }, retryDelay * (retryCount + 1));
+      }
     }
   };
 
@@ -437,6 +467,127 @@ const HomePage = () => {
     }
   };
 
+  // ฟังก์ชันสำหรับตรวจสอบนักเรียนที่ไม่มาขึ้นรถ
+  const checkMissingStudents = async () => {
+    try {
+      setCheckingStudents(true);
+      
+      const driverId = await getMyDriverId();
+      if (!driverId) {
+        console.error('ไม่พบ driver ID');
+        return;
+      }
+
+      // ดึงข้อมูลนักเรียนทั้งหมดในระบบ (ไม่รวมที่ลา)
+      const today = new Date().toISOString().split('T')[0];
+      
+      // ดึงรายชื่อนักเรียนที่ลาวันนี้
+      const { data: leaveRequests } = await supabase
+        .from('leave_requests')
+        .select('student_id')
+        .eq('leave_date', today)
+        .eq('status', 'approved');
+      
+      const leaveStudentIds = new Set(leaveRequests?.map(req => req.student_id) || []);
+
+      // ดึงข้อมูลนักเรียนทั้งหมดที่ใช้รถคันนี้
+      const { data: allStudents } = await supabase
+        .from('students')
+        .select('student_id, student_name, student_number')
+        .eq('driver_id', driverId)
+        .eq('is_active', true);
+
+      if (!allStudents) {
+        console.error('ไม่สามารถดึงข้อมูลนักเรียนได้');
+        return;
+      }
+
+      // กรองนักเรียนที่ไม่ลา
+      const activeStudents = allStudents.filter(student => 
+        !leaveStudentIds.has(student.student_id)
+      );
+
+      // ดึงข้อมูลนักเรียนที่สแกนบัตรแล้วในขากลับ
+      const { data: scannedStudents } = await supabase
+        .from('pickup_dropoff')
+        .select('student_id')
+        .eq('driver_id', driverId)
+        .eq('trip_date', today)
+        .eq('location', 'return')
+        .eq('action', 'pickup');
+
+      const scannedStudentIds = new Set(scannedStudents?.map(scan => scan.student_id) || []);
+
+      // หานักเรียนที่ยังไม่สแกนบัตร
+      const missingStudentsList = activeStudents.filter(student => 
+        !scannedStudentIds.has(student.student_id)
+      );
+
+      if (missingStudentsList.length > 0) {
+        setMissingStudents(missingStudentsList);
+        setMissingStudentsModalVisible(true);
+        
+        // เริ่มระบบแจ้งเตือนซ้ำทุก 10 วินาที
+        startReminderTimer();
+      }
+
+    } catch (error) {
+      console.error('เกิดข้อผิดพลาดในการตรวจสอบนักเรียน:', error);
+    } finally {
+      setCheckingStudents(false);
+    }
+  };
+
+  // ฟังก์ชันเริ่มระบบแจ้งเตือนซ้ำ
+  const startReminderTimer = () => {
+    // ล้าง timer เก่าก่อน
+    if (reminderTimer) {
+      clearInterval(reminderTimer);
+    }
+
+    const timer = setInterval(async () => {
+      // ตรวจสอบอีกครั้งว่ายังมีนักเรียนที่ไม่สแกนบัตรหรือไม่
+      await checkMissingStudents();
+    }, 10000); // 10 วินาที
+
+    setReminderTimer(timer);
+  };
+
+  // ฟังก์ชันหยุดระบบแจ้งเตือน
+  const stopReminderTimer = () => {
+    if (reminderTimer) {
+      clearInterval(reminderTimer);
+      setReminderTimer(null);
+    }
+  };
+
+  // ฟังก์ชันเริ่มระบบตรวจสอบหลังจากกดปุ่ม "รอรับกลับบ้าน"
+  const startWaitingReturnCheck = () => {
+    // ล้าง timer เก่าก่อน
+    if (waitingReturnTimer) {
+      clearTimeout(waitingReturnTimer);
+    }
+
+    // ตั้ง timer 15 วินาที
+    const timer = setTimeout(() => {
+      checkMissingStudents();
+    }, 15000); // 15 วินาที
+
+    setWaitingReturnTimer(timer);
+  };
+
+  // ล้าง timers เมื่อ component unmount
+  useEffect(() => {
+    return () => {
+      if (waitingReturnTimer) {
+        clearTimeout(waitingReturnTimer);
+      }
+      if (reminderTimer) {
+        clearInterval(reminderTimer);
+      }
+    };
+  }, [waitingReturnTimer, reminderTimer]);
+
   async function markNewDayReset() {
     const d = new Date();
     const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -481,6 +632,9 @@ const HomePage = () => {
         
         // รีเซ็ตสถานะนักเรียนในฐานข้อมูลสำหรับขากลับ
         await resetStudentStatusForReturn();
+        
+        // เริ่มระบบตรวจสอบนักเรียนที่ไม่มาขึ้นรถหลังจาก 15 วินาที
+        startWaitingReturnCheck();
       }
 
       if (next === 'finished') {
@@ -505,6 +659,16 @@ const HomePage = () => {
         
         // รีเซ็ตสถานะนักเรียนในฐานข้อมูลเมื่อจบการเดินทาง
         await resetStudentStatusForNewDay();
+        
+        // รีเซ็ตตัวนับทั้งหมดใน passenger_stats เมื่อจบการเดินทาง
+        const resetStats = {
+          pickupGo: 0,
+          dropGo: 0,
+          pickupRet: 0,
+          dropRet: 0
+        };
+        await AsyncStorage.setItem('passenger_stats', JSON.stringify(resetStats));
+        console.log('รีเซ็ตตัวนับทั้งหมดเมื่อจบการเดินทางเรียบร้อยแล้ว');
         
         // ตั้งเวลา auto-reset หลังจาก 5 วินาที
         setTimeout(async () => {
@@ -938,7 +1102,69 @@ const HomePage = () => {
             </View>
 
             <Text style={styles.emergencyNote}>
-              กรุณาเลือกการตอบสนองที่เหมาะสม
+              กรุณาตรวจสอบสถานการณ์และตอบสนองอย่างเหมาะสม
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MISSING STUDENTS MODAL */}
+      <Modal transparent visible={missingStudentsModalVisible} animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.missingStudentsBackdrop}>
+          <View style={styles.missingStudentsModal}>
+            <View style={styles.missingStudentsHeader}>
+              <View style={styles.missingStudentsIcon}>
+                <Ionicons name="people" size={32} color={COLORS.warning} />
+              </View>
+              <Text style={styles.missingStudentsTitle}>นักเรียนยังไม่ขึ้นรถ</Text>
+              <Text style={styles.missingStudentsSubtitle}>
+                พบนักเรียนที่ยังไม่ได้สแกนบัตรขึ้นรถ
+              </Text>
+              <Text style={styles.missingStudentsCount}>
+                จำนวน: {missingStudents.length} คน
+              </Text>
+            </View>
+
+            <ScrollView style={styles.missingStudentsList} showsVerticalScrollIndicator={false}>
+              {missingStudents.map((student, index) => (
+                <View key={student.id} style={styles.missingStudentItem}>
+                  <View style={styles.missingStudentInfo}>
+                    <Text style={styles.missingStudentId}>ID: {student.id}</Text>
+                    <Text style={styles.missingStudentName}>{student.name}</Text>
+                  </View>
+                  <View style={styles.missingStudentStatus}>
+                    <Ionicons name="time" size={16} color={COLORS.warning} />
+                    <Text style={styles.missingStudentStatusText}>ยังไม่สแกน</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            <View style={styles.missingStudentsActions}>
+              <TouchableOpacity
+                style={[styles.missingStudentsButton, styles.missingStudentsButtonPrimary]}
+                onPress={() => setMissingStudentsModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.missingStudentsButtonText}>รับทราบ</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.missingStudentsButton, styles.missingStudentsButtonSecondary]}
+                onPress={() => {
+                  setMissingStudentsModalVisible(false);
+                  stopReminderTimer();
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close-circle" size={20} color={COLORS.text} />
+                <Text style={styles.missingStudentsButtonTextSecondary}>หยุดแจ้งเตือน</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.missingStudentsNote}>
+              ระบบจะแจ้งเตือนซ้ำทุก 10 วินาที จนกว่านักเรียนจะสแกนบัตรครบ
             </Text>
           </View>
         </View>
@@ -1449,10 +1675,141 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
+
+  // Missing Students Modal Styles
+  missingStudentsBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  missingStudentsModal: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    ...shadowElevated,
+  },
+  missingStudentsHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  missingStudentsIcon: {
+    width: 64,
+    height: 64,
+    backgroundColor: COLORS.warningSoft,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  missingStudentsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  missingStudentsSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  missingStudentsCount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.warning,
+    textAlign: 'center',
+  },
+  missingStudentsList: {
+    maxHeight: 300,
+    marginBottom: 20,
+  },
+  missingStudentItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.bgSecondary,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  missingStudentInfo: {
+    flex: 1,
+  },
+  missingStudentId: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    fontWeight: '500',
+  },
+  missingStudentName: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  missingStudentStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  missingStudentStatusText: {
+    fontSize: 12,
+    color: COLORS.warning,
+    fontWeight: '500',
+  },
+  missingStudentsActions: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  missingStudentsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+  },
+  missingStudentsButtonPrimary: {
+    backgroundColor: COLORS.primary,
+  },
+  missingStudentsButtonSecondary: {
+    backgroundColor: COLORS.bgSecondary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  missingStudentsButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  missingStudentsButtonTextSecondary: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  missingStudentsNote: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
 });
 
 // ฟังก์ชันสำหรับดึงจำนวนเด็กจริงจากฐานข้อมูล
-async function getStudentCount() {
+async function getStudentCount(retryCount = 0) {
+  const maxRetries = 3;
+  const retryDelay = 1000; // 1 วินาที
+
   try {
     // Import supabase client
     const { supabase } = await import('../../src/services/supabaseClient');
@@ -1464,6 +1821,14 @@ async function getStudentCount() {
 
     if (error) {
       console.warn('ไม่สามารถดึงข้อมูลจำนวนเด็กได้:', error);
+      
+      // ลองใหม่หากยังไม่ถึงจำนวนครั้งสูงสุด
+      if (retryCount < maxRetries) {
+        console.log(`Retrying getStudentCount... (${retryCount + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay * (retryCount + 1)));
+        return await getStudentCount(retryCount + 1);
+      }
+      
       return 24; // fallback
     }
 
@@ -1472,6 +1837,18 @@ async function getStudentCount() {
     return studentCount;
   } catch (error) {
     console.warn('เกิดข้อผิดพลาดในการดึงข้อมูลจำนวนเด็ก:', error);
+    
+    // ลองใหม่หากเกิด network error หรือ connection error
+    if (retryCount < maxRetries && (
+      (error as Error).message?.includes('Failed to fetch') || 
+      (error as Error).message?.includes('ERR_ABORTED') ||
+      (error as Error).message?.includes('Network request failed')
+    )) {
+      console.log(`Retrying getStudentCount after network error... (${retryCount + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay * (retryCount + 1)));
+      return await getStudentCount(retryCount + 1);
+    }
+    
     return 24; // fallback
   }
 }

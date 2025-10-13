@@ -127,9 +127,9 @@ const EmergencyAlertModal: React.FC<EmergencyAlertModalProps> = ({
     if (emergency.triggered_by === 'student') {
       return `มีการตรวจพบการกดปุ่มฉุกเฉินจากนักเรียน\nประเภท: ${eventTypeText}\nกรุณาทำการตรวจสอบทันที`;
     } else if (emergency.triggered_by === 'sensor') {
-      return `ตรวจพบเหตุการณ์จากเซ็นเซอร์\nประเภท: ${eventTypeText}\nแหล่งที่มา: ${sourceText}\nกรุณาตรวจสอบและดำเนินการ`;
+      return `ตรวจพบเหตุการณ์จากเซ็นเซอร์\nประเภท: ${eventTypeText}\nกรุณาตรวจสอบและดำเนินการ`;
     }
-    return `เหตุการณ์: ${eventTypeText}\nแหล่งที่มา: ${sourceText}`;
+    return `เหตุการณ์: ${eventTypeText}`;
   };
 
   const renderButtons = () => {

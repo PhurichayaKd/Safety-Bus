@@ -382,18 +382,48 @@ window.addEventListener('message',e=>handle(e.data));
   const fetchTodayLeaveRequests = useCallback(async () => {
     const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
     
-    const { data, error } = await supabase
-      .from('leave_requests')
-      .select('student_id')
-      .eq('leave_date', today)
-      .eq('status', 'approved');
+    const maxRetries = 3;
+    let retryCount = 0;
 
-    if (error) {
-      console.error('Error fetching leave requests:', error);
-      return new Set<number>();
-    }
+    const attemptFetch = async (): Promise<Set<number>> => {
+      try {
+        const { data, error } = await supabase
+          .from('leave_requests')
+          .select('student_id')
+          .eq('leave_date', today)
+          .eq('status', 'approved');
 
-    return new Set((data || []).map(item => item.student_id));
+        if (error) {
+          throw error;
+        }
+
+        return new Set((data || []).map(item => item.student_id));
+
+      } catch (error: any) {
+        retryCount++;
+        console.error(`Error fetching leave requests (attempt ${retryCount}/${maxRetries}):`, error);
+
+        // Check if it's a network-related error that should be retried
+        const isNetworkError = error?.message?.includes('Failed to fetch') ||
+                              error?.message?.includes('ERR_ABORTED') ||
+                              error?.message?.includes('Network request failed') ||
+                              error?.code === 'PGRST301' ||
+                              error?.code === 'PGRST116';
+
+        if (isNetworkError && retryCount < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000); // Exponential backoff, max 5s
+          console.log(`Retrying fetchTodayLeaveRequests in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return attemptFetch();
+        }
+
+        // If all retries failed or it's not a network error, return empty set
+        console.warn(`Failed to fetch leave requests after ${retryCount} retries. Using empty set as fallback.`);
+        return new Set<number>();
+      }
+    };
+
+    return await attemptFetch();
   }, []);
 
   // Load students
@@ -405,91 +435,128 @@ window.addEventListener('message',e=>handle(e.data));
       return;
     }
 
-    // Get driver's route_id from driver_bus table
-    const { data: driverBusData } = await supabase
-      .from('driver_bus')
-      .select('route_id')
-      .eq('driver_id', driverId)
-      .single();
+    const maxRetries = 3;
+    let retryCount = 0;
 
-    if (!driverBusData?.route_id) {
-      console.error('No route found for driver');
-      setStudents([]);
-      setLoading(false);
-      return;
-    }
+    const attemptFetch = async (): Promise<void> => {
+      try {
+        // Get driver's route_id from driver_bus table
+        const { data: driverBusData, error: driverBusError } = await supabase
+          .from('driver_bus')
+          .select('route_id')
+          .eq('driver_id', driverId)
+          .single();
 
-    // Fetch ALL students from students table with their route information and RFID
-    const { data, error } = await supabase
-      .from('students')
-      .select(`
-        student_id,
-        student_name,
-        grade,
-        student_phone,
-        status,
-        home_latitude,
-        home_longitude,
-        primary_parent:students_parent_id_fkey ( parent_phone ),
-        route_students!left (
-          stop_order,
-          route_id
-        ),
-        rfid_card_assignments!left (
-          is_active,
-          valid_to,
-          rfid_cards (
-            rfid_code
-          )
-        )
-      `)
-      .eq('is_active', true)
-      .order('student_id', { ascending: true });
+        if (driverBusError) {
+          throw driverBusError;
+        }
 
-    if (error) {
-      console.error('Error fetching students:', error);
-      setStudents([]);
-    } else {
-      // Get today's leave requests
-      const leaveRequestsToday = await fetchTodayLeaveRequests();
-      
-      // Transform data and assign stop_order based on route assignment or default order
-      const studentsData = (data || []).map((student: any, index: number) => {
-        // Find route assignment for this driver's route
-        const routeAssignment = student.route_students?.find((rs: any) => rs.route_id === driverBusData.route_id);
+        if (!driverBusData?.route_id) {
+          console.error('No route found for driver');
+          setStudents([]);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch ALL students from students table with their route information and RFID
+        const { data, error } = await supabase
+          .from('students')
+          .select(`
+            student_id,
+            student_name,
+            grade,
+            student_phone,
+            status,
+            home_latitude,
+            home_longitude,
+            primary_parent:students_parent_id_fkey ( parent_phone ),
+            route_students!left (
+              stop_order,
+              route_id
+            ),
+            rfid_card_assignments!left (
+              is_active,
+              valid_to,
+              rfid_cards (
+                rfid_code
+              )
+            )
+          `)
+          .eq('is_active', true)
+          .order('student_id', { ascending: true });
+
+        if (error) {
+          throw error;
+        }
+
+        // Get today's leave requests
+        const leaveRequestsToday = await fetchTodayLeaveRequests();
         
-        // Get RFID code from active assignments only
-        const activeRfidAssignment = student.rfid_card_assignments?.find((assignment: any) => 
-          assignment.is_active === true && assignment.valid_to === null
+        // Transform data and assign stop_order based on route assignment or default order
+        const studentsData = (data || []).map((student: any, index: number) => {
+          // Find route assignment for this driver's route
+          const routeAssignment = student.route_students?.find((rs: any) => rs.route_id === driverBusData.route_id);
+          
+          // Get RFID code from active assignments only
+          const activeRfidAssignment = student.rfid_card_assignments?.find((assignment: any) => 
+            assignment.is_active === true && assignment.valid_to === null
+          );
+          const rfidCode = activeRfidAssignment?.rfid_cards?.rfid_code || null;
+          
+          return {
+            student_id: student.student_id,
+            student_name: student.student_name,
+            grade: student.grade,
+            student_phone: student.student_phone,
+            status: student.status,
+            home_latitude: student.home_latitude,
+            home_longitude: student.home_longitude,
+            primary_parent: student.primary_parent,
+            rfid_code: rfidCode,
+            stop_order: routeAssignment?.stop_order || (index + 1) // Use route stop_order or default sequential order
+          };
+        });
+        
+        // Sort by stop_order to maintain pickup sequence
+        studentsData.sort((a, b) => a.stop_order - b.stop_order);
+        
+        const filteredStudents = studentsData.filter(student => 
+          !leaveRequestsToday.has(student.student_id)
         );
-        const rfidCode = activeRfidAssignment?.rfid_cards?.rfid_code || null;
         
-        return {
-          student_id: student.student_id,
-          student_name: student.student_name,
-          grade: student.grade,
-          student_phone: student.student_phone,
-          status: student.status,
-          home_latitude: student.home_latitude,
-          home_longitude: student.home_longitude,
-          primary_parent: student.primary_parent,
-          rfid_code: rfidCode,
-          stop_order: routeAssignment?.stop_order || (index + 1) // Use route stop_order or default sequential order
-        };
-      });
-      
-      // Sort by stop_order to maintain pickup sequence
-      studentsData.sort((a, b) => a.stop_order - b.stop_order);
-      
-      const filteredStudents = studentsData.filter(student => 
-        !leaveRequestsToday.has(student.student_id)
-      );
-      
-      setStudents(filteredStudents as Student[]);
-      
-      // Update absent set with students on leave
-      setAbsentSet(leaveRequestsToday);
-    }
+        setStudents(filteredStudents as Student[]);
+        
+        // Update absent set with students on leave
+        setAbsentSet(leaveRequestsToday);
+
+      } catch (error: any) {
+        console.error('Error fetching students:', error);
+        
+        // Check if it's a network-related error that might benefit from retry
+        const isNetworkError = error?.message?.includes('Failed to fetch') ||
+                              error?.message?.includes('ERR_ABORTED') ||
+                              error?.message?.includes('Network request failed') ||
+                              error?.code === 'PGRST301' ||
+                              error?.code === 'PGRST116';
+
+        if (isNetworkError && retryCount < maxRetries) {
+          retryCount++;
+          console.log(`Retrying fetchStudents (attempt ${retryCount}/${maxRetries})...`);
+          
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          
+          return attemptFetch();
+        }
+
+        // If all retries failed or it's not a network error, set empty array
+        console.warn(`Failed to fetch students after ${retryCount} retries. Using empty array as fallback.`);
+        setStudents([]);
+        setAbsentSet(new Set());
+      }
+    };
+
+    await attemptFetch();
     setLoading(false);
   }, [fetchTodayLeaveRequests, getMyDriverId]);
 
@@ -497,42 +564,71 @@ window.addEventListener('message',e=>handle(e.data));
   const fetchTodayEvents = useCallback(async () => {
     if (!driverId) { softResetSets(); return; }
 
-    const { data, error } = await supabase
-      .from('pickup_dropoff')
-      .select('student_id,event_type,event_time,pickup_source,location_type,driver_id')
-      .gte('event_time', startOfTodayISO)
-      .eq('driver_id', driverId)
-      .order('event_time', { ascending: true });
+    const maxRetries = 3;
+    let retryCount = 0;
 
-    if (error) {
-      console.error('Error fetching today events:', error);
-      softResetSets();
-      return;
-    }
+    const attemptFetch = async (): Promise<void> => {
+      try {
+        const { data, error } = await supabase
+          .from('pickup_dropoff')
+          .select('student_id,event_type,event_time,pickup_source,location_type,driver_id')
+          .gte('event_time', startOfTodayISO)
+          .eq('driver_id', driverId)
+          .order('event_time', { ascending: true });
 
-    const gPick = new Set<number>(), rPick = new Set<number>();
-    const gDrop = new Set<number>(), rDrop = new Set<number>();
-    const ab = new Set<number>();
+        if (error) {
+          throw error;
+        }
 
-    (data || []).forEach((row: any) => {
-      const sid = row.student_id as number;
-      const type = row.event_type as PDDEventType;
-      const loc: string = row.location_type || 'go';
+        const gPick = new Set<number>(), rPick = new Set<number>();
+        const gDrop = new Set<number>(), rDrop = new Set<number>();
+        const ab = new Set<number>();
 
-      if (type === 'pickup') {
-        if (loc === 'return') rPick.add(sid); else gPick.add(sid);
-      } else if (type === 'dropoff') {
-        if (loc === 'return') rDrop.add(sid); else gDrop.add(sid);
-      } else if (type === 'absent') {
-        ab.add(sid);
+        (data || []).forEach((row: any) => {
+          const sid = row.student_id as number;
+          const type = row.event_type as PDDEventType;
+          const loc: string = row.location_type || 'go';
+
+          if (type === 'pickup') {
+            if (loc === 'return') rPick.add(sid); else gPick.add(sid);
+          } else if (type === 'dropoff') {
+            if (loc === 'return') rDrop.add(sid); else gDrop.add(sid);
+          } else if (type === 'absent') {
+            ab.add(sid);
+          }
+        });
+
+        setBoardedGoSet(gPick);
+        setBoardedReturnSet(rPick);
+        setDroppedGoSet(gDrop);
+        setDroppedReturnSet(rDrop);
+        setAbsentSet(ab);
+
+      } catch (error: any) {
+        retryCount++;
+        console.error(`Error fetching today events (attempt ${retryCount}/${maxRetries}):`, error);
+
+        // Check if it's a network-related error that should be retried
+        const isNetworkError = error?.message?.includes('Failed to fetch') ||
+                              error?.message?.includes('ERR_ABORTED') ||
+                              error?.message?.includes('Network request failed') ||
+                              error?.code === 'PGRST301' ||
+                              error?.code === 'PGRST116';
+
+        if (isNetworkError && retryCount < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000); // Exponential backoff, max 5s
+          console.log(`Retrying fetchTodayEvents in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return attemptFetch();
+        }
+
+        // If all retries failed or it's not a network error, reset sets
+        console.warn(`Failed to fetch today events after ${retryCount} retries. Using soft reset as fallback.`);
+        softResetSets();
       }
-    });
+    };
 
-    setBoardedGoSet(gPick);
-    setBoardedReturnSet(rPick);
-    setDroppedGoSet(gDrop);
-    setDroppedReturnSet(rDrop);
-    setAbsentSet(ab);
+    await attemptFetch();
   }, [startOfTodayISO, driverId]);
 
   // ตรวจสอบการรีเซ็ตสำหรับรอบเย็น
@@ -1001,6 +1097,9 @@ window.addEventListener('message',e=>handle(e.data));
     
     setSheetVisible(false);
     
+    // Track constraint errors to handle notification sending
+    let hasConstraintError = false;
+    
     try {
       const now = new Date().toISOString();
       const location = phase === 'go' ? 'go' : 'return';
@@ -1028,67 +1127,39 @@ window.addEventListener('message',e=>handle(e.data));
           return;
         }
       } else {
-        // For pickup/dropoff, use upsert to handle existing records
-        const today = new Date().toISOString().split('T')[0];
-        
-        // Use upsert with proper conflict resolution
+        // For pickup/dropoff, use direct insert since table has exclusion constraint
         const { error } = await supabase
           .from('pickup_dropoff')
-          .upsert({
+          .insert({
             student_id: selected.student_id,
             driver_id: driverId,
             event_type: eventType,
             event_time: now,
             location_type: location,
-          }, {
-            onConflict: 'student_id,event_type,location_type,event_time'
           });
-
+        
         if (error) {
           console.error('Error updating status:', error);
           
-          // If upsert fails, try to delete existing and insert new
-          try {
-            const { error: deleteError } = await supabase
-              .from('pickup_dropoff')
-              .delete()
-              .eq('student_id', selected.student_id)
-              .eq('location_type', location)
-              .eq('event_type', eventType)
-              .gte('event_time', `${today}T00:00:00.000Z`)
-              .lt('event_time', `${today}T23:59:59.999Z`);
-
-            if (deleteError) {
-              console.error('Error deleting existing records:', deleteError);
-            }
-
-            // Try insert again
-            const { error: insertError } = await supabase
-              .from('pickup_dropoff')
-              .insert({
-                student_id: selected.student_id,
-                driver_id: driverId,
-                event_type: eventType,
-                event_time: now,
-                location_type: location,
-              });
-
-            if (insertError) {
-              console.error('Error inserting after delete:', insertError);
-              Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปเดตสถานะได้');
-              return;
-            }
-          } catch (fallbackError) {
-            console.error('Fallback error:', fallbackError);
+          // Check if it's a rapid rescan error (exclusion constraint violation)
+          if (error.code === '23P01' && error.message?.includes('no_rapid_rescan')) {
+            hasConstraintError = true;
+            Alert.alert(
+              'แจ้งเตือน', 
+              'ไม่สามารถสแกนซ้ำในช่วงเวลาสั้นๆ ได้ กรุณารอสักครู่แล้วลองใหม่'
+            );
+            // Still send notification even if there's a constraint error
+            // Continue to notification sending below
+          } else {
             Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปเดตสถานะได้');
             return;
           }
         }
       }
 
-      // Send LINE notification
+      // Send LINE notification (always send, even for constraint errors)
       try {
-        const notificationResponse = await fetch('https://safety-bus-bot-vercel-deploy.vercel.app/api/student-status-notification', {
+        const notificationResponse = await fetch('https://safety-bus-liff-v4-new.vercel.app/api/student-status-notification', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1114,65 +1185,68 @@ window.addEventListener('message',e=>handle(e.data));
         console.error('Error sending notification:', notificationError);
       }
 
-      // Update local state
-      if (eventType === 'pickup') {
-        if (phase === 'go') {
-          setBoardedGoSet(prev => new Set([...prev, selected.student_id]));
-        } else {
-          setBoardedReturnSet(prev => new Set([...prev, selected.student_id]));
-        }
-      } else if (eventType === 'dropoff') {
-        if (phase === 'go') {
-          setDroppedGoSet(prev => new Set([...prev, selected.student_id]));
-        } else {
-          setDroppedReturnSet(prev => new Set([...prev, selected.student_id]));
-        }
-      } else if (eventType === 'absent') {
-        setAbsentSet(prev => new Set([...prev, selected.student_id]));
-      }
-
-      // Update statistics in AsyncStorage
-      try {
-        // Calculate new statistics based on current sets
-        let newPickupGo = boardedGoSet.size;
-        let newDropGo = droppedGoSet.size;
-        let newPickupRet = boardedReturnSet.size;
-        let newDropRet = droppedReturnSet.size;
-
-        // Adjust for the new action
+      // Only update local state and statistics if there was no constraint error
+      if (!hasConstraintError) {
+        // Update local state
         if (eventType === 'pickup') {
           if (phase === 'go') {
-            newPickupGo = boardedGoSet.size + 1; // +1 for the new pickup
+            setBoardedGoSet(prev => new Set([...prev, selected.student_id]));
           } else {
-            newPickupRet = boardedReturnSet.size + 1; // +1 for the new pickup in return phase
+            setBoardedReturnSet(prev => new Set([...prev, selected.student_id]));
           }
         } else if (eventType === 'dropoff') {
           if (phase === 'go') {
-            newDropGo = droppedGoSet.size + 1; // +1 for the new dropoff
+            setDroppedGoSet(prev => new Set([...prev, selected.student_id]));
           } else {
-            newDropRet = droppedReturnSet.size + 1; // +1 for the new dropoff in return phase
+            setDroppedReturnSet(prev => new Set([...prev, selected.student_id]));
           }
+        } else if (eventType === 'absent') {
+          setAbsentSet(prev => new Set([...prev, selected.student_id]));
         }
-        // For absent, no change in statistics
 
-        // Save updated statistics to AsyncStorage with new structure
-        const stats = {
-          pickupGo: newPickupGo,
-          dropGo: newDropGo,
-          pickupRet: newPickupRet,
-          dropRet: newDropRet,
-          total: students.length
-        };
-        
-        await AsyncStorage.setItem('passenger_stats', JSON.stringify(stats));
-      } catch (statsError) {
-        console.error('Error updating statistics:', statsError);
+        // Update statistics in AsyncStorage
+        try {
+          // Calculate new statistics based on current sets
+          let newPickupGo = boardedGoSet.size;
+          let newDropGo = droppedGoSet.size;
+          let newPickupRet = boardedReturnSet.size;
+          let newDropRet = droppedReturnSet.size;
+
+          // Adjust for the new action
+          if (eventType === 'pickup') {
+            if (phase === 'go') {
+              newPickupGo = boardedGoSet.size + 1; // +1 for the new pickup
+            } else {
+              newPickupRet = boardedReturnSet.size + 1; // +1 for the new pickup in return phase
+            }
+          } else if (eventType === 'dropoff') {
+            if (phase === 'go') {
+              newDropGo = droppedGoSet.size + 1; // +1 for the new dropoff
+            } else {
+              newDropRet = droppedReturnSet.size + 1; // +1 for the new dropoff in return phase
+            }
+          }
+          // For absent, no change in statistics
+
+          // Save updated statistics to AsyncStorage with new structure
+          const stats = {
+            pickupGo: newPickupGo,
+            dropGo: newDropGo,
+            pickupRet: newPickupRet,
+            dropRet: newDropRet,
+            total: students.length
+          };
+          
+          await AsyncStorage.setItem('passenger_stats', JSON.stringify(stats));
+        } catch (statsError) {
+          console.error('Error updating statistics:', statsError);
+        }
+
+        // Show success message
+        const statusText = eventType === 'pickup' ? 'ขึ้นรถแล้ว' : 
+                          eventType === 'dropoff' ? 'ส่งแล้ว' : 'หยุด';
+        Alert.alert('สำเร็จ', `อัปเดตสถานะ "${statusText}" สำหรับ ${selected.student_name} แล้ว`);
       }
-
-      // Show success message
-      const statusText = eventType === 'pickup' ? 'ขึ้นรถแล้ว' : 
-                        eventType === 'dropoff' ? 'ส่งแล้ว' : 'หยุด';
-      Alert.alert('สำเร็จ', `อัปเดตสถานะ "${statusText}" สำหรับ ${selected.student_name} แล้ว`);
       
     } catch (error) {
       console.error('Error updating student status:', error);
@@ -1617,7 +1691,7 @@ window.addEventListener('message',e=>handle(e.data));
                       </View>
                       <View style={styles.alertsLogDetails}>
                         <Text style={styles.alertsLogDetailText}>
-                          แหล่งที่มา: {getSourceText(item)}
+                          {getSourceText(item)}
                         </Text>
                       </View>
                     </View>

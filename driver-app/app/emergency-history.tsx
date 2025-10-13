@@ -78,7 +78,6 @@ const EmergencyHistoryScreen: React.FC = () => {
     Alert.alert(
       getEventTypeText(emergency.event_type),
       `เวลา: ${formatDateTime(emergency.event_time)}\n` +
-      `แหล่งที่มา: ${getSourceText(emergency)}\n` +
       `${emergency.description ? `รายละเอียด: ${emergency.description}\n` : ''}` +
       `${emergency.location ? `ตำแหน่ง: ${emergency.location}\n` : ''}` +
       `สถานะ: ${emergency.status === 'resolved' ? 'แก้ไขแล้ว' : 'รอดำเนินการ'}`,
@@ -151,7 +150,7 @@ const EmergencyHistoryScreen: React.FC = () => {
 
         <View style={styles.emergencyDetails}>
           <Text style={styles.triggeredBy}>
-            แหล่งที่มา: {getSourceText(item)}
+            {getSourceText(item)}
           </Text>
           
           {item.description && (

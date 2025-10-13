@@ -22,12 +22,12 @@ try {
 // ข้อความสำหรับสถานะต่างๆ ของนักเรียน
 const STUDENT_STATUS_MESSAGES = {
   onboard: {
-    emoji: '🚌',
+    emoji: '🚌🚌',
     title: 'นักเรียนขึ้นรถแล้ว',
     message: 'ขึ้นรถแล้ว'
   },
   offboard: {
-    emoji: '🏠',
+    emoji: '✅✅',
     title: 'นักเรียนลงรถแล้ว',
     message: 'ลงรถแล้ว'
   },
@@ -139,34 +139,16 @@ export default async function handler(req, res) {
     // สร้างข้อความ
     const currentTime = new Date().toLocaleString('th-TH', {
       timeZone: 'Asia/Bangkok',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+      minute: '2-digit'
     });
 
-    let messageText = `${messageInfo.emoji} ${messageInfo.title}\n\n`;
-    messageText += `👨‍🎓 นักเรียน: ${studentData.student_name}`;
-    messageText += `\n🆔 รหัส: ${studentData.student_id}`;
-    messageText += `\n🏫 ชั้น: ${studentData.grade}`;
-    messageText += `\n\n${messageInfo.message}`;
+    // สร้างข้อความแบบสั้น ตามรูปแบบที่ต้องการ
+    let messageText = `${messageInfo.emoji} ${studentData.student_name} ${messageInfo.message} เวลา ${currentTime} น.`;
     
     if (driverData) {
-      messageText += `\n\n👨‍✈️ คนขับ: ${driverData.driver_name}`;
-      messageText += `\n🚌 รถเมล์: ${driverData.license_plate}`;
+      messageText += ` คนขับ: ${driverData.driver_name}`;
     }
-    
-    if (location) {
-      messageText += `\n📍 ตำแหน่ง: ${location}`;
-    }
-    
-    if (notes) {
-      messageText += `\n📝 หมายเหตุ: ${notes}`;
-    }
-    
-    messageText += `\n\n⏰ เวลา: ${currentTime}`;
 
     const lineMessage = {
       type: 'text',

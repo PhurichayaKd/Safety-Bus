@@ -17,12 +17,12 @@
       "dest": "/api/$1"
     },
     {
-      "src": "/leave-form",
-      "dest": "/leave-form.html",
+      "src": "/leave-form(.*)",
+      "dest": "/index.mjs",
       "headers": {
         "Cache-Control": "public, max-age=0, must-revalidate",
         "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "DENY"
+        "X-Frame-Options": "ALLOWALL"
       }
     },
 
@@ -43,21 +43,21 @@
       }
     },
     {
-      "src": "/bus-location",
-      "dest": "/bus-location.html",
+      "src": "/bus-location(.*)",
+      "dest": "/index.mjs",
       "headers": {
         "Cache-Control": "public, max-age=0, must-revalidate",
         "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "DENY"
+        "X-Frame-Options": "ALLOWALL"
       }
     },
     {
-      "src": "/check-students",
-      "dest": "/check-students.html",
+      "src": "/check-students(.*)",
+      "dest": "/index.mjs",
       "headers": {
         "Cache-Control": "public, max-age=0, must-revalidate",
         "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "DENY"
+        "X-Frame-Options": "ALLOWALL"
       }
     },
     {

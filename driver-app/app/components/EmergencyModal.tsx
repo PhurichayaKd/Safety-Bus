@@ -227,8 +227,10 @@ const EmergencyModal: React.FC = () => {
               <View style={styles.warningContainer}>
                 <Ionicons name="information-circle" size={20} color={COLORS.warning} />
                 <Text style={styles.warningText}>
-                  กรุณาเลือกการดำเนินการที่เหมาะสม หากเป็นเหตุการณ์ฉุกเฉินจริง 
-                  ให้กดปุ่ม "ฉุกเฉิน" เพื่อให้นักเรียนลงจากรถทันที
+                  {currentEmergency?.triggered_by === 'student' 
+                    ? 'นักเรียนได้กดปุ่มฉุกเฉิน กรุณาตรวจสอบสถานการณ์และกดปุ่ม "ตรวจสอบแล้ว" เมื่อได้ตรวจสอบเรียบร้อยแล้ว'
+                    : 'กรุณาเลือกการดำเนินการที่เหมาะสม หากเป็นเหตุการณ์ฉุกเฉินจริง ให้กดปุ่ม "ฉุกเฉิน" เพื่อให้นักเรียนลงจากรถทันที'
+                  }
                 </Text>
               </View>
             </View>
@@ -246,8 +248,18 @@ const EmergencyModal: React.FC = () => {
                 <Ionicons name="checkmark-done" size={24} color="#FFFFFF" />
                 <Text style={styles.actionButtonText}>ยืนยันสถานการณ์กลับมาปกติ</Text>
               </TouchableOpacity>
+            ) : currentEmergency?.triggered_by === 'student' ? (
+              // กรณีนักเรียนกดปุ่มฉุกเฉิน - แสดงเฉพาะปุ่ม "ตรวจสอบแล้ว"
+              <TouchableOpacity
+                style={[styles.actionButton, styles.checkedButton]}
+                onPress={() => confirmEmergencyResponse('CHECKED')}
+                disabled={isProcessing}
+              >
+                <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>ตรวจสอบแล้ว</Text>
+              </TouchableOpacity>
             ) : (
-              // แสดงปุ่มตามประเภทการแจ้งเตือน
+              // แสดงปุ่มตามประเภทการแจ้งเตือนปกติ (เซ็นเซอร์หรือคนขับกดปุ่มฉุกเฉิน)
               <>
                 <TouchableOpacity
                   style={[styles.actionButton, styles.checkedButton]}
@@ -258,17 +270,15 @@ const EmergencyModal: React.FC = () => {
                   <Text style={styles.actionButtonText}>ตรวจสอบแล้ว</Text>
                 </TouchableOpacity>
 
-                {/* แสดงปุ่มฉุกเฉินเฉพาะกรณีที่มาจากเซ็นเซอร์ */}
-                {currentEmergency.triggered_by === 'sensor' && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.emergencyButton]}
-                    onPress={() => confirmEmergencyResponse('EMERGENCY')}
-                    disabled={isProcessing}
-                  >
-                    <Ionicons name="warning" size={24} color="#FFFFFF" />
-                    <Text style={styles.actionButtonText}>ฉุกเฉิน</Text>
-                  </TouchableOpacity>
-                )}
+                {/* แสดงปุ่มฉุกเฉินสำหรับกรณีที่ไม่ใช่นักเรียนกดปุ่ม */}
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.emergencyButton]}
+                  onPress={() => confirmEmergencyResponse('EMERGENCY')}
+                  disabled={isProcessing}
+                >
+                  <Ionicons name="warning" size={24} color="#FFFFFF" />
+                  <Text style={styles.actionButtonText}>ฉุกเฉิน</Text>
+                </TouchableOpacity>
               </>
             )}
           </View>

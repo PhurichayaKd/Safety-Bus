@@ -166,11 +166,11 @@ const EmergencyAlertModal: React.FC<EmergencyAlertModalProps> = ({
       );
     }
 
-    // สถานะเริ่มต้น
-    if (emergency?.triggered_by === 'student') {
-      return (
+    // สถานะเริ่มต้น - แสดงปุ่มทั้งสองสำหรับทุกกรณี
+    return (
+      <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={[styles.button, styles.primaryButton]}
+          style={[styles.button, styles.primaryButton, { flex: 1, marginRight: 8 }]}
           onPress={() => handleResponse('CHECKED')}
           disabled={responding}
         >
@@ -183,44 +183,23 @@ const EmergencyAlertModal: React.FC<EmergencyAlertModalProps> = ({
             ตรวจสอบแล้ว
           </Text>
         </TouchableOpacity>
-      );
-    } else if (emergency?.triggered_by === 'sensor') {
-      return (
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.button, styles.primaryButton, { flex: 1, marginRight: 8 }]}
-            onPress={() => handleResponse('CHECKED')}
-            disabled={responding}
-          >
-            {responding ? (
-              <ActivityIndicator size="small" color={COLORS.surface} />
-            ) : (
-              <Ionicons name="checkmark" size={20} color={COLORS.surface} />
-            )}
-            <Text style={[styles.buttonText, { color: COLORS.surface }]}>
-              ตรวจสอบแล้ว
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.button, styles.dangerButton, { flex: 1, marginLeft: 8 }]}
-            onPress={() => handleResponse('EMERGENCY')}
-            disabled={responding}
-          >
-            {responding ? (
-              <ActivityIndicator size="small" color={COLORS.surface} />
-            ) : (
-              <Ionicons name="warning" size={20} color={COLORS.surface} />
-            )}
-            <Text style={[styles.buttonText, { color: COLORS.surface }]}>
-              ฉุกเฉิน
-            </Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    return null;
+        
+        <TouchableOpacity
+          style={[styles.button, styles.dangerButton, { flex: 1, marginLeft: 8 }]}
+          onPress={() => handleResponse('EMERGENCY')}
+          disabled={responding}
+        >
+          {responding ? (
+            <ActivityIndicator size="small" color={COLORS.surface} />
+          ) : (
+            <Ionicons name="warning" size={20} color={COLORS.surface} />
+          )}
+          <Text style={[styles.buttonText, { color: COLORS.surface }]}>
+            ฉุกเฉิน
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   if (!emergency) return null;

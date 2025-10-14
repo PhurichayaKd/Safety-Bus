@@ -6,10 +6,10 @@ import {
   subscribeToEmergencyLogs,
   getUnresolvedEmergencyLogs,
   recordEmergencyResponse,
-  sendLineNotification,
   getEventTypeText,
   formatDateTime
 } from '../services/emergencyService';
+import { sendEmergencyLineNotification } from '../services/lineNotificationService';
 
 interface EmergencyContextType {
   emergencies: EmergencyLog[];
@@ -64,6 +64,15 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
         // คำนวณจำนวนที่ยังไม่ได้อ่าน
         const unread = data.filter(emergency => !readEmergencies.has(emergency.event_id));
         setUnreadCount(unread.length);
+        
+        // ถ้ามี emergency ใหม่และยังไม่มี modal แสดงอยู่ ให้แสดง emergency แรก
+        if (data.length > 0 && !showEmergencyModal && !currentEmergency) {
+          const firstUnread = data.find(emergency => !readEmergencies.has(emergency.event_id));
+          if (firstUnread) {
+            setCurrentEmergency(firstUnread);
+            setShowEmergencyModal(true);
+          }
+        }
       }
     } catch (error) {
       console.error('Error refreshing emergencies:', error);
@@ -79,9 +88,17 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
 
     // ส่งการแจ้งเตือนไปยัง LINE (ยกเว้นกรณี triggered_by เป็น student)
     if (emergency.triggered_by !== 'student') {
-      sendLineNotification(emergency).catch(error => {
-        console.error('Failed to send LINE notification:', error);
-      });
+      sendEmergencyLineNotification(emergency, 'NEW_EMERGENCY')
+        .then(result => {
+          if (!result.success) {
+            console.warn('Failed to send LINE notification:', result.error);
+          } else {
+            console.log('LINE notification sent successfully for new emergency');
+          }
+        })
+        .catch(error => {
+          console.error('Failed to send LINE notification:', error);
+        });
     }
 
     // แสดง Alert สำหรับการแจ้งเตือนในแอป
@@ -143,10 +160,21 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
         return;
       }
 
-      // ส่งการแจ้งเตือนไปยัง LINE
+      // ส่งการแจ้งเตือนไปยัง LINE สำหรับทุกประเภทการตอบสนอง
       const emergency = emergencies.find(e => e.event_id === eventId);
       if (emergency) {
-        await sendLineNotification(emergency, responseType);
+        try {
+          const result = await sendEmergencyLineNotification(emergency, responseType);
+          if (!result.success) {
+            console.warn('LINE notification failed:', result.error);
+            // ไม่แสดง error ให้ผู้ใช้เห็น เพราะการตอบสนองหลักสำเร็จแล้ว
+          } else {
+            console.log('LINE notification sent successfully');
+          }
+        } catch (error) {
+          console.error('Error sending LINE notification:', error);
+          // ไม่ให้ error ของการส่ง notification ทำให้การตอบสนองล้มเหลว
+        }
       }
 
       // อัปเดต UI - สำหรับ EMERGENCY ไม่ปิด modal ทันที
@@ -155,8 +183,10 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
         Alert.alert('สำเร็จ', 'ส่งสัญญาณฉุกเฉินเรียบร้อย\nกรุณายืนยันเมื่อสถานการณ์กลับมาปกติ');
       } else {
         // สำหรับ CHECKED และ CONFIRMED_NORMAL ให้ปิด modal
+        // ทำเครื่องหมายว่าอ่านแล้วก่อน
+        markAsRead(eventId);
+        
         setEmergencies(prev => prev.filter(e => e.event_id !== eventId));
-        setUnreadCount(prev => Math.max(0, prev - 1));
         setShowEmergencyModal(false);
         setCurrentEmergency(null);
 
@@ -203,6 +233,10 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
 
   // ปิด Modal
   const dismissModal = () => {
+    // ทำเครื่องหมายว่าอ่านแล้วก่อนปิด modal
+    if (currentEmergency) {
+      markAsRead(currentEmergency.event_id);
+    }
     setShowEmergencyModal(false);
     setCurrentEmergency(null);
   };

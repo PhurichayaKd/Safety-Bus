@@ -39,7 +39,7 @@ const EmergencyModal = ({ visible = true, onClose = () => {} }) => {
           onPress: async () => {
             try {
               setIsResponding(true);
-              await handleEmergencyResponse(currentEmergency.id, responseType);
+              await handleEmergencyResponse(currentEmergency.event_id, responseType);
               
               Alert.alert(
                 'สำเร็จ',

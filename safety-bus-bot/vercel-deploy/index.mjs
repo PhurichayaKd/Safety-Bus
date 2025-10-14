@@ -46,7 +46,32 @@ export default function handler(req, res) {
         const formContent = readFileSync(formPath, 'utf8');
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+        res.setHeader('X-Frame-Options', 'ALLOWALL'); // Allow iframe for LINE LIFF
         return res.status(200).send(formContent);
+      }
+    }
+    
+    // Handle bus location route
+    if (url.startsWith('/bus-location')) {
+      const busLocationPath = join(process.cwd(), 'bus-location.html');
+      if (existsSync(busLocationPath)) {
+        const busLocationContent = readFileSync(busLocationPath, 'utf8');
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+        res.setHeader('X-Frame-Options', 'ALLOWALL'); // Allow iframe for LINE LIFF
+        return res.status(200).send(busLocationContent);
+      }
+    }
+    
+    // Handle check students route
+    if (url.startsWith('/check-students')) {
+      const checkStudentsPath = join(process.cwd(), 'check-students.html');
+      if (existsSync(checkStudentsPath)) {
+        const checkStudentsContent = readFileSync(checkStudentsPath, 'utf8');
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+        res.setHeader('X-Frame-Options', 'ALLOWALL'); // Allow iframe for LINE LIFF
+        return res.status(200).send(checkStudentsContent);
       }
     }
     

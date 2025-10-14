@@ -28,7 +28,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const { data: { session }, error } = await authWithRetry.getSession();
           if (mounted) {
             if (error) {
-              console.warn('Session retrieval error after recovery:', error.message);
+              // ตรวจสอบว่าเป็น refresh token error หรือไม่
+              if (error.message.includes('refresh') || error.message.includes('token')) {
+                console.warn('Refresh token error during initialization, signing out:', error.message);
+                await authWithRetry.signOut();
+              } else {
+                console.warn('Session retrieval error after recovery:', error.message);
+              }
               setSession(null);
             } else {
               setSession(session);
@@ -40,7 +46,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const { data: { session }, error } = await authWithRetry.getSession();
           if (mounted) {
             if (error) {
-              console.warn('Session retrieval error:', error.message);
+              // ตรวจสอบว่าเป็น refresh token error หรือไม่
+              if (error.message.includes('refresh') || error.message.includes('token')) {
+                console.warn('Refresh token error, signing out:', error.message);
+                await authWithRetry.signOut();
+              } else {
+                console.warn('Session retrieval error:', error.message);
+              }
             }
             setSession(session);
             setLoading(false);
@@ -49,6 +61,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Failed to initialize session:', error);
         if (mounted) {
+          // ล้าง session เมื่อเกิด error
+          try {
+            await authWithRetry.signOut();
+          } catch (signOutError) {
+            console.warn('Failed to sign out during initialization error:', signOutError);
+          }
           setSession(null);
           setLoading(false);
         }
@@ -60,9 +78,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // ฟังการเปลี่ยนแปลงของ auth state
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+    } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+      console.log('Auth state changed:', event, session?.user?.id);
+      
       if (mounted) {
-        setSession(session);
+        if (event === 'SIGNED_OUT') {
+          setSession(null);
+        } else if (event === 'TOKEN_REFRESHED') {
+          if (session) {
+            setSession(session);
+          } else {
+            // ถ้า refresh ล้มเหลวและไม่มี session
+            console.warn('Token refresh failed, no session available');
+            setSession(null);
+          }
+        } else if (event === 'SIGNED_IN') {
+          setSession(session);
+        } else {
+          setSession(session);
+        }
         setLoading(false);
       }
     });

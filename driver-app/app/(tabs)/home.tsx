@@ -1,4 +1,6 @@
 // src/components/HomePage.tsx
+import '../../src/polyfills';
+
 import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView, StyleSheet, Text, TouchableOpacity, View,
@@ -6,6 +8,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useEmergency } from '../../src/contexts/EmergencyContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -251,10 +254,7 @@ const HomePage = () => {
   const [estimatedTime, setEstimatedTime] = useState<string>('25 นาที');
   const [loading, setLoading] = useState(true);
 
-  // เพิ่ม state สำหรับ emergency
-  const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
-  const [currentEmergency, setCurrentEmergency] = useState<any>(null);
-  const [processingEmergency, setProcessingEmergency] = useState(false);
+
 
   // เพิ่ม state สำหรับระบบตรวจสอบนักเรียนที่ไม่มาขึ้นรถ
   const [missingStudentsModalVisible, setMissingStudentsModalVisible] = useState(false);
@@ -276,9 +276,6 @@ const HomePage = () => {
         // เริ่มต้นด้วยค่าว่าง ให้คนขับเลือกเอง
         setStatus(null);
       }
-      
-      // ตรวจสอบ emergency logs
-      await checkEmergencyLogs();
     })();
   }, []);
 
@@ -317,139 +314,9 @@ const HomePage = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // เพิ่ม useEffect สำหรับตรวจสอบ emergency_logs ทุก 10 วินาที
-  useEffect(() => {
-    const emergencyTimer = setInterval(() => {
-      checkEmergencyLogs();
-    }, 10000); // ตรวจสอบทุก 10 วินาที
 
-    return () => clearInterval(emergencyTimer);
-  }, []);
 
-  // ฟังก์ชันตรวจสอบ emergency_logs พร้อม retry mechanism
-  const checkEmergencyLogs = async (retryCount = 0) => {
-    const maxRetries = 3;
-    const retryDelay = 1000; // 1 วินาที
 
-    try {
-      const driverId = await getMyDriverId();
-      if (!driverId) return;
-
-      const { data: emergencyLogs, error } = await supabase
-        .from('emergency_logs')
-        .select('*')
-        .eq('triggered_by', 'driver')
-        .eq('driver_id', driverId)
-        .is('driver_response_type', null) // ยังไม่ได้ตอบสนอง
-        .order('event_time', { ascending: false })
-        .limit(1);
-
-      if (error) {
-        console.error('Error checking emergency logs:', error);
-        
-        // ลองใหม่หากยังไม่ถึงจำนวนครั้งสูงสุด
-        if (retryCount < maxRetries) {
-          console.log(`Retrying checkEmergencyLogs... (${retryCount + 1}/${maxRetries})`);
-          setTimeout(() => {
-            checkEmergencyLogs(retryCount + 1);
-          }, retryDelay * (retryCount + 1)); // เพิ่มเวลาหน่วงในแต่ละครั้ง
-        }
-        return;
-      }
-
-      if (emergencyLogs && emergencyLogs.length > 0) {
-        const emergency = emergencyLogs[0];
-        setCurrentEmergency(emergency);
-        setEmergencyModalVisible(true);
-      }
-    } catch (error) {
-      console.error('Error in checkEmergencyLogs:', error);
-      
-      // ลองใหม่หากเกิด network error หรือ connection error
-      if (retryCount < maxRetries && (
-        (error as Error).message?.includes('Failed to fetch') || 
-        (error as Error).message?.includes('ERR_ABORTED') ||
-        (error as Error).message?.includes('Network request failed')
-      )) {
-        console.log(`Retrying checkEmergencyLogs after network error... (${retryCount + 1}/${maxRetries})`);
-        setTimeout(() => {
-          checkEmergencyLogs(retryCount + 1);
-        }, retryDelay * (retryCount + 1));
-      }
-    }
-  };
-
-  // ฟังก์ชันจัดการการตอบสนองเหตุฉุกเฉิน
-  const handleEmergencyResponse = async (responseType: 'EMERGENCY' | 'CONFIRMED_NORMAL') => {
-    if (!currentEmergency) return;
-
-    setProcessingEmergency(true);
-    try {
-      // อัปเดต emergency_log
-      const { error: updateError } = await supabase
-        .from('emergency_logs')
-        .update({
-          driver_response_type: responseType,
-          driver_response_time: new Date().toISOString(),
-          driver_response_notes: responseType === 'EMERGENCY' 
-            ? 'คนขับยืนยันเหตุฉุกเฉิน' 
-            : 'คนขับยืนยันสถานการณ์กลับสู่ปกติ'
-        })
-        .eq('event_id', currentEmergency.event_id);
-
-      if (updateError) {
-        console.error('Error updating emergency log:', updateError);
-        Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกการตอบสนองได้');
-        return;
-      }
-
-      if (responseType === 'EMERGENCY') {
-        // ส่งการแจ้งเตือนไปยัง LINE
-        try {
-          const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://safety-bus-liff-v4-new.vercel.app/api';
-          const response = await fetch(`${apiBaseUrl}/emergency-notification`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              emergency_id: currentEmergency.id,
-              driver_id: currentEmergency.driver_id,
-              message: 'คนขับได้ยืนยันเหตุฉุกเฉินแล้ว กำลังส่งแจ้งเตือนไปยังผู้ใช้ทุกคน',
-              timestamp: new Date().toISOString(),
-            }),
-          });
-
-          if (!response.ok) {
-            console.warn('Failed to send emergency notification:', response.status);
-          } else {
-            console.log('Emergency notification sent successfully');
-          }
-        } catch (notificationError) {
-          console.error('Error sending emergency notification:', notificationError);
-        }
-
-        Alert.alert(
-          'ส่งสัญญาณฉุกเฉินเรียบร้อย',
-          'กรุณายืนยันเมื่อสถานการณ์กลับมาปกติ',
-          [{ text: 'ตกลง' }]
-        );
-      } else {
-        Alert.alert(
-          'ยืนยันสถานการณ์ปกติ',
-          'บันทึกการยืนยันสถานการณ์กลับสู่ปกติเรียบร้อยแล้ว',
-          [{ text: 'ตกลง' }]
-        );
-        setEmergencyModalVisible(false);
-        setCurrentEmergency(null);
-      }
-    } catch (error) {
-      console.error('Error handling emergency response:', error);
-      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถดำเนินการได้');
-    } finally {
-      setProcessingEmergency(false);
-    }
-  };
 
   const handleSignOut = async () => {
     await Haptics.selectionAsync();
@@ -1048,65 +915,7 @@ const HomePage = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* EMERGENCY RESPONSE MODAL */}
-      <Modal transparent visible={emergencyModalVisible} animationType="fade" onRequestClose={() => {}}>
-        <View style={styles.emergencyBackdrop}>
-          <View style={styles.emergencyModal}>
-            <View style={styles.emergencyHeader}>
-              <View style={styles.emergencyIcon}>
-                <Ionicons name="warning" size={32} color={COLORS.danger} />
-              </View>
-              <Text style={styles.emergencyTitle}>ตรวจพบสัญญาณฉุกเฉิน</Text>
-              <Text style={styles.emergencySubtitle}>
-                ระบบตรวจพบสัญญาณฉุกเฉินจากอุปกรณ์ IoT
-              </Text>
-              {currentEmergency && (
-                <Text style={styles.emergencyTime}>
-                  เวลา: {new Date(currentEmergency.created_at).toLocaleString('th-TH')}
-                </Text>
-              )}
-            </View>
 
-            <View style={styles.emergencyActions}>
-              <TouchableOpacity
-                style={[styles.emergencyButton, styles.emergencyButtonDanger]}
-                onPress={() => handleEmergencyResponse('EMERGENCY')}
-                disabled={processingEmergency}
-                activeOpacity={0.8}
-              >
-                {processingEmergency ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="alert-circle" size={20} color="#fff" />
-                    <Text style={styles.emergencyButtonText}>ยืนยันเหตุฉุกเฉิน</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.emergencyButton, styles.emergencyButtonNormal]}
-                onPress={() => handleEmergencyResponse('CONFIRMED_NORMAL')}
-                disabled={processingEmergency}
-                activeOpacity={0.8}
-              >
-                {processingEmergency ? (
-                  <ActivityIndicator color={COLORS.text} size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                    <Text style={styles.emergencyButtonTextNormal}>สถานการณ์ปกติ</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.emergencyNote}>
-              กรุณาตรวจสอบสถานการณ์และตอบสนองอย่างเหมาะสม
-            </Text>
-          </View>
-        </View>
-      </Modal>
 
       {/* MISSING STUDENTS MODAL */}
       <Modal transparent visible={missingStudentsModalVisible} animationType="fade" onRequestClose={() => {}}>
@@ -1591,90 +1400,7 @@ const styles = StyleSheet.create({
   },
 
   // Emergency Modal Styles
-  emergencyBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  emergencyModal: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    ...shadowElevated,
-  },
-  emergencyHeader: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  emergencyIcon: {
-    width: 64,
-    height: 64,
-    backgroundColor: COLORS.dangerSoft,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  emergencyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  emergencySubtitle: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  emergencyTime: {
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    textAlign: 'center',
-  },
-  emergencyActions: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  emergencyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    gap: 8,
-  },
-  emergencyButtonDanger: {
-    backgroundColor: COLORS.danger,
-  },
-  emergencyButtonNormal: {
-    backgroundColor: COLORS.bgSecondary,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  emergencyButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  emergencyButtonTextNormal: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  emergencyNote: {
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
+
 
   // Missing Students Modal Styles
   missingStudentsBackdrop: {

@@ -1,4 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import '../polyfills';
+
+// Polyfills are now imported from separate file
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -14,7 +18,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
     // เพิ่มการตั้งค่าสำหรับ token refresh
     flowType: 'pkce',
-    storage: undefined, // ใช้ default storage ของ React Native
+    // ใช้ AsyncStorage โดยตรงสำหรับ React Native
+    storage: AsyncStorage,
   },
   global: {
     headers: {
@@ -99,6 +104,13 @@ export const recoverSession = async (): Promise<boolean> => {
     const { data: { session }, error } = await supabase.auth.getSession();
     
     if (error) {
+      // ตรวจสอบว่าเป็น refresh token error หรือไม่
+      if (error.message.includes('refresh') || error.message.includes('token')) {
+        console.warn('Refresh token error, clearing session:', error.message);
+        // ล้าง session ที่เสียหายออกจาก storage
+        await supabase.auth.signOut();
+        return false;
+      }
       console.warn('Session recovery error:', error.message);
       return false;
     }
@@ -114,15 +126,28 @@ export const recoverSession = async (): Promise<boolean> => {
     
     if (expiresAt <= now) {
       console.log('Session expired, attempting refresh...');
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-      
-      if (refreshError) {
-        console.warn('Session refresh failed:', refreshError.message);
+      try {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError) {
+          // ถ้า refresh ล้มเหลว ให้ล้าง session
+          if (refreshError.message.includes('refresh') || refreshError.message.includes('token')) {
+            console.warn('Refresh token invalid, clearing session:', refreshError.message);
+            await supabase.auth.signOut();
+          } else {
+            console.warn('Session refresh failed:', refreshError.message);
+          }
+          return false;
+        }
+        
+        console.log('Session refreshed successfully');
+        return !!refreshData.session;
+      } catch (refreshError) {
+        console.warn('Session refresh exception:', refreshError);
+        // ล้าง session เมื่อเกิด error
+        await supabase.auth.signOut();
         return false;
       }
-      
-      console.log('Session refreshed successfully');
-      return !!refreshData.session;
     }
     
     console.log('Session is valid');
@@ -130,6 +155,12 @@ export const recoverSession = async (): Promise<boolean> => {
     
   } catch (error) {
     console.warn('Session recovery failed:', error);
+    // ล้าง session เมื่อเกิด error ที่ไม่คาดคิด
+    try {
+      await supabase.auth.signOut();
+    } catch (signOutError) {
+      console.warn('Failed to sign out after error:', signOutError);
+    }
     return false;
   }
 };

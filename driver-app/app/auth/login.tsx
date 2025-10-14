@@ -60,12 +60,28 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     try {
       setLoading(true);
+      
+      // ล้าง session เก่าก่อน login ใหม่
+      await authWithRetry.signOut();
+      
       const { error } = await authWithRetry.signInWithPassword({
         email: username,
         password: password,
       });
+      
       if (error) {
-        Alert.alert('เข้าสู่ระบบไม่สำเร็จ', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+        // ตรวจสอบประเภทของ error
+        if (error.message.includes('refresh') || error.message.includes('token')) {
+          Alert.alert(
+            'เซสชันหมดอายุ', 
+            'กรุณาเข้าสู่ระบบใหม่อีกครั้ง',
+            [{ text: 'ตกลง', onPress: () => {} }]
+          );
+        } else if (error.message.includes('Invalid login credentials')) {
+          Alert.alert('เข้าสู่ระบบไม่สำเร็จ', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+        } else {
+          Alert.alert('เข้าสู่ระบบไม่สำเร็จ', error.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+        }
       }
       // ลบ router.replace ออก ให้ AuthContext จัดการ navigation แทน
     } catch (error) {

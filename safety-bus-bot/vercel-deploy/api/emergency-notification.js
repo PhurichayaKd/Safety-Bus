@@ -80,6 +80,11 @@ const RESPONSE_MESSAGES = {
     emoji: '🚨',
     title: 'คนขับแจ้งเหตุฉุกเฉิน',
     message: 'คนขับแจ้งเหตุฉุกเฉิน กำลังดำเนินการให้นักเรียนลงจากรถเพื่อความปลอดภัย'
+  },
+  CONFIRMED_NORMAL: {
+    emoji: '✅',
+    title: 'คนขับยืนยันสถานการณ์กลับมาสู่ปกติแล้ว',
+    message: 'คนขับยืนยันว่าสถานการณ์กลับมาสู่ปกติแล้ว'
   }
 };
 
@@ -177,9 +182,15 @@ export default async function handler(req, res) {
       messageText += `\n🆔 รหัสเหตุการณ์: ${eventId}`;
     }
 
+    // ทำความสะอาดข้อความเพื่อป้องกันปัญหา encoding
+    const cleanMessageText = messageText
+      .replace(/[^\u0000-\u007F\u0E00-\u0E7F]/g, '') // เก็บเฉพาะ ASCII และไทย
+      .replace(/\s+/g, ' ') // แทนที่ whitespace หลายตัวด้วยช่องว่างเดียว
+      .trim();
+
     const lineMessage = {
       type: 'text',
-      text: messageText
+      text: cleanMessageText
     };
 
     let notificationResults = [];
@@ -191,9 +202,10 @@ export default async function handler(req, res) {
           // ดึงข้อมูลจาก student_line_links
           const { data: studentLinks, error: studentError } = await supabase
             .from('student_line_links')
-            .select('line_user_id, student_name')
+            .select('line_user_id, student_id, line_display_id')
             .not('line_user_id', 'is', null)
-            .neq('line_user_id', '');
+            .neq('line_user_id', '')
+            .eq('active', true);
 
           if (studentError) {
             console.error('Error fetching student links:', studentError);
@@ -204,16 +216,21 @@ export default async function handler(req, res) {
                 await lineClient.pushMessage(student.line_user_id, lineMessage);
                 notificationResults.push({
                   lineUserId: student.line_user_id,
-                  studentName: student.student_name,
+                  studentId: student.student_id,
+                  lineDisplayId: student.line_display_id,
                   type: 'student',
                   status: 'success'
                 });
-                console.log(`✅ Emergency notification sent to student ${student.student_name} (${student.line_user_id})`);
+                console.log(`✅ Emergency notification sent to student ${student.student_id} (${student.line_user_id})`);
               } catch (error) {
-                console.error(`❌ Failed to send to student ${student.student_name}:`, error);
+                console.error(`❌ Failed to send to student ${student.student_id}:`, error.message);
+                if (error.response && error.response.data) {
+                  console.error('LINE API Error Details:', error.response.data);
+                }
                 notificationResults.push({
                   lineUserId: student.line_user_id,
-                  studentName: student.student_name,
+                  studentId: student.student_id,
+                  lineDisplayId: student.line_display_id,
                   type: 'student',
                   status: 'failed',
                   error: error.message
@@ -227,9 +244,10 @@ export default async function handler(req, res) {
           // ดึงข้อมูลจาก parent_line_links
           const { data: parentLinks, error: parentError } = await supabase
             .from('parent_line_links')
-            .select('line_user_id, parent_name, student_name')
+            .select('line_user_id, parent_id, line_display_id')
             .not('line_user_id', 'is', null)
-            .neq('line_user_id', '');
+            .neq('line_user_id', '')
+            .eq('active', true);
 
           if (parentError) {
             console.error('Error fetching parent links:', parentError);
@@ -240,18 +258,21 @@ export default async function handler(req, res) {
                 await lineClient.pushMessage(parent.line_user_id, lineMessage);
                 notificationResults.push({
                   lineUserId: parent.line_user_id,
-                  parentName: parent.parent_name,
-                  studentName: parent.student_name,
+                  parentId: parent.parent_id,
+                  lineDisplayId: parent.line_display_id,
                   type: 'parent',
                   status: 'success'
                 });
-                console.log(`✅ Emergency notification sent to parent ${parent.parent_name} (${parent.line_user_id})`);
+                console.log(`✅ Emergency notification sent to parent ${parent.parent_id} (${parent.line_user_id})`);
               } catch (error) {
-                console.error(`❌ Failed to send to parent ${parent.parent_name}:`, error);
+                console.error(`❌ Failed to send to parent ${parent.parent_id}:`, error.message);
+                if (error.response && error.response.data) {
+                  console.error('LINE API Error Details:', error.response.data);
+                }
                 notificationResults.push({
                   lineUserId: parent.line_user_id,
-                  parentName: parent.parent_name,
-                  studentName: parent.student_name,
+                  parentId: parent.parent_id,
+                  lineDisplayId: parent.line_display_id,
                   type: 'parent',
                   status: 'failed',
                   error: error.message

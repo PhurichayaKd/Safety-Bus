@@ -1,4 +1,6 @@
 // app/index.tsx
+import '../src/polyfills';
+
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useRouter } from 'expo-router';

@@ -286,14 +286,14 @@ function handle(raw){
     if(m.type==='school') setSchool(m.lat,m.lng);
   }catch(e){}
 }
-document.addEventListener('message',e=>handle(e.data));
-window.addEventListener('message',e=>handle(e.data));
+if(typeof document !== 'undefined') document.addEventListener('message',e=>handle(e.data));
+if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.data));
 </script></body></html>`;
   }, [bus]);
 
   const sendToMap = useCallback((payload: any) => {
     const s = JSON.stringify(payload).replace(/\\/g,'\\\\').replace(/`/g,'\\`');
-    webRef.current?.injectJavaScript(`(function(){window.dispatchEvent(new MessageEvent('message',{data:\`${s}\`}));})();true;`);
+    webRef.current?.injectJavaScript(`(function(){if(typeof window !== 'undefined') window.dispatchEvent(new MessageEvent('message',{data:\`${s}\`}));})();true;`);
   }, []);
 
 

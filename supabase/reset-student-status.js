@@ -1,5 +1,7 @@
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: '../safety-bus-bot/vercel-deploy/.env.local' });
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '../safety-bus-bot/vercel-deploy/.env.local' });
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;

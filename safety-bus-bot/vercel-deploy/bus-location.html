@@ -158,6 +158,15 @@
             justify-content: center;
             font-size: 16px;
             color: white;
+            position: relative;
+        }
+
+        .bus-icon.realtime {
+            background: #28a745;
+        }
+
+        .bus-icon.offline {
+            background: #ffc107;
         }
 
         .home-icon {
@@ -209,6 +218,7 @@
                 <div class="stat-dot school"></div>
                 <span id="school-count">0 โรงเรียน</span>
             </div>
+
         </div>
         
         <div>
@@ -248,9 +258,6 @@
                 attribution: '© OpenStreetMap contributors',
                 maxZoom: 18
             }).addTo(map);
-
-            // Load initial data
-            loadBusLocations();
         }
 
         // Show/hide loading indicator
@@ -285,7 +292,7 @@
         }
 
         // Create custom icon
-        function createCustomIcon(type) {
+        function createCustomIcon(type, isRealTime = false) {
             let iconHtml = '';
             let className = '';
             
@@ -293,6 +300,9 @@
                 case 'bus':
                     iconHtml = '🚌';
                     className = 'bus-icon';
+                    if (isRealTime) {
+                        iconHtml += '<div style="position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; background: #00ff00; border-radius: 50%; border: 1px solid white;"></div>';
+                    }
                     break;
                 case 'home':
                     iconHtml = '🏠';
@@ -308,7 +318,7 @@
             }
 
             return L.divIcon({
-                html: `<div class="${className}">${iconHtml}</div>`,
+                html: `<div class="${className}" style="position: relative;">${iconHtml}</div>`,
                 className: 'custom-marker',
                 iconSize: [30, 30],
                 iconAnchor: [15, 15],
@@ -318,23 +328,29 @@
 
         // Add marker to map
         function addMarker(bus) {
-            // Add bus current location if available
-            if (bus.has_location && bus.current_latitude && bus.current_longitude) {
-                const busIcon = createCustomIcon('bus');
+            // Add real-time bus location if available (priority: live_driver_locations data)
+            if (bus.current_latitude && bus.current_longitude) {
+                const isRealTime = bus.last_location_update ? true : false;
+                const busIcon = createCustomIcon('bus', isRealTime);
                 const busMarker = L.marker([bus.current_latitude, bus.current_longitude], {
                     icon: busIcon
                 }).addTo(map);
 
-                const lastUpdate = bus.last_seen ? 
-                    new Date(bus.last_seen).toLocaleString('th-TH') : 'ไม่ทราบ';
+                const lastUpdate = bus.last_location_update ? 
+                    new Date(bus.last_location_update).toLocaleString('th-TH') : 'ไม่ทราบ';
+
+                const locationSource = isRealTime ? '📍 ตำแหน่งเรียลไทม์' : '📍 ตำแหน่งล่าสุด';
+                const connectionStatus = bus.status === 'active' ? '🟢 ออนไลน์' : '🔴 ออฟไลน์';
 
                 busMarker.bindPopup(`
                     <div style="text-align: center;">
-                        <h4>🚌 ${bus.bus_number}</h4>
+                        <h4>🚌 ${bus.license_plate}</h4>
                         <p><strong>คนขับ:</strong> ${bus.driver_name}</p>
-                        <p><strong>เส้นทาง:</strong> ${bus.route_name}</p>
-                        <p><strong>ความจุ:</strong> ${bus.capacity} คน</p>
-                        <p><strong>สถานะ:</strong> ${bus.status === 'active' ? 'ออนไลน์' : 'ออฟไลน์'}</p>
+                        <p><strong>เส้นทาง:</strong> ${bus.route_id || 'ไม่ระบุ'}</p>
+                        <p><strong>นักเรียนบนรถ:</strong> ${bus.student_count} คน</p>
+                        <p><strong>สถานะการเชื่อมต่อ:</strong> ${connectionStatus}</p>
+                        <p><strong>ระยะการเดินทาง:</strong> ${bus.trip_phase === 'go' ? 'ไป' : bus.trip_phase === 'return' ? 'กลับ' : bus.trip_phase === 'completed' ? 'เสร็จสิ้น' : 'ไม่ทราบ'}</p>
+                        <p><strong>${locationSource}</strong></p>
                         <p><strong>อัปเดตล่าสุด:</strong> ${lastUpdate}</p>
                     </div>
                 `);
@@ -353,7 +369,7 @@
                     <div style="text-align: center;">
                         <h4>🏠 บ้านคนขับ</h4>
                         <p><strong>คนขับ:</strong> ${bus.driver_name}</p>
-                        <p><strong>รถบัส:</strong> ${bus.bus_number}</p>
+                        <p><strong>รถบัส:</strong> ${bus.license_plate}</p>
                     </div>
                 `);
 
@@ -370,8 +386,8 @@
                 schoolMarker.bindPopup(`
                     <div style="text-align: center;">
                         <h4>🏫 โรงเรียน</h4>
-                        <p><strong>เส้นทาง:</strong> ${bus.route_name}</p>
-                        <p><strong>รถบัส:</strong> ${bus.bus_number}</p>
+                        <p><strong>เส้นทาง:</strong> ${bus.route_id || 'ไม่ระบุ'}</p>
+                        <p><strong>รถบัส:</strong> ${bus.license_plate}</p>
                     </div>
                 `);
 
@@ -386,7 +402,9 @@
             let schoolCount = 0;
 
             buses.forEach(bus => {
-                if (bus.has_location) busCount++;
+                if (bus.current_latitude && bus.current_longitude) {
+                    busCount++;
+                }
                 if (bus.home_latitude && bus.home_longitude) homeCount++;
                 if (bus.school_latitude && bus.school_longitude) schoolCount++;
             });
@@ -399,78 +417,128 @@
         // Load bus locations from API
         let isFirstLoad = true;
 
-        async function loadBusLocations() {
-            if (isLoading) return;
+        function loadBusLocations() {
+            if (isLoading) {
+                console.log('Already loading, skipping...');
+                return;
+            }
 
-            try {
-                // Only show loading indicator on first load
-                if (isFirstLoad) {
-                    showLoading(true);
-                }
-                
-                const response = await fetch('/api/get-bus-locations', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
+            isLoading = true;
+
+            // Only show loading indicator on first load
+            if (isFirstLoad) {
+                showLoading(true);
+            }
+            
+            console.log('Loading bus locations...');
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/get-bus-locations', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Accept', 'application/json');
+            
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    console.log('XHR status:', xhr.status);
+                    
+                    if (xhr.status === 200) {
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            console.log('Received data:', data);
+                            
+                            if (!data.success) {
+                                throw new Error(data.error || 'ไม่สามารถดึงข้อมูลได้');
+                            }
+
+                            // Clear existing markers
+                            clearMarkers();
+
+                            // Add new markers - use data.buses from the new API structure
+                            const buses = data.buses || [];
+                            buses.forEach(bus => {
+                                addMarker(bus);
+                            });
+
+                            // Update statistics
+                            updateStats(buses);
+
+                            // Update last update time
+                            document.getElementById('last-update-time').textContent = 
+                                new Date().toLocaleString('th-TH');
+
+                            console.log(`โหลดข้อมูลสำเร็จ: ${buses.length} รถบัส, ${markers.length} markers`);
+
+                            // Auto-fit map to show all markers (improved logic)
+                            if (markers.length > 0) {
+                                const group = new L.featureGroup(markers);
+                                const bounds = group.getBounds();
+                                
+                                // If this is the first load or if we have valid bounds
+                                if (isFirstLoad || bounds.isValid()) {
+                                    map.fitBounds(bounds.pad(0.1));
+                                    console.log('Map fitted to bounds:', bounds);
+                                }
+                            } else if (isFirstLoad) {
+                                // If no markers, center on default location with appropriate zoom
+                                map.setView([16.248, 103.25], 12);
+                                console.log('No markers found, using default view');
+                            }
+                            
+                        } catch (error) {
+                            console.error('Error parsing JSON:', error);
+                            showError('ไม่สามารถโหลดข้อมูลตำแหน่งได้: ' + error.message);
+                            // Show loading indicator when there's an error
+                            if (!isFirstLoad) {
+                                showLoading(true);
+                                setTimeout(() => showLoading(false), 1000);
+                            }
+                        }
+                    } else {
+                        console.error('XHR error:', xhr.status, xhr.statusText);
+                        console.error('Response text:', xhr.responseText);
+                        showError('ไม่สามารถโหลดข้อมูลตำแหน่งได้: HTTP ' + xhr.status);
+                        // Show loading indicator when there's an error
+                        if (!isFirstLoad) {
+                            showLoading(true);
+                            setTimeout(() => showLoading(false), 1000);
+                        }
                     }
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    
+                    if (isFirstLoad) {
+                        showLoading(false);
+                        isFirstLoad = false;
+                    }
+                    isLoading = false;
                 }
-
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'ไม่สามารถดึงข้อมูลได้');
-                }
-
-                // Clear existing markers
-                clearMarkers();
-
-                // Add new markers - fix: use data.data instead of data.locations
-                const buses = data.data || [];
-                buses.forEach(bus => {
-                    addMarker(bus);
-                });
-
-                // Update statistics
-                updateStats(buses);
-
-                // Update last update time
-                document.getElementById('last-update-time').textContent = 
-                    new Date().toLocaleString('th-TH');
-
-                // Auto-fit map to show all markers (only on first load)
-                if (isFirstLoad && markers.length > 0) {
-                    const group = new L.featureGroup(markers);
-                    map.fitBounds(group.getBounds().pad(0.1));
-                }
-
-                console.log(`โหลดข้อมูลสำเร็จ: ${buses.length} รถบัส`);
-
-            } catch (error) {
-                console.error('Error loading bus locations:', error);
-                showError('ไม่สามารถโหลดข้อมูลตำแหน่งได้: ' + error.message);
-                // Show loading indicator when there's an error
-                if (!isFirstLoad) {
-                    showLoading(true);
-                    setTimeout(() => showLoading(false), 1000);
-                }
-            } finally {
+            };
+            
+            xhr.onerror = function() {
+                console.error('XHR network error');
+                showError('เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่าย');
                 if (isFirstLoad) {
                     showLoading(false);
                     isFirstLoad = false;
                 }
-            }
+                isLoading = false;
+            };
+            
+            xhr.send();
         }
 
-        // Auto-refresh every 1 second
-        setInterval(loadBusLocations, 1000);
+        // Auto refresh every 5 seconds for real-time updates
+        setInterval(() => {
+            if (!isFirstLoad && !isLoading) {
+                loadBusLocations();
+            }
+        }, 5000);
 
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', function() {
             initMap();
+            // Add a small delay before first API call
+            setTimeout(() => {
+                loadBusLocations();
+            }, 1000);
         });
     </script>
 </body>

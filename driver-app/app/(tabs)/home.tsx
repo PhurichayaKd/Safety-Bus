@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../src/services/supabaseClient';
+import { updateArrivedAtSchool } from '../../src/services/tripPhaseService';
 import COLORS from '../colors';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -329,6 +330,8 @@ const HomePage = () => {
       await AsyncStorage.setItem('trip_phase', 'return');
     } else if (next === 'enroute') {
       await AsyncStorage.setItem('trip_phase', 'go');
+    } else if (next === 'arrived_school') {
+      await AsyncStorage.setItem('trip_phase', 'at_school');
     } else {
       await AsyncStorage.removeItem('trip_phase');
     }
@@ -603,6 +606,12 @@ const HomePage = () => {
           
           if (next === 'enroute') {
             tripPhase = 'go';
+          } else if (next === 'arrived_school') {
+            tripPhase = 'at_school';
+            // เรียกใช้ฟังก์ชันอัปเดตสถานะนักเรียนเมื่อถึงโรงเรียน
+            if (driverId) {
+              await updateArrivedAtSchool(driverId, 'อัปเดตจากแอปคนขับ', `คนขับอัปเดตสถานะเป็น ${STATUS_LABEL[next]} เวลา ${new Date().toLocaleString('th-TH')}`);
+            }
           } else if (next === 'waiting_return') {
             tripPhase = 'return';
           } else if (next === 'finished') {

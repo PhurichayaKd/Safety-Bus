@@ -41,11 +41,12 @@ export interface StudentWithGeo extends Student {
 
 // Boarding status types - Updated to match service interface
 export interface BoardingStatus {
-  student_id: number;
-  status: 'waiting' | 'boarded' | 'dropped' | 'absent' | 'onboard' | 'offboard';
-  phase: 'go' | 'return';
-  timestamp: string;
-  rfid_code?: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
+  student_id: string;
+  student_name: string;
+  phase: 'go' | 'return' | 'at_school';
+  status: 'boarded' | 'not_boarded' | 'absent';
+  boarding_time?: string;
+  location?: string;
 }
 
 export interface BoardingStatusWithStudent extends BoardingStatus {
@@ -84,12 +85,13 @@ export interface SupabaseRfidCardAssignment {
 export interface RFIDScanEvent {
   student_id: number;
   boarding_status: 'onboard' | 'offboard';
-  phase: 'go' | 'return';
+  phase: 'go' | 'return' | 'at_school';
   scan_time: string;
   rfid_code: string; // เปลี่ยนจาก rfid_tag เป็น rfid_code
   // Additional properties used in the code
   status: 'onboard' | 'offboard';
   timestamp: string;
+  location?: string;
 }
 
 // PDD (Pickup/Dropoff/Destination) event types

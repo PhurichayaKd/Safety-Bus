@@ -31,7 +31,7 @@ interface TripPhaseStatusResponse {
  */
 export async function updateTripPhase(
   driverId: number,
-  tripPhase: 'go' | 'return',
+  tripPhase: 'go' | 'return' | 'at_school',
   currentStatus: string = 'active',
   location?: string,
   notes?: string
@@ -99,6 +99,88 @@ export async function updateTripPhase(
     }
   } catch (error) {
     console.error('❌ Error updating trip phase:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+    };
+  }
+}
+
+/**
+ * อัปเดตสถานะเป็น 'ถึงโรงเรียน' และตั้งค่า trip_phase เป็น 'at_school'
+ * @param driverId ID ของคนขับ
+ * @param location ตำแหน่งปัจจุบัน (optional)
+ * @param notes หมายเหตุ (optional)
+ * @returns ผลลัพธ์การอัปเดต
+ */
+export async function updateArrivedAtSchool(
+  driverId: number,
+  location?: string,
+  notes?: string
+): Promise<TripPhaseUpdateResponse> {
+  try {
+    console.log(`🏫 Updating status to 'arrived at school' for driver ${driverId}`);
+    
+    // อัพเดตสถานะคนขับเป็น at_school
+    const response = await fetch(`${API_BASE_URL}/get-driver-status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        driver_id: driverId,
+        trip_phase: 'at_school',
+        current_status: 'arrived_school',
+      }),
+    });
+
+    const result = await response.json();
+    
+    if (response.ok && result.success) {
+      console.log('✅ Arrived at school status updated successfully:', result);
+      
+      // อัปเดต AsyncStorage ด้วย
+      await AsyncStorage.setItem('trip_phase', 'at_school');
+      
+      // ส่งแจ้งเตือน LINE
+      try {
+        console.log('📤 Sending arrived at school notification...');
+        const notificationResponse = await fetch(`${API_BASE_URL}/driver-status-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            driver_id: driverId,
+            trip_phase: 'at_school',
+            current_status: 'arrived_school',
+            location: location || 'โรงเรียน',
+            notes: notes || 'รถโดยสารถึงโรงเรียนแล้ว'
+          }),
+        });
+
+        const notificationResult = await notificationResponse.json();
+        
+        if (notificationResponse.ok && notificationResult.success) {
+          console.log('✅ Arrived at school notification sent successfully:', notificationResult.summary);
+        } else {
+          console.error('❌ Failed to send arrived at school notification:', notificationResult.error);
+        }
+      } catch (notificationError) {
+        console.error('❌ Error sending arrived at school notification:', notificationError);
+        // ไม่ให้ error ของการส่งแจ้งเตือนมาขัดขวางการอัพเดตสถานะ
+      }
+      
+      return result;
+    } else {
+      console.error('❌ Failed to update arrived at school status:', result);
+      return {
+        success: false,
+        error: result.error || 'Failed to update arrived at school status',
+      };
+    }
+  } catch (error) {
+    console.error('❌ Error updating arrived at school status:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',

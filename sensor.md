@@ -260,13 +260,17 @@ bool checkDriverStatus() {
                         currentTripPhase.c_str(), newTripPhase.c_str());
           currentTripPhase = newTripPhase;
           
-          // เปิด PIR Sensor เฉพาะเมื่อ trip_phase เป็น 'completed'
-          if (currentTripPhase == "completed") {
+          // เปิด PIR Sensor เมื่อ trip_phase เป็น 'completed' หรือ 'at_school'
+          if (currentTripPhase == "completed" || currentTripPhase == "at_school") {
             pirSensorEnabled = true;
-            Serial.println("[PIR] PIR Sensor ENABLED - Trip completed, monitoring for motion");
+            if (currentTripPhase == "completed") {
+              Serial.println("[PIR] PIR Sensor ENABLED - Trip completed, monitoring for motion");
+            } else {
+              Serial.println("[PIR] PIR Sensor ENABLED - Arrived at school, monitoring for motion");
+            }
           } else {
             pirSensorEnabled = false;
-            Serial.println("[PIR] PIR Sensor DISABLED - Trip not completed");
+            Serial.println("[PIR] PIR Sensor DISABLED - Trip not completed or at school");
             // หยุดไซเรนถ้ากำลังทำงานอยู่
             if (sirenActive) {
               sirenStop();
@@ -302,11 +306,21 @@ void checkMotion() {
     if (!pirIsHigh) {
       pirIsHigh = true;
       pirHighSince = now;
-      Serial.println("[PIR] Motion detected, start timer (Trip completed mode)");
+      if (currentTripPhase == "completed") {
+        Serial.println("[PIR] Motion detected, start timer (Trip completed mode)");
+      } else if (currentTripPhase == "at_school") {
+        Serial.println("[PIR] Motion detected, start timer (At school mode)");
+      }
     } else if (!sirenActive && (now - pirHighSince >= PIR_HOLD_MS)) {
-      Serial.println("[PIR] Motion held >= 30s → ALARM");
+      Serial.println("[PIR] Motion held >= 5s → ALARM");
       sirenStart();
-      postSensorAlertMessage("motion_detected_after_trip", "ตรวจพบการเคลื่อนไหวผิดปกติหลังจบการเดินทาง ตรวจสอบทันที");
+      
+      // แยกข้อความแจ้งเตือนตามสถานะ trip_phase
+      if (currentTripPhase == "completed") {
+        postSensorAlertMessage("motion_detected_after_trip", "ตรวจพบการเคลื่อนไหวผิดปกติหลังจบการเดินทาง ตรวจสอบทันที");
+      } else if (currentTripPhase == "at_school") {
+        postSensorAlertMessage("motion_detected_at_school", "ตรวจพบการเคลื่อนไหวผิดปกติขณะจอดที่โรงเรียน ตรวจสอบทันที");
+      }
     }
   } else {
     pirIsHigh = false;

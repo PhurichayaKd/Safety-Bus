@@ -4,6 +4,7 @@ import { sendMainMenu } from './menu.js';
 import { getStudentByLineId } from './student-data.js';
 import { config } from './config.js';
 import { checkLineUserIdExists, matchLineIds, checkAndAutoMatchLineId } from './line-id-matcher.js';
+import { createStudentInfoBubble, createLeaveRequestBubble } from './flex-templates.js';
 
 // Store user form states (in production, use Redis or database)
 const userFormStates = new Map();
@@ -454,16 +455,7 @@ export async function handleLocationRequest(event) {
   });
 }
 
-/**
- * จัดการคำขอติดต่อ
- * @param {Object} event - LINE webhook event
- */
-export async function handleContactRequest(event) {
-  await replyLineMessage(event.replyToken, {
-    type: 'text',
-    text: '📞 ติดต่อคนขับรถ\n\nโทร: 02-XXX-XXXX\nหรือติดต่อผ่านโรงเรียนโดยตรง\n\nเวลาทำการ: 06:00 - 17:00 น.'
-  });
-}
+
 
 /**
  * จัดการการผูกบัญชี
@@ -1014,21 +1006,6 @@ export async function handleHistoryRequest(event) {
     console.log('RFID data:', rfidData);
     console.log('RFID error:', rfidError);
     
-    // แสดงข้อมูลนักเรียน
-    let infoText = `👦 ข้อมูลนักเรียน\n`;
-    infoText += `ชื่อ: ${fullStudentData?.student_name || student.student_name || '-'}\n`;
-    infoText += `รหัสนักเรียน: ${fullStudentData?.student_id || student.student_id || '-'}\n`;
-    infoText += `ชั้นเรียน: ${fullStudentData?.grade || '-'}\n`;
-    infoText += `รหัสบัตร RFID: ${rfidData?.rfid_cards?.rfid_code || '-'}\n`;
-    infoText += `ชื่อผู้ปกครอง: ${fullStudentData?.parents?.parent_name || '-'}\n`;
-    
-    const startDate = fullStudentData?.start_date ? 
-      new Date(fullStudentData.start_date).toLocaleDateString('th-TH') : '-';
-    const endDate = fullStudentData?.end_date ? 
-      new Date(fullStudentData.end_date).toLocaleDateString('th-TH') : '-';
-    
-    infoText += `วันที่เริ่มต้น-สิ้นสุดการใช้บริการรถรับส่ง: ${startDate} - ${endDate}\n`;
-    
     if (studentError) {
       console.log('ไม่สามารถดึงข้อมูลเพิ่มเติมได้:', studentError);
     }
@@ -1041,21 +1018,10 @@ export async function handleHistoryRequest(event) {
       .order('travel_date', { ascending: false })
       .limit(10);
 
-    let historyText = '';
-    if (history && history.length > 0) {
-      historyText = '\n📊 ประวัติการเดินทางล่าสุด\n';
-      history.forEach((record, index) => {
-        const date = new Date(record.travel_date).toLocaleDateString('th-TH');
-        historyText += `${index + 1}. ${date}\n`;
-        historyText += `   🚌 ${record.pickup_time || 'N/A'} - ${record.dropoff_time || 'N/A'}\n`;
-        historyText += `   📍 ${record.status || 'N/A'}\n`;
-      });
-    }
+    // สร้าง Flex Message สำหรับแสดงข้อมูลนักเรียน
+    const flexMessage = createStudentInfoBubble(fullStudentData, rfidData, history);
 
-    await replyLineMessage(event.replyToken, {
-      type: 'text',
-      text: infoText + historyText
-    });
+    await replyLineMessage(event.replyToken, flexMessage);
   } catch (error) {
     console.error('Error handling history request:', error);
     // Only reply once - don't use push message as fallback to prevent spam
@@ -1210,19 +1176,13 @@ export async function handleLeaveRequestMenu(event) {
     userLeaveFormStates.set(userId, currentTime);
     console.log(`📝 Leave form sent to user ${userId} at ${new Date(currentTime).toISOString()}`);
 
-    const leaveText = `📝 แจ้งลาหยุด\n\n` +
-      `📋 ข้อมูลนักเรียน:\n` +
-      `ชื่อ: ${studentData.student.student_name}\n` +
-      `รหัส: ${studentData.student.student_id}\n` +
-      `ชั้น: ${studentData.student.grade || 'ไม่ระบุ'}\n\n` +
-      `🔗 เปิดฟอร์มแจ้งลาหยุด:\n` +
-      `${config.liffAppUrl}/leave-form?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}&grade=${encodeURIComponent(studentData.student.grade || 'ไม่ระบุ')}`;
+    const formUrl = `${config.liffAppUrl}/leave-form?studentId=${studentData.student.student_id}&studentName=${encodeURIComponent(studentData.student.student_name)}&grade=${encodeURIComponent(studentData.student.grade || 'ไม่ระบุ')}`;
+
+    // สร้าง Flex Message สำหรับฟอร์มแจ้งลา
+    const flexMessage = createLeaveRequestBubble(studentData, formUrl);
 
     // ใช้ reply message เพื่อตอบสนองการกดเมนูเท่านั้น
-    await replyLineMessage(event.replyToken, {
-      type: 'text',
-      text: leaveText
-    });
+    await replyLineMessage(event.replyToken, flexMessage);
 
   } catch (error) {
     console.error('Error handling leave request menu:', error);
@@ -1288,7 +1248,7 @@ export async function handleLeaveRequestMenuPush(userId) {
     userLeaveFormStates.set(userId, currentTime);
     console.log(`📝 Leave form sent to user ${userId} at ${new Date(currentTime).toISOString()}`);
 
-    const leaveText = `📝 แจ้งลาหยุด\n\n` +
+    const leaveText = `แจ้งลาหยุด\n\n` +
       `กรุณากดลิงก์ด้านล่างเพื่อเข้าสู่ฟอร์มแจ้งลาหยุด\n\n` +
       `ระบบจะดึงข้อมูลชื่อและรหัสนักเรียนอัตโนมัติ\n` +
       `สามารถเลือกวันที่ลาได้สูงสุด 3 วัน\n\n` +
@@ -1348,7 +1308,7 @@ export async function handleBusLocationRequest(event) {
       actions: [
         {
           type: 'uri',
-          label: '🗺️ ดูแผนที่',
+          label: 'ดูแผนที่',
           uri: mapUrl
         }
       ]

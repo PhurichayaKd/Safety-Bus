@@ -32,7 +32,7 @@ CREATE TABLE public.driver_bus (
   current_updated_at timestamp with time zone,
   current_latitude numeric,
   current_longitude numeric,
-  trip_phase text DEFAULT 'go'::text CHECK (trip_phase = ANY (ARRAY['go'::text, 'return'::text, 'unknown'::text, 'completed'::text])),
+  trip_phase text DEFAULT 'go'::text CHECK (trip_phase = ANY (ARRAY['go'::text, 'return'::text, 'unknown'::text, 'completed'::text, 'at_school'::text])),
   current_status text DEFAULT 'inactive'::text CHECK (current_status = ANY (ARRAY['active'::text, 'inactive'::text, 'break'::text, 'emergency'::text])),
   is_active boolean DEFAULT true,
   CONSTRAINT driver_bus_pkey PRIMARY KEY (driver_id),

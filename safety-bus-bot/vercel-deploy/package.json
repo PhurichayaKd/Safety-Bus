@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node index.mjs",
-    "dev": "node server.js",
+    "dev": "node server-with-webhook.js",
     "build": "echo 'Static files ready for deployment'",
     "vercel-build": "echo 'Vercel build completed'"
   },

@@ -4,7 +4,7 @@ import { sendMainMenu } from './menu.js';
 import { getStudentByLineId } from './student-data.js';
 import { config } from './config.js';
 import { checkLineUserIdExists, matchLineIds, checkAndAutoMatchLineId } from './line-id-matcher.js';
-import { createStudentInfoBubble, createLeaveRequestBubble } from './flex-templates.js';
+import { createStudentInfoBubble, createLeaveRequestBubble, createContactDriverBubble } from './flex-templates.js';
 
 // Store user form states (in production, use Redis or database)
 const userFormStates = new Map();
@@ -1300,7 +1300,7 @@ export async function handleBusLocationRequest(event) {
     altText: '🚌 ตำแหน่งรถบัส - ดูแผนที่เรียลไทม์',
     template: {
       type: 'buttons',
-      thumbnailImageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=400&h=200&fit=crop',
+      thumbnailImageUrl: 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj2gcdtwqdBqnqddViqekDMhnpWWWowbpSiM7ambAAprlMIEE1R6bisb6Ld8ZWvRdsvq5xFv9y1pxpKsG0K3soAqvr_w2E6uZmfvSZ-nNu7daAixhcSbk2TDhyphenhyphen3LuYrC5Awra1_at7xnkCH/s1600/map.png',
       imageAspectRatio: 'rectangle',
       imageSize: 'cover',
       title: '🚌 ตำแหน่งรถบัส',
@@ -1341,7 +1341,7 @@ export async function handleBusLocationRequestPush(userId) {
     altText: '🚌 ตำแหน่งรถบัส - ดูแผนที่เรียลไทม์',
     template: {
       type: 'buttons',
-      thumbnailImageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=400&h=200&fit=crop',
+      thumbnailImageUrl: 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj2gcdtwqdBqnqddViqekDMhnpWWWowbpSiM7ambAAprlMIEE1R6bisb6Ld8ZWvRdsvq5xFv9y1pxpKsG0K3soAqvr_w2E6uZmfvSZ-nNu7daAixhcSbk2TDhyphenhyphen3LuYrC5Awra1_at7xnkCH/s1600/map.png',
       imageAspectRatio: 'rectangle',
       imageSize: 'cover',
       title: '🚌 ตำแหน่งรถบัส',
@@ -1349,7 +1349,7 @@ export async function handleBusLocationRequestPush(userId) {
       actions: [
         {
           type: 'uri',
-          label: '🗺️ ดูแผนที่',
+          label: 'ดูแผนที่',
           uri: mapUrl
         },
         {
@@ -1379,58 +1379,30 @@ export async function handleContactDriverRequest(event) {
       return;
     }
     
-    console.log('📞 [INFO] Fetching driver ID 1 via RPC get_driver_current_status');
+    console.log('📞 [INFO] Fetching driver ID 1 with route information');
     
-    let driverInfo = null;
-    let phoneNumber = null;
+    // ดึงข้อมูลคนขับพร้อมข้อมูลเส้นทาง
+    const { data: driverData, error: driverError } = await supabase
+      .from('driver_bus')
+      .select(`
+        driver_id,
+        driver_name,
+        phone_number,
+        license_plate,
+        route_id,
+        routes (
+          route_name,
+          start_point
+        )
+      `)
+      .eq('driver_id', 1)
+      .single();
     
-    // ลองดึงข้อมูลคนขับจาก RPC function ก่อน
-    try {
-      const { data: driverStatus, error: rpcError } = await supabase
-        .rpc('get_driver_current_status', { p_driver_id: 1 });
-
-      console.log('🔍 [DEBUG] RPC get_driver_current_status result:', { driverStatus, rpcError });
-
-      if (!rpcError && driverStatus && driverStatus.success === true) {
-        driverInfo = driverStatus;
-        phoneNumber = driverStatus.phone_number;
-        console.log('✅ [DEBUG] Got driver info from RPC');
-      } else {
-        console.log('⚠️ [DEBUG] RPC failed or no data, trying fallback...');
-      }
-    } catch (rpcErr) {
-      console.log('⚠️ [DEBUG] RPC exception:', rpcErr.message);
-    }
+    console.log('🔍 [DEBUG] Driver query result:', { driverData, driverError });
     
-    // ถ้า RPC ไม่ได้ผล ให้ลองดึงจากตารางโดยตรง
-    if (!driverInfo) {
-      try {
-        console.log('🔍 [DEBUG] Trying direct database query...');
-        const { data: driverRow, error: dbError } = await supabase
-          .from('driver_bus')
-          .select('driver_id, driver_name, phone_number, license_plate')
-          .eq('driver_id', 1)
-          .single();
-        
-        console.log('🔍 [DEBUG] Direct query result:', { driverRow, dbError });
-        
-        if (!dbError && driverRow) {
-          driverInfo = {
-            driver_name: driverRow.driver_name,
-            license_plate: driverRow.license_plate,
-            success: true
-          };
-          phoneNumber = driverRow.phone_number;
-          console.log('✅ [DEBUG] Got driver info from direct query');
-        }
-      } catch (dbErr) {
-        console.log('⚠️ [DEBUG] Direct query exception:', dbErr.message);
-      }
-    }
-    
-    // ถ้ายังไม่มีข้อมูลคนขับ ให้ส่งข้อความติดต่อโรงเรียน
-    if (!driverInfo) {
-      console.log('❌ [DEBUG] No driver info found, sending contact school message');
+    // ถ้าไม่พบข้อมูลคนขับ
+    if (driverError || !driverData) {
+      console.log('❌ [DEBUG] No driver data found, sending fallback message');
       await replyLineMessage(replyToken, {
         type: 'text',
         text: '📞 ติดต่อคนขับรถ\n\n⚠️ ไม่พบข้อมูลคนขับในระบบ\nกรุณาติดต่อโรงเรียนโดยตรง\n\n📞 โทร: 043-754-321\n⏰ เวลาทำการ: 08:00 - 16:30 น.'
@@ -1438,48 +1410,22 @@ export async function handleContactDriverRequest(event) {
       return;
     }
     
-    // ตรวจสอบและทำความสะอาดข้อมูล
-    const driverName = driverInfo.driver_name || 'คนขับรถโรงเรียน';
-    const licensePlate = driverInfo.license_plate || 'ไม่ระบุ';
-    phoneNumber = phoneNumber || '043-754-321';
+    // เตรียมข้อมูลสำหรับ template
+    const contactData = {
+      driver_name: driverData.driver_name || 'คนขับรถโรงเรียน',
+      phone_number: driverData.phone_number || '043-754-321',
+      license_plate: driverData.license_plate || 'ไม่ระบุ',
+      start_point: driverData.routes?.start_point || 'ไม่ระบุ'
+    };
     
-    console.log('🔍 [DEBUG] Final driver info:', { driverName, phoneNumber, licensePlate });
+    console.log('🔍 [DEBUG] Contact data prepared:', contactData);
     
-    // ทำความสะอาดเบอร์โทรศัพท์
-    const cleanPhoneNumber = phoneNumber.replace(/[-\s]/g, '');
+    // สร้าง Flex Message
+    const flexMessage = createContactDriverBubble(contactData);
     
-    // ลองส่ง template message ก่อน
-    try {
-      await replyLineMessage(replyToken, {
-        type: 'template',
-        altText: `📞 ติดต่อคนขับรถ - ${driverName} ${phoneNumber}`,
-        template: {
-          type: 'buttons',
-          thumbnailImageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=400&h=200&fit=crop',
-          imageAspectRatio: 'rectangle',
-          imageSize: 'cover',
-          title: '📞 ติดต่อคนขับรถ',
-          text: `👨‍💼 ${driverName}\n📱 เบอร์โทร: ${phoneNumber}\n🚌 ป้ายทะเบียน: ${licensePlate}\n⏰ เวลาทำการ: 06:00 - 17:00 น.`,
-          actions: [
-            {
-              type: 'uri',
-              label: '📞 โทรหาคนขับ',
-              uri: `tel:${cleanPhoneNumber}`
-            }
-          ]
-        }
-      });
-      console.log('✅ [DEBUG] Template message sent successfully');
-    } catch (templateError) {
-      console.log('⚠️ [DEBUG] Template message failed, trying simple text:', templateError.message);
-      
-      // ถ้า template message ไม่ได้ ให้ส่งข้อความธรรมดา
-      await replyLineMessage(replyToken, {
-        type: 'text',
-        text: `📞 ติดต่อคนขับรถ\n\n👨‍💼 ${driverName}\n📱 เบอร์โทร: ${phoneNumber}\n🚌 ป้ายทะเบียน: ${licensePlate}\n⏰ เวลาทำการ: 06:00 - 17:00 น.\n\n💡 กดที่เบอร์โทรเพื่อโทรหาคนขับ`
-      });
-      console.log('✅ [DEBUG] Simple text message sent as fallback');
-    }
+    // ส่ง Flex Message
+    await replyLineMessage(replyToken, flexMessage);
+    console.log('✅ [DEBUG] Contact driver Flex Message sent successfully');
 
   } catch (error) {
     console.error('❌ Error in handleContactDriverRequest:', error);
@@ -1503,10 +1449,48 @@ export async function handleContactDriverRequest(event) {
  * @param {string} userId - LINE User ID
  */
 export async function handleContactDriverRequestPush(userId) {
-  await sendLineMessage(userId, [{
-    type: 'text',
-    text: '📞 ติดต่อคนขับรถ\n\n⚠️ ฟีเจอร์นี้อยู่ระหว่างการพัฒนา\nจะเปิดให้บริการในเร็วๆ นี้\n\nขออภัยในความไม่สะดวก 🙏'
-  }]);
+  try {
+    // ดึงข้อมูลคนขับ ID 1 พร้อมข้อมูลเส้นทาง
+    const { data: driverData, error } = await supabase
+      .from('driver_bus')
+      .select(`
+        driver_id,
+        driver_name,
+        phone_number,
+        license_plate,
+        route_id,
+        routes!inner(start_point)
+      `)
+      .eq('driver_id', 1)
+      .single();
+
+    if (error || !driverData) {
+      console.error('Error fetching driver data:', error);
+      await sendLineMessage(userId, [{
+        type: 'text',
+        text: '❌ ไม่สามารถดึงข้อมูลคนขับได้ในขณะนี้\nกรุณาลองใหม่อีกครั้ง'
+      }]);
+      return;
+    }
+
+    // สร้าง Flex Message สำหรับข้อมูลคนขับ
+    const flexMessage = createContactDriverBubble({
+      driverName: driverData.driver_name,
+      phoneNumber: driverData.phone_number,
+      licensePlate: driverData.license_plate,
+      address: driverData.routes?.start_point || 'ไม่ระบุ',
+      workingHours: '06:00 - 17:00 น.'
+    });
+
+    await sendLineMessage(userId, [flexMessage]);
+
+  } catch (error) {
+    console.error('Error in handleContactDriverRequestPush:', error);
+    await sendLineMessage(userId, [{
+      type: 'text',
+      text: '❌ เกิดข้อผิดพลาดในการดึงข้อมูลคนขับ\nกรุณาลองใหม่อีกครั้ง'
+    }]);
+  }
 }
 
 /**

@@ -1,7 +1,7 @@
 // Configuration file for Safety Bus Bot
 
 // LIFF App URL - Update this when deploying to new environment
-export const LIFF_APP_URL = process.env.BASE_URL || process.env.LIFF_APP_URL || 'https://safety-bus-liff-v4-ba8bepcjg-phurichayakds-projects.vercel.app';
+export const LIFF_APP_URL = process.env.BASE_URL || process.env.LIFF_APP_URL || 'https://safety-bus-liff-v4-new.vercel.app';
 
 // Other configuration
 export const config = {

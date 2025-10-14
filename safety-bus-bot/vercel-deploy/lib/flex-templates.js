@@ -320,6 +320,212 @@ export function createStudentInfoBubble(studentData, rfidData, travelHistory) {
 }
 
 /**
+ * สร้าง Bubble Container สำหรับแสดงข้อมูลติดต่อคนขับ
+ * @param {Object} driverData - ข้อมูลคนขับ
+ * @returns {Object} Flex Message object
+ */
+export function createContactDriverBubble(driverData) {
+  const {
+    driver_name = 'คนขับรถโรงเรียน',
+    phone_number = '043-754-321',
+    license_plate = 'ไม่ระบุ',
+    start_point = 'ไม่ระบุ'
+  } = driverData;
+
+  // ทำความสะอาดเบอร์โทรศัพท์สำหรับการโทร
+  const cleanPhoneNumber = phone_number.replace(/[-\s]/g, '');
+
+  return {
+    type: "flex",
+    altText: `📞 ติดต่อคนขับรถ - ${driver_name}`,
+    contents: {
+      type: "bubble",
+      size: "kilo",
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          // Header
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "📞 ติดต่อคนขับรถ",
+                weight: "bold",
+                size: "xl",
+                color: "#1DB446",
+                align: "center"
+              }
+            ],
+            paddingBottom: "lg"
+          },
+          // Separator
+          {
+            type: "separator",
+            margin: "md"
+          },
+          // Driver Information
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              // Driver Name
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  {
+                    type: "text",
+                    text: "👨‍💼 ชื่อคนขับ:",
+                    size: "sm",
+                    color: "#666666",
+                    flex: 2
+                  },
+                  {
+                    type: "text",
+                    text: driver_name,
+                    size: "sm",
+                    weight: "bold",
+                    color: "#333333",
+                    flex: 3,
+                    wrap: true
+                  }
+                ],
+                margin: "lg"
+              },
+              // Phone Number
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  {
+                    type: "text",
+                    text: "📱 เบอร์โทร:",
+                    size: "sm",
+                    color: "#666666",
+                    flex: 2
+                  },
+                  {
+                    type: "text",
+                    text: phone_number,
+                    size: "sm",
+                    weight: "bold",
+                    color: "#1DB446",
+                    flex: 3,
+                    wrap: true
+                  }
+                ],
+                margin: "md"
+              },
+              // License Plate
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  {
+                    type: "text",
+                    text: "🚌 ป้ายทะเบียน:",
+                    size: "sm",
+                    color: "#666666",
+                    flex: 2
+                  },
+                  {
+                    type: "text",
+                    text: license_plate,
+                    size: "sm",
+                    weight: "bold",
+                    color: "#333333",
+                    flex: 3,
+                    wrap: true
+                  }
+                ],
+                margin: "md"
+              },
+              // Address
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  {
+                    type: "text",
+                    text: "📍 ที่อยู่:",
+                    size: "sm",
+                    color: "#666666",
+                    flex: 2
+                  },
+                  {
+                    type: "text",
+                    text: start_point,
+                    size: "sm",
+                    weight: "bold",
+                    color: "#333333",
+                    flex: 3,
+                    wrap: true
+                  }
+                ],
+                margin: "md"
+              },
+              // Working Hours
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  {
+                    type: "text",
+                    text: "⏰ เวลาทำการ:",
+                    size: "sm",
+                    color: "#666666",
+                    flex: 2
+                  },
+                  {
+                    type: "text",
+                    text: "06:00 - 17:00 น.",
+                    size: "sm",
+                    weight: "bold",
+                    color: "#333333",
+                    flex: 3,
+                    wrap: true
+                  }
+                ],
+                margin: "md"
+              }
+            ],
+            paddingTop: "lg"
+          },
+          // Separator
+          {
+            type: "separator",
+            margin: "lg"
+          },
+          // Call Button
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                action: {
+                  type: "uri",
+                  label: "📞 โทรหาคนขับ",
+                  uri: `tel:${cleanPhoneNumber}`
+                },
+                style: "primary",
+                color: "#1DB446",
+                height: "sm"
+              }
+            ],
+            paddingTop: "lg"
+          }
+        ],
+        paddingAll: "20px"
+      }
+    }
+  };
+}
+
+/**
  * สร้าง Bubble Container สำหรับฟอร์มแจ้งลา
  * @param {Object} studentData - ข้อมูลนักเรียน
  * @param {string} formUrl - URL ของฟอร์มแจ้งลา

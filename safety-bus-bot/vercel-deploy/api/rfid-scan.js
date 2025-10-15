@@ -126,7 +126,7 @@ export default async function handler(req, res) {
 
     // 5. ส่งการแจ้งเตือน LINE
     try {
-      await sendLineNotification(student, newEventType, location_type);
+      await sendLineNotification(student, newEventType, location_type, driver_id);
     } catch (lineError) {
       console.error('[RFID Scan] LINE notification failed:', lineError);
       // ไม่ return error เพราะการบันทึกสำเร็จแล้ว
@@ -165,7 +165,7 @@ export default async function handler(req, res) {
 }
 
 // ฟังก์ชันส่งการแจ้งเตือน LINE
-async function sendLineNotification(student, eventType, locationType) {
+async function sendLineNotification(student, eventType, locationType, driverId) {
   try {
     // หา LINE user ID ของนักเรียน
     const { data: studentLineData } = await supabase
@@ -185,6 +185,20 @@ async function sendLineNotification(student, eventType, locationType) {
       .eq('student_id', student.student_id)
       .eq('parent_line_links.active', true);
 
+    // ดึงข้อมูลคนขับ
+    let driverName = 'คนขับ';
+    if (driverId) {
+      const { data: driverData } = await supabase
+        .from('driver_bus')
+        .select('driver_name')
+        .eq('driver_id', driverId)
+        .single();
+      
+      if (driverData?.driver_name) {
+        driverName = driverData.driver_name;
+      }
+    }
+
     const currentTime = new Date().toLocaleString('th-TH', {
       timeZone: 'Asia/Bangkok',
       year: 'numeric',
@@ -196,12 +210,9 @@ async function sendLineNotification(student, eventType, locationType) {
 
     let message = '';
     if (eventType === 'pickup') {
-      if (locationType === 'go') {
-        message = `🚌 ${student.student_name} ขึ้นรถไปโรงเรียนแล้ว\n⏰ เวลา: ${currentTime}`;
-      } else {
-        message = `🚌 ${student.student_name} ขึ้นรถกลับบ้านแล้ว\n⏰ เวลา: ${currentTime}`;
-      }
+      message = `🟢ขึ้นรถแล้ว🟢\n${student.student_name}\n\nสถานะ : เช็คขึ้นรถ โดยการสแกนบัตร\nคนขับ: ${driverName}\n⏰ เวลา: ${currentTime}`;
     } else {
+      // สำหรับการลงรถ - ใช้ข้อความเดิมไว้ก่อน เพราะ RFID scan ไม่ได้ใช้สำหรับลงรถ
       if (locationType === 'go') {
         message = `🏫 ${student.student_name} ลงรถที่โรงเรียนแล้ว\n⏰ เวลา: ${currentTime}`;
       } else {

@@ -143,11 +143,27 @@ export default async function handler(req, res) {
       minute: '2-digit'
     });
 
-    // สร้างข้อความแบบสั้น ตามรูปแบบที่ต้องการ
-    let messageText = `${messageInfo.emoji} ${studentData.student_name} ${messageInfo.message} เวลา ${currentTime} น.`;
+    // สร้างข้อความตามรูปแบบใหม่
+    let messageText = '';
     
-    if (driverData) {
-      messageText += ` คนขับ: ${driverData.driver_name}`;
+    if (status === 'onboard') {
+      messageText = `🟢ขึ้นรถแล้ว🟢\n${studentData.student_name}\n\nสถานะ : เช็คขึ้นรถ โดยคนขับ`;
+      if (driverData) {
+        messageText += `\nคนขับ: ${driverData.driver_name}`;
+      }
+      messageText += `\n⏰ เวลา: ${currentTime} น.`;
+    } else if (status === 'offboard') {
+      messageText = `🟠ลงรถแล้ว🟠\n${studentData.student_name}\n\nสถานะ : เช็คลงรถ โดยคนขับ`;
+      if (driverData) {
+        messageText += `\nคนขับ: ${driverData.driver_name}`;
+      }
+      messageText += `\n⏰ เวลา: ${currentTime} น.`;
+    } else {
+      // สำหรับสถานะอื่นๆ ใช้รูปแบบเดิม
+      messageText = `${messageInfo.emoji} ${studentData.student_name} ${messageInfo.message} เวลา ${currentTime} น.`;
+      if (driverData) {
+        messageText += ` คนขับ: ${driverData.driver_name}`;
+      }
     }
 
     const lineMessage = {

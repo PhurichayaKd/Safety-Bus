@@ -1,9 +1,6 @@
 {
   "version": 2,
   "functions": {
-    "index.mjs": {
-      "runtime": "@vercel/node@3.1.0"
-    },
     "api/**/*.js": {
       "runtime": "@vercel/node@3.1.0"
     },
@@ -26,14 +23,7 @@
       }
     },
 
-    {
-      "src": "/css/(.*)",
-      "dest": "/public/css/$1",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable",
-        "X-Content-Type-Options": "nosniff"
-      }
-    },
+
     {
       "src": "/(.*\\.(ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot))",
       "dest": "/public/$1",

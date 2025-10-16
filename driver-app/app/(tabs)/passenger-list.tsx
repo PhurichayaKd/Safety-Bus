@@ -483,7 +483,7 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
             status,
             home_latitude,
             home_longitude,
-            primary_parent:students_parent_id_fkey ( parent_phone ),
+            parents:parent_id ( parent_phone ),
             route_students!left (
               stop_order,
               route_id
@@ -525,7 +525,7 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
             status: student.status,
             home_latitude: student.home_latitude,
             home_longitude: student.home_longitude,
-            primary_parent: student.primary_parent,
+            primary_parent: student.parents,
             rfid_code: rfidCode,
             stop_order: routeAssignment?.stop_order || (index + 1) // Use route stop_order or default sequential order
           };

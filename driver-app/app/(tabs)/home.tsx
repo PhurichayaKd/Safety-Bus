@@ -169,15 +169,15 @@ async function resetStudentStatusForReturn() {
 
     const today = new Date().toISOString().split('T')[0];
     
-    // รีเซ็ตจำนวนขึ้นรถ-ลงรถเป็น 0 สำหรับขากลับ
+    // รีเซ็ตสถานะนักเรียนเป็น waiting สำหรับขากลับ
     const { error } = await supabase
-      .from('student_bus_status')
+      .from('student_boarding_status')
       .update({ 
-        boarded_count: 0,
-        alighted_count: 0
+        boarding_status: 'waiting',
+        trip_phase: 'return'
       })
       .eq('driver_id', driverId)
-      .eq('date', today);
+      .eq('trip_date', today);
     
     if (error) {
       console.error('เกิดข้อผิดพลาดในการรีเซ็ตจำนวนขึ้น-ลงรถ:', error);
@@ -385,11 +385,28 @@ const HomePage = () => {
       
       const leaveStudentIds = new Set(leaveRequests?.map(req => req.student_id) || []);
 
-      // ดึงข้อมูลนักเรียนทั้งหมดที่ใช้รถคันนี้
+      // ดึงข้อมูลนักเรียนทั้งหมดที่ใช้รถคันนี้ผ่าน route_students และ driver_bus
+      const { data: driverBusData } = await supabase
+        .from('driver_bus')
+        .select('route_id')
+        .eq('driver_id', driverId)
+        .single();
+
+      if (!driverBusData?.route_id) {
+        console.error('ไม่พบเส้นทางสำหรับคนขับ');
+        return;
+      }
+
       const { data: allStudents } = await supabase
         .from('students')
-        .select('student_id, student_name, student_number')
-        .eq('driver_id', driverId)
+        .select(`
+          student_id, 
+          student_name, 
+          route_students!inner (
+            route_id
+          )
+        `)
+        .eq('route_students.route_id', driverBusData.route_id)
         .eq('is_active', true);
 
       if (!allStudents) {
@@ -574,20 +591,8 @@ const HomePage = () => {
             setStatus('waiting_departure');
             await AsyncStorage.setItem('current_bus_status', 'waiting_departure');
             
-            // อัพเดต trip_phase กลับเป็น go
-            const driverId = await getMyDriverId();
-            if (driverId) {
-              const { error } = await supabase
-                .from('driver_bus')
-                .update({ trip_phase: 'go' })
-                .eq('driver_id', 1);
-                
-              if (error) {
-                console.error('เกิดข้อผิดพลาดในการรีเซ็ต trip_phase:', error);
-              } else {
-                console.log('รีเซ็ต trip_phase เป็น go เรียบร้อยแล้ว');
-              }
-            }
+            // ไม่รีเซ็ต trip_phase ให้ยังคงเป็น 'completed' จนกว่าคนขับจะกด "เริ่มออกเดินทาง" อีกครั้ง
+            console.log('รีเซ็ตสถานะเรียบร้อยแล้ว trip_phase ยังคงเป็น completed');
             
             console.log('Auto-reset สถานะเรียบร้อยแล้ว');
             AccessibilityInfo.announceForAccessibility?.('รีเซ็ตสถานะเรียบร้อยแล้ว พร้อมสำหรับวันใหม่');
@@ -627,7 +632,7 @@ const HomePage = () => {
           } else if (next === 'waiting_return') {
             tripPhase = 'return';
           } else if (next === 'finished') {
-            tripPhase = 'finished';
+            tripPhase = 'completed';
           }
           
           const { error } = await supabase

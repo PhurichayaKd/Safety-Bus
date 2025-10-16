@@ -46,13 +46,16 @@ CREATE TABLE public.emergency_logs (
   event_type text NOT NULL CHECK (event_type = ANY (ARRAY['PANIC_BUTTON'::text, 'SENSOR_ALERT'::text, 'DRIVER_INCAPACITATED'::text])),
   triggered_by text NOT NULL CHECK (triggered_by = ANY (ARRAY['sensor'::text, 'driver'::text, 'student'::text])),
   details jsonb,
-  driver_response_type text CHECK (driver_response_type = ANY (ARRAY['CHECKED'::text, 'EMERGENCY'::text, 'CONFIRMED_NORMAL'::text])),
+  driver_response_type text CHECK (driver_response_type IS NULL OR (driver_response_type = ANY (ARRAY['CHECKED'::text, 'EMERGENCY'::text, 'CONFIRMED_NORMAL'::text, 'CHECKED_ONLY'::text, 'EMERGENCY_CONFIRMED'::text, 'SITUATION_NORMAL'::text]))),
   driver_response_time timestamp with time zone,
   driver_response_notes text,
   status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'checked'::text, 'emergency_confirmed'::text, 'resolved'::text])),
   resolved boolean DEFAULT false,
   resolved_at timestamp with time zone,
   resolved_by integer,
+  sensor_type text CHECK (sensor_type IS NULL OR (sensor_type = ANY (ARRAY['PIR'::text, 'DHT22'::text, 'MQ2'::text, 'MQ135'::text, 'TEMPERATURE'::text, 'SMOKE'::text, 'MOTION'::text, 'COMBINED'::text]))),
+  sensor_data jsonb,
+  is_student_emergency boolean DEFAULT false,
   CONSTRAINT emergency_logs_pkey PRIMARY KEY (event_id),
   CONSTRAINT events_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.driver_bus(driver_id),
   CONSTRAINT emergency_logs_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES public.driver_bus(driver_id)
@@ -61,10 +64,11 @@ CREATE TABLE public.emergency_responses (
   response_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   event_id integer NOT NULL,
   driver_id integer NOT NULL,
-  response_type text NOT NULL CHECK (response_type = ANY (ARRAY['CHECKED'::text, 'EMERGENCY'::text, 'CONFIRMED_NORMAL'::text])),
+  response_type text NOT NULL CHECK (response_type = ANY (ARRAY['CHECKED'::text, 'EMERGENCY'::text, 'CONFIRMED_NORMAL'::text, 'CHECKED_ONLY'::text, 'EMERGENCY_CONFIRMED'::text, 'SITUATION_NORMAL'::text])),
   response_time timestamp with time zone NOT NULL DEFAULT now(),
   notes text,
   created_at timestamp with time zone DEFAULT now(),
+  line_sent boolean DEFAULT true,
   CONSTRAINT emergency_responses_pkey PRIMARY KEY (response_id),
   CONSTRAINT emergency_responses_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.emergency_logs(event_id),
   CONSTRAINT emergency_responses_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.driver_bus(driver_id)
@@ -229,12 +233,23 @@ CREATE TABLE public.routes (
   end_longitude numeric,
   CONSTRAINT routes_pkey PRIMARY KEY (route_id)
 );
+CREATE TABLE public.sensor_settings (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  driver_id integer NOT NULL,
+  sensor_type text NOT NULL CHECK (sensor_type = ANY (ARRAY['PIR'::text, 'DHT22'::text, 'MQ2'::text, 'MQ135'::text, 'TEMPERATURE'::text, 'SMOKE'::text])),
+  threshold_value numeric,
+  is_enabled boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT sensor_settings_pkey PRIMARY KEY (id),
+  CONSTRAINT sensor_settings_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.driver_bus(driver_id)
+);
 CREATE TABLE public.student_boarding_status (
   status_id bigint NOT NULL DEFAULT nextval('student_boarding_status_status_id_seq'::regclass),
   student_id integer NOT NULL,
   driver_id integer NOT NULL,
   trip_date date NOT NULL,
-  trip_phase character varying NOT NULL DEFAULT 'go'::character varying CHECK (trip_phase::text = ANY (ARRAY['go'::text, 'return'::text, 'unknown'::text, 'completed'::text])),
+  trip_phase character varying NOT NULL DEFAULT 'go'::character varying CHECK (trip_phase::text = ANY (ARRAY['go'::text, 'return'::text, 'unknown'::text, 'completed'::text, 'at_school'::text])),
   boarding_status character varying NOT NULL CHECK (boarding_status::text = ANY (ARRAY['waiting'::character varying::text, 'boarded'::character varying::text, 'dropped'::character varying::text, 'absent'::character varying::text, 'picked_up'::character varying::text, 'dropped_off'::character varying::text])),
   pickup_time timestamp with time zone,
   dropoff_time timestamp with time zone,

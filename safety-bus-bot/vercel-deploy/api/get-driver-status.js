@@ -95,43 +95,50 @@ async function getDriverCurrentStatus(driverId) {
 }
 
 /**
- * อัปเดตสถานะ trip_phase ของคนขับ
+ * อัปเดตสถานะของคนขับ
  * @param {number} driverId - ID ของคนขับ
- * @param {string} tripPhase - trip_phase ใหม่ ('go' หรือ 'return')
- * @param {string} currentStatus - สถานะปัจจุบัน (เช่น 'pickup', 'dropoff', 'driving')
+ * @param {string} tripPhase - trip_phase ใหม่ ('go', 'return', 'at_school', 'completed')
+ * @param {string} currentStatus - สถานะปัจจุบัน (เช่น 'pickup', 'dropoff', 'driving', 'arrived_school')
  * @returns {Object} ผลลัพธ์การอัปเดต
  */
 async function updateDriverStatus(driverId, tripPhase, currentStatus = 'active') {
   try {
     // ตรวจสอบว่า trip_phase ถูกต้องหรือไม่
-    if (!['go', 'return'].includes(tripPhase)) {
+    const validTripPhases = ['go', 'return', 'unknown', 'completed', 'at_school'];
+    if (!validTripPhases.includes(tripPhase)) {
       return {
         success: false,
-        error: 'trip_phase ต้องเป็น "go" หรือ "return" เท่านั้น',
+        error: `trip_phase ต้องเป็น ${validTripPhases.join(', ')} เท่านั้น`,
         driver_id: driverId
       };
     }
 
-    // พยายามอัปเดตในตาราง driver_status
+    // อัปเดตในตาราง driver_bus แทน driver_status
     const { data: updateResult, error: updateError } = await supabase
-      .from('driver_status')
-      .upsert({
-        driver_id: driverId,
+      .from('driver_bus')
+      .update({
         trip_phase: tripPhase,
         current_status: currentStatus,
-        is_active: true,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'driver_id'
+        current_updated_at: new Date().toISOString()
       })
+      .eq('driver_id', driverId)
       .select();
 
-    if (updateError && !updateError.message.includes('relation "driver_status" does not exist')) {
+    if (updateError) {
       throw updateError;
     }
 
-    // ถ้าไม่มีตาราง driver_status ให้บันทึกลง notification_logs เพื่อเก็บประวัติ
-    if (updateError && updateError.message.includes('relation "driver_status" does not exist')) {
+    // ตรวจสอบว่าอัปเดตสำเร็จหรือไม่
+    if (!updateResult || updateResult.length === 0) {
+      return {
+        success: false,
+        error: `ไม่พบคนขับ ID ${driverId} ในระบบ`,
+        driver_id: driverId
+      };
+    }
+
+    // บันทึกลง notification_logs เพื่อเก็บประวัติ
+    try {
       const { error: logError } = await supabase
         .from('notification_logs')
         .insert({
@@ -139,6 +146,7 @@ async function updateDriverStatus(driverId, tripPhase, currentStatus = 'active')
           recipient_id: driverId.toString(),
           message: `Driver ${driverId} updated trip_phase to ${tripPhase}`,
           status: 'logged',
+          driver_id: driverId,
           error_details: {
             trip_phase: tripPhase,
             current_status: currentStatus,
@@ -149,6 +157,8 @@ async function updateDriverStatus(driverId, tripPhase, currentStatus = 'active')
       if (logError) {
         console.warn('Warning: Could not log status update:', logError.message);
       }
+    } catch (logError) {
+      console.warn('Warning: Could not log status update:', logError);
     }
 
     return {
@@ -157,7 +167,8 @@ async function updateDriverStatus(driverId, tripPhase, currentStatus = 'active')
       trip_phase: tripPhase,
       current_status: currentStatus,
       updated_at: new Date().toISOString(),
-      message: 'สถานะอัปเดตสำเร็จ'
+      message: 'สถานะอัปเดตสำเร็จ',
+      updated_data: updateResult[0]
     };
 
   } catch (error) {

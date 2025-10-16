@@ -1322,6 +1322,23 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
   const handleStatusUpdate = async (eventType: PDDEventType) => {
     if (!selected || !driverId) return;
     
+    // Validate dropoff - student must be picked up first
+    if (eventType === 'dropoff') {
+      const isPickedUp = phase === 'go' 
+        ? boardedGoSet.has(selected.student_id)
+        : boardedReturnSet.has(selected.student_id);
+      
+      if (!isPickedUp) {
+        Alert.alert(
+          'ไม่สามารถลงรถได้',
+          'นักเรียนต้องขึ้นรถก่อนถึงจะสามารถลงรถได้',
+          [{ text: 'ตกลง', style: 'default' }]
+        );
+        setSheetVisible(false);
+        return;
+      }
+    }
+    
     setSheetVisible(false);
 
     // Optimistic UI update - update immediately
@@ -1686,6 +1703,7 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
   const total = students.length;
   const came = boardedGoSet.size;
   const back = droppedGoSet.size + droppedReturnSet.size;
+  // จำนวนเด็กที่ขาดนับเฉพาะที่มีข้อมูลแจ้งลาในตาราง leave_requests ของวันนั้นๆ
   const absent = absentSet.size;
 
   return (
@@ -1962,6 +1980,74 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Status Selection Modal */}
+      <Modal
+        transparent
+        visible={sheetVisible}
+        animationType="slide"
+        onRequestClose={() => setSheetVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalBackdrop} 
+          activeOpacity={1} 
+          onPress={() => setSheetVisible(false)}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>เลือกสถานะ</Text>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setSheetVisible(false)}
+              >
+                <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalContent}>
+              <Text style={styles.modalSubtitle}>
+                {selected?.student_name} - {selected?.grade}
+              </Text>
+              
+              {/* Pickup Option */}
+              <TouchableOpacity 
+                style={styles.statusOption}
+                onPress={() => handleStatusUpdate('pickup')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statusIcon, { backgroundColor: COLORS.warningSoft }]}>
+                  <Ionicons name="arrow-up-circle" size={24} color={COLORS.warning} />
+                </View>
+                <Text style={styles.statusOptionText}>ขึ้นรถ</Text>
+              </TouchableOpacity>
+
+              {/* Dropoff Option */}
+              <TouchableOpacity 
+                style={styles.statusOption}
+                onPress={() => handleStatusUpdate('dropoff')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statusIcon, { backgroundColor: COLORS.successSoft }]}>
+                  <Ionicons name="arrow-down-circle" size={24} color={COLORS.success} />
+                </View>
+                <Text style={styles.statusOptionText}>ลงรถ</Text>
+              </TouchableOpacity>
+
+              {/* Absent Option */}
+              <TouchableOpacity 
+                style={styles.statusOption}
+                onPress={() => handleStatusUpdate('absent')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statusIcon, { backgroundColor: COLORS.dangerSoft }]}>
+                  <Ionicons name="close-circle" size={24} color={COLORS.danger} />
+                </View>
+                <Text style={styles.statusOptionText}>ขาด</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Real-time Emergency Alert Modal */}

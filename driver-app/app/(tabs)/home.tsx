@@ -169,9 +169,21 @@ async function resetStudentStatusForReturn() {
 
     const today = new Date().toISOString().split('T')[0];
     
-    // ไม่ต้องรีเซ็ตข้อมูลในฐานข้อมูล เพราะข้อมูลการขึ้นรถ-ลงรถจะถูกจัดการแยกตาม trip_phase
-    // แค่ log ว่าเสร็จสิ้นการเตรียมพร้อมสำหรับขากลับ
-    console.log('เตรียมพร้อมสำหรับขากลับเรียบร้อยแล้ว');
+    // รีเซ็ตจำนวนขึ้นรถ-ลงรถเป็น 0 สำหรับขากลับ
+    const { error } = await supabase
+      .from('student_bus_status')
+      .update({ 
+        boarded_count: 0,
+        alighted_count: 0
+      })
+      .eq('driver_id', driverId)
+      .eq('date', today);
+    
+    if (error) {
+      console.error('เกิดข้อผิดพลาดในการรีเซ็ตจำนวนขึ้น-ลงรถ:', error);
+    } else {
+      console.log('รีเซ็ตจำนวนขึ้น-ลงรถเป็น 0 สำหรับขากลับเรียบร้อยแล้ว');
+    }
   } catch (error) {
     console.error('เกิดข้อผิดพลาดในการเตรียมพร้อมสำหรับขากลับ:', error);
   }
@@ -621,7 +633,7 @@ const HomePage = () => {
           const { error } = await supabase
             .from('driver_bus')
             .update({ trip_phase: tripPhase })
-            .eq('driver_id', 1); // ใช้เฉพาะ driver_id 1
+            .eq('driver_id', driverId);
             
           if (error) {
             console.error('เกิดข้อผิดพลาดในการอัพเดต trip_phase:', error);

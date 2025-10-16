@@ -15,7 +15,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../../../src/services/supabaseClient';
 import { safeGoBack } from '../../../src/utils/navigationUtils';
 
@@ -27,11 +27,19 @@ type Row = {
   parents: {
     parent_name: string;
     parent_phone: string;
+    parent_line_links: {
+      line_display_id: string;
+      active: boolean;
+    }[];
   } | null;
   student_guardians: {
     parents: {
       parent_name: string;
       parent_phone: string;
+      parent_line_links: {
+        line_display_id: string;
+        active: boolean;
+      }[];
     };
     is_primary: boolean;
   }[] | null;
@@ -97,13 +105,23 @@ export default function ProfilePage() {
         student_name, 
         grade, 
         student_phone,
-        parents:parent_id(parent_name, parent_phone),
+        parents:parent_id(
+          parent_name, 
+          parent_phone,
+          parent_line_links!inner(line_display_id, active)
+        ),
         student_guardians(
-          parents(parent_name, parent_phone),
+          parents(
+            parent_name, 
+            parent_phone,
+            parent_line_links!inner(line_display_id, active)
+          ),
           is_primary
         ),
         rfid_card_assignments(rfid_cards(rfid_code))
       `)
+      .eq('parents.parent_line_links.active', true)
+      .eq('student_guardians.parents.parent_line_links.active', true)
       .order('student_id', { ascending: true });
 
     if (keyword && keyword.trim()) {
@@ -124,6 +142,13 @@ export default function ProfilePage() {
   };
 
   useEffect(() => { fetchList(); }, []);
+
+  // Refresh data when page gets focus (e.g., returning from edit page)
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchList(q);
+    }, [q])
+  );
 
   // debounce search
   useEffect(() => {
@@ -171,17 +196,19 @@ export default function ProfilePage() {
           // ลองใช้ข้อมูลจาก student_guardians ก่อน
           if (item.student_guardians && item.student_guardians.length > 0) {
             const primaryGuardian = item.student_guardians.find(g => g.is_primary) || item.student_guardians[0];
+            const lineId = primaryGuardian.parents.parent_line_links?.find(link => link.active)?.line_display_id;
             return (
               <Text style={styles.parentLine} numberOfLines={1}>
-                ผู้ปกครอง: {primaryGuardian.parents.parent_name} {primaryGuardian.parents.parent_phone && `(${primaryGuardian.parents.parent_phone})`}
+                ผู้ปกครอง: {primaryGuardian.parents.parent_name} {primaryGuardian.parents.parent_phone && `(${primaryGuardian.parents.parent_phone})`} {lineId && `LINE: ${lineId}`}
               </Text>
             );
           }
           // ถ้าไม่มีใน student_guardians ให้ใช้ parents (legacy)
           if (item.parents) {
+            const lineId = item.parents.parent_line_links?.find(link => link.active)?.line_display_id;
             return (
               <Text style={styles.parentLine} numberOfLines={1}>
-                ผู้ปกครอง: {item.parents.parent_name} {item.parents.parent_phone && `(${item.parents.parent_phone})`}
+                ผู้ปกครอง: {item.parents.parent_name} {item.parents.parent_phone && `(${item.parents.parent_phone})`} {lineId && `LINE: ${lineId}`}
               </Text>
             );
           }
@@ -198,7 +225,7 @@ export default function ProfilePage() {
     <SafeAreaView style={styles.screen}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => safeGoBack('/manage')} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/home')} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.title}>ข้อมูลนักเรียน</Text>

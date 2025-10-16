@@ -555,21 +555,44 @@ export default function StudentFormScreen() {
 
       // จัดการ LINE ID ในตาราง parent_line_links
       if (line) {
-        // ปิดการใช้งาน link เก่าทั้งหมด
-        await supabase
+        // ตรวจสอบว่ามี active link อยู่แล้วหรือไม่
+        const { data: existingLinks } = await supabase
           .from('parent_line_links')
-          .update({ active: false })
-          .eq('parent_id', g.parent_id!);
-        
-        // เพิ่ม/อัปเดต link ใหม่
-        const { error: linkError } = await supabase
-          .from('parent_line_links')
-          .upsert({
-            parent_id: g.parent_id!,
-            line_user_id: line,
-            active: true
-          });
-        if (linkError) throw linkError;
+          .select('link_id, line_display_id')
+          .eq('parent_id', g.parent_id!)
+          .eq('active', true);
+
+        if (existingLinks && existingLinks.length > 0) {
+          // มี link เก่าอยู่ - อัปเดต link แรกและลบที่เหลือ
+          const firstLink = existingLinks[0];
+          
+          // อัปเดต link แรก
+          await supabase
+            .from('parent_line_links')
+            .update({ 
+              line_display_id: line,
+              linked_at: new Date().toISOString()
+            })
+            .eq('link_id', firstLink.link_id);
+
+          // ลบ link ที่เหลือ (ถ้ามี)
+          if (existingLinks.length > 1) {
+            const otherLinkIds = existingLinks.slice(1).map(link => link.link_id);
+            await supabase
+              .from('parent_line_links')
+              .update({ active: false })
+              .in('link_id', otherLinkIds);
+          }
+        } else {
+          // ไม่มี active link - สร้างใหม่
+          await supabase
+            .from('parent_line_links')
+            .insert({
+              parent_id: g.parent_id!,
+              line_display_id: line,
+              active: true
+            });
+        }
       } else {
         // ถ้าไม่มี LINE ID ให้ปิดการใช้งาน link ทั้งหมด
         await supabase
@@ -839,7 +862,7 @@ export default function StudentFormScreen() {
       Alert.alert('สำเร็จ', isEdit ? 'บันทึกการแก้ไขแล้ว' : 'เพิ่มนักเรียนแล้ว', [
         { text: 'ตกลง', onPress: () => { 
           clearDraft(); 
-          router.push('/manage/students/' as any); 
+          router.push('/manage/students/profile' as any); 
         } },
       ]);
     } catch (e: any) {
@@ -868,7 +891,7 @@ export default function StudentFormScreen() {
                   .from('students').update({ status: 'inactive' }).eq('student_id', sid);
                 if (e2) throw e2;
                 Alert.alert('เปลี่ยนสถานะแล้ว', 'มีประวัติการใช้งาน จึงเปลี่ยนเป็นไม่ใช้งานแทน', [
-                  { text: 'ตกลง', onPress: () => { clearDraft(); router.push('/manage/students/' as any); } },
+                  { text: 'ตกลง', onPress: () => { clearDraft(); router.push('/manage/students/profile' as any); } },
                 ]);
               } else {
                 throw error;
@@ -876,7 +899,7 @@ export default function StudentFormScreen() {
             } else {
 
               Alert.alert('สำเร็จ', 'ลบข้อมูลแล้ว', [
-                { text: 'ตกลง', onPress: () => { clearDraft(); router.push('/manage/students/' as any); } },
+                { text: 'ตกลง', onPress: () => { clearDraft(); router.push('/manage/students/profile' as any); } },
               ]);
             }
           } catch (e: any) {
@@ -912,7 +935,7 @@ export default function StudentFormScreen() {
     <View style={styles.screen}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => { clearDraft(); safeGoBack('/manage/students'); }} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => { clearDraft(); router.push('/manage/students/profile'); }} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>{isEdit ? 'แก้ไขนักเรียน' : 'เพิ่มนักเรียน'}</Text>

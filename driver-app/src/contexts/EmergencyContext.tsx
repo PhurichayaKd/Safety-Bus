@@ -138,7 +138,7 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
   // ทำเครื่องหมายว่าอ่านแล้ว
   const markAsRead = (eventId: number) => {
     if (!readEmergencies.has(eventId)) {
-      setReadEmergencies(prev => new Set([...prev, eventId]));
+      setReadEmergencies(prev => new Set([...Array.from(prev), eventId]));
       setUnreadCount(prev => Math.max(0, prev - 1));
     }
   };
@@ -208,7 +208,7 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
   const createEmergency = async (eventData: any) => {
     try {
       // ใช้ EmergencyService เดิมถ้ามี หรือสร้างใหม่
-      const { EmergencyService } = await import('../../services/EmergencyService.js');
+      const { EmergencyService } = await import('../../services/EmergencyService');
       await EmergencyService.createEmergencyEvent(eventData);
       
       // รีเฟรชข้อมูล

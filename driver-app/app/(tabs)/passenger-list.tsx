@@ -1147,10 +1147,204 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
     setPhonePopupVisible(false);
   };
 
+  // Optimistic update function for immediate UI response
+  const handleQuickStatusUpdate = async (student: StudentWithGeo, eventType: PDDEventType) => {
+    if (!driverId) return;
+    
+    // Immediate UI update (optimistic)
+    const updateUI = () => {
+      if (eventType === 'pickup') {
+        if (phase === 'go') {
+          setBoardedGoSet(prev => new Set([...Array.from(prev), student.student_id]));
+        } else {
+          setBoardedReturnSet(prev => new Set([...Array.from(prev), student.student_id]));
+        }
+      } else if (eventType === 'dropoff') {
+        if (phase === 'go') {
+          setDroppedGoSet(prev => new Set([...Array.from(prev), student.student_id]));
+        } else {
+          setDroppedReturnSet(prev => new Set([...Array.from(prev), student.student_id]));
+        }
+      } else if (eventType === 'absent') {
+        setAbsentSet(prev => new Set([...Array.from(prev), student.student_id]));
+      }
+    };
+
+    // Update UI immediately
+    updateUI();
+
+    // Background API call
+    try {
+      const now = new Date().toISOString();
+      const location = phase === 'go' ? 'go' : 'return';
+      
+      if (eventType === 'absent') {
+        const today = new Date().toISOString().split('T')[0];
+        
+        const { error } = await supabase
+          .from('leave_requests')
+          .upsert({
+            student_id: student.student_id,
+            leave_date: today,
+            status: 'approved',
+            leave_type: 'กดโดยคนขับ',
+            created_at: now,
+            updated_at: now,
+          }, {
+            onConflict: 'student_id,leave_date'
+          });
+
+        if (error) {
+          console.error('Error creating leave request:', error);
+          // Revert UI change on error
+          setAbsentSet(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(student.student_id);
+            return newSet;
+          });
+          Alert.alert('ข้อผิดพลาด', 'ไม่สามารถบันทึกการลาได้');
+          return;
+        }
+      } else {
+        const { error } = await supabase
+          .from('pickup_dropoff')
+          .insert({
+            student_id: student.student_id,
+            driver_id: driverId,
+            event_type: eventType,
+            event_time: now,
+            location_type: location,
+          });
+        
+        if (error) {
+          console.error('Error updating status:', error);
+          
+          // Revert UI change on error
+          if (eventType === 'pickup') {
+            if (phase === 'go') {
+              setBoardedGoSet(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(student.student_id);
+                return newSet;
+              });
+            } else {
+              setBoardedReturnSet(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(student.student_id);
+                return newSet;
+              });
+            }
+          } else if (eventType === 'dropoff') {
+            if (phase === 'go') {
+              setDroppedGoSet(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(student.student_id);
+                return newSet;
+              });
+            } else {
+              setDroppedReturnSet(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(student.student_id);
+                return newSet;
+              });
+            }
+          }
+          
+          if (error.code === '23P01' && error.message?.includes('no_rapid_rescan')) {
+            Alert.alert('แจ้งเตือน', 'ไม่สามารถสแกนซ้ำในช่วงเวลาสั้นๆ ได้ กรุณารอสักครู่แล้วลองใหม่');
+          } else {
+            Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปเดตสถานะได้');
+          }
+          return;
+        }
+      }
+
+      // Send LINE notification in background (don't wait for it)
+      fetch('https://safety-bus-liff-v4-new.vercel.app/api/student-status-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          student_id: student.student_id,
+          status: eventType === 'pickup' ? 'onboard' : 
+                 eventType === 'dropoff' ? 'offboard' : 
+                 eventType === 'absent' ? 'absent' : 'stop',
+          driver_id: driverId,
+          location: location,
+          notes: '',
+          phase: phase
+        }),
+      }).catch(error => {
+        console.error('Error sending notification:', error);
+      });
+
+      // Update statistics in background
+      try {
+        let newPickupGo = boardedGoSet.size;
+        let newDropGo = droppedGoSet.size;
+        let newPickupRet = boardedReturnSet.size;
+        let newDropRet = droppedReturnSet.size;
+
+        if (eventType === 'pickup') {
+          if (phase === 'go') {
+            newPickupGo = boardedGoSet.size;
+          } else {
+            newPickupRet = boardedReturnSet.size;
+          }
+        } else if (eventType === 'dropoff') {
+          if (phase === 'go') {
+            newDropGo = droppedGoSet.size;
+          } else {
+            newDropRet = droppedReturnSet.size;
+          }
+        }
+
+        const stats = {
+          pickupGo: newPickupGo,
+          dropGo: newDropGo,
+          pickupRet: newPickupRet,
+          dropRet: newDropRet,
+          total: students.length
+        };
+        
+        await AsyncStorage.setItem('passenger_stats', JSON.stringify(stats));
+      } catch (statsError) {
+        console.error('Error updating statistics:', statsError);
+      }
+      
+    } catch (error) {
+      console.error('Error updating student status:', error);
+      Alert.alert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการอัปเดตสถานะ');
+    }
+  };
+
   const handleStatusUpdate = async (eventType: PDDEventType) => {
     if (!selected || !driverId) return;
     
     setSheetVisible(false);
+
+    // Optimistic UI update - update immediately
+    const updateUI = () => {
+      if (eventType === 'pickup') {
+        if (phase === 'go') {
+          setBoardedGoSet(prev => new Set([...Array.from(prev), selected.student_id]));
+        } else {
+          setBoardedReturnSet(prev => new Set([...Array.from(prev), selected.student_id]));
+        }
+      } else if (eventType === 'dropoff') {
+        if (phase === 'go') {
+          setDroppedGoSet(prev => new Set([...Array.from(prev), selected.student_id]));
+        } else {
+          setDroppedReturnSet(prev => new Set([...Array.from(prev), selected.student_id]));
+        }
+      } else if (eventType === 'absent') {
+        setAbsentSet(prev => new Set([...Array.from(prev), selected.student_id]));
+      }
+    };
+
+    // Update UI immediately
+    updateUI();
     
     // Track constraint errors to handle notification sending
     let hasConstraintError = false;
@@ -1245,18 +1439,18 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
         // Update local state
         if (eventType === 'pickup') {
           if (phase === 'go') {
-            setBoardedGoSet(prev => new Set([...prev, selected.student_id]));
+            setBoardedGoSet(prev => new Set([...Array.from(prev), selected.student_id]));
           } else {
-            setBoardedReturnSet(prev => new Set([...prev, selected.student_id]));
+            setBoardedReturnSet(prev => new Set([...Array.from(prev), selected.student_id]));
           }
         } else if (eventType === 'dropoff') {
           if (phase === 'go') {
-            setDroppedGoSet(prev => new Set([...prev, selected.student_id]));
+            setDroppedGoSet(prev => new Set([...Array.from(prev), selected.student_id]));
           } else {
-            setDroppedReturnSet(prev => new Set([...prev, selected.student_id]));
+            setDroppedReturnSet(prev => new Set([...Array.from(prev), selected.student_id]));
           }
         } else if (eventType === 'absent') {
-          setAbsentSet(prev => new Set([...prev, selected.student_id]));
+          setAbsentSet(prev => new Set([...Array.from(prev), selected.student_id]));
         }
 
         // Update statistics in AsyncStorage
@@ -1297,14 +1491,86 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
           console.error('Error updating statistics:', statsError);
         }
 
-        // Show success message
-        const statusText = eventType === 'pickup' ? 'ขึ้นรถแล้ว' : 
-                          eventType === 'dropoff' ? 'ส่งแล้ว' : 'หยุด';
-        Alert.alert('สำเร็จ', `อัปเดตสถานะ "${statusText}" สำหรับ ${selected.student_name} แล้ว`);
+        // Success - no alert needed, UI already updated optimistically
+      } else {
+        // Revert UI changes if there was a constraint error
+        if (eventType === 'pickup') {
+          if (phase === 'go') {
+            setBoardedGoSet(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(selected.student_id);
+              return newSet;
+            });
+          } else {
+            setBoardedReturnSet(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(selected.student_id);
+              return newSet;
+            });
+          }
+        } else if (eventType === 'dropoff') {
+          if (phase === 'go') {
+            setDroppedGoSet(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(selected.student_id);
+              return newSet;
+            });
+          } else {
+            setDroppedReturnSet(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(selected.student_id);
+              return newSet;
+            });
+          }
+        } else if (eventType === 'absent') {
+          setAbsentSet(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(selected.student_id);
+            return newSet;
+          });
+        }
       }
       
     } catch (error) {
       console.error('Error updating student status:', error);
+      
+      // Revert UI changes on error
+      if (eventType === 'pickup') {
+        if (phase === 'go') {
+          setBoardedGoSet(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(selected.student_id);
+            return newSet;
+          });
+        } else {
+          setBoardedReturnSet(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(selected.student_id);
+            return newSet;
+          });
+        }
+      } else if (eventType === 'dropoff') {
+        if (phase === 'go') {
+          setDroppedGoSet(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(selected.student_id);
+            return newSet;
+          });
+        } else {
+          setDroppedReturnSet(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(selected.student_id);
+            return newSet;
+          });
+        }
+      } else if (eventType === 'absent') {
+        setAbsentSet(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(selected.student_id);
+          return newSet;
+        });
+      }
+      
       Alert.alert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการอัปเดตสถานะ');
     }
   };
@@ -1550,69 +1816,7 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
         )}
       </View>
 
-      {/* Student Status Modal */}
-      <Modal
-        transparent
-        visible={sheetVisible}
-        animationType="fade"
-        onRequestClose={() => setSheetVisible(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalBackdrop} 
-          activeOpacity={1} 
-          onPress={() => setSheetVisible(false)}
-        >
-          <View style={styles.modalSheet}>
-            <TouchableOpacity activeOpacity={1}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {selected?.student_name}
-                </Text>
-                <TouchableOpacity 
-                  onPress={() => setSheetVisible(false)}
-                  style={styles.modalCloseButton}
-                >
-                  <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.modalContent}>
-                <Text style={styles.modalSubtitle}>เลือกสถานะนักเรียน</Text>
-                
-                <TouchableOpacity 
-                  style={styles.statusOption}
-                  onPress={() => handleStatusUpdate('pickup')}
-                >
-                  <View style={[styles.statusIcon, { backgroundColor: COLORS.warning + '20' }]}>
-                    <Ionicons name="car" size={20} color={COLORS.warning} />
-                  </View>
-                  <Text style={styles.statusOptionText}>ขึ้นรถแล้ว</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.statusOption}
-                  onPress={() => handleStatusUpdate('dropoff')}
-                >
-                  <View style={[styles.statusIcon, { backgroundColor: COLORS.success + '20' }]}>
-                    <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                  </View>
-                  <Text style={styles.statusOptionText}>ลงรถ</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.statusOption}
-                  onPress={() => handleStatusUpdate('absent')}
-                >
-                  <View style={[styles.statusIcon, { backgroundColor: COLORS.danger + '20' }]}>
-                    <Ionicons name="close-circle" size={20} color={COLORS.danger} />
-                  </View>
-                  <Text style={styles.statusOptionText}>หยุด</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+
 
       {/* Phone Popup Modal */}
       <Modal
@@ -2156,6 +2360,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
+
   resizeDivider: {
     height: 20,
     backgroundColor: COLORS.card,

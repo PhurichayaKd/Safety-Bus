@@ -25,19 +25,28 @@ ADD COLUMN IF NOT EXISTS sensor_type text;
 ALTER TABLE public.emergency_logs 
 ADD COLUMN IF NOT EXISTS sensor_data jsonb;
 
--- เพิ่ม constraint สำหรับ sensor_type
-ALTER TABLE public.emergency_logs 
-ADD CONSTRAINT emergency_logs_sensor_type_check 
-CHECK (sensor_type IS NULL OR sensor_type = ANY (ARRAY[
-    'PIR'::text,
-    'DHT22'::text, 
-    'MQ2'::text,
-    'MQ135'::text,
-    'TEMPERATURE'::text,
-    'SMOKE'::text,
-    'MOTION'::text,
-    'COMBINED'::text
-]));
+-- เพิ่ม constraint สำหรับ sensor_type (ตรวจสอบว่ามีอยู่แล้วหรือไม่)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'emergency_logs_sensor_type_check' 
+        AND conrelid = 'public.emergency_logs'::regclass
+    ) THEN
+        ALTER TABLE public.emergency_logs 
+        ADD CONSTRAINT emergency_logs_sensor_type_check 
+        CHECK (sensor_type IS NULL OR sensor_type = ANY (ARRAY[
+            'PIR'::text,
+            'DHT22'::text, 
+            'MQ2'::text,
+            'MQ135'::text,
+            'TEMPERATURE'::text,
+            'SMOKE'::text,
+            'MOTION'::text,
+            'COMBINED'::text
+        ]));
+    END IF;
+END $$;
 
 -- 3. เพิ่มฟิลด์สำหรับระบุว่าเป็นเหตุการณ์จากนักเรียนหรือไม่
 ALTER TABLE public.emergency_logs 
@@ -113,3 +122,23 @@ COMMENT ON COLUMN public.emergency_logs.sensor_data IS 'ข้อมูลจา
 COMMENT ON COLUMN public.emergency_logs.is_student_emergency IS 'ระบุว่าเป็นเหตุการณ์ฉุกเฉินจากนักเรียนหรือไม่';
 COMMENT ON COLUMN public.emergency_responses.line_sent IS 'ระบุว่าส่งข้อความ LINE แล้วหรือไม่';
 COMMENT ON TABLE public.sensor_settings IS 'ตารางสำหรับเก็บการตั้งค่าเซ็นเซอร์ของแต่ละคนขับ';
+
+-- 11. อัปเดต constraint สำหรับ trip_phase ในตาราง driver_bus ให้รองรับ 'at_school'
+-- ลบ constraint เดิม
+ALTER TABLE public.driver_bus 
+DROP CONSTRAINT IF EXISTS driver_bus_trip_phase_check;
+
+-- เพิ่ม constraint ใหม่ที่รองรับ 'at_school'
+ALTER TABLE public.driver_bus 
+ADD CONSTRAINT driver_bus_trip_phase_check 
+CHECK (trip_phase = ANY (ARRAY['go'::text, 'return'::text, 'unknown'::text, 'completed'::text, 'at_school'::text]));
+
+-- 12. อัปเดต constraint สำหรับ trip_phase ในตาราง student_boarding_status ให้รองรับ 'at_school'
+-- ลบ constraint เดิม
+ALTER TABLE public.student_boarding_status 
+DROP CONSTRAINT IF EXISTS student_boarding_status_trip_phase_check;
+
+-- เพิ่ม constraint ใหม่ที่รองรับ 'at_school'
+ALTER TABLE public.student_boarding_status 
+ADD CONSTRAINT student_boarding_status_trip_phase_check 
+CHECK (trip_phase = ANY (ARRAY['go'::text, 'return'::text, 'unknown'::text, 'completed'::text, 'at_school'::text]));

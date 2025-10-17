@@ -154,7 +154,7 @@ void sirenUpdate() {
   }
 }
 
-/* ===== Supabase: emergency_logs (details → JSON ที่อ่านง่าย) ===== */
+/* ===== Supabase: emergency_logs + LINE notification ===== */
 bool postSensorAlertMessage(const String& sourceKey, const String& humanMessage) {
   // ตรวจสอบ error counter ก่อน
   if (consecutiveHttpErrors >= MAX_HTTP_ERRORS) {
@@ -189,30 +189,58 @@ bool postSensorAlertMessage(const String& sourceKey, const String& humanMessage)
   https.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
   https.addHeader("Prefer", "return=representation");
 
-  // กำหนด sensor_type ตาม sourceKey
+  // กำหนด sensor_type ตาม sourceKey (แก้ไขให้ตรงกับตาราง emergency_logs)
   String sensorType = "";
+  String originalSensorType = "";
   if (sourceKey == "motion_detected_after_trip" || sourceKey == "motion_detected_at_school") {
     sensorType = "PIR";
+    originalSensorType = "MOVEMENT_DETECTED";
   } else if (sourceKey == "smoke_heat") {
-    sensorType = "SMOKE_HEAT";
+    sensorType = "COMBINED"; // ใช้ COMBINED แทน SMOKE_HEAT
+    originalSensorType = "SMOKE_AND_HEAT";
   } else if (sourceKey == "temp_only") {
     sensorType = "TEMPERATURE";
+    originalSensorType = "HIGH_TEMPERATURE";
   } else {
-    sensorType = "UNKNOWN";
+    sensorType = "COMBINED";
+    originalSensorType = "UNKNOWN";
   }
 
+  // สร้าง sensor_data สำหรับเก็บข้อมูลเซ็นเซอร์
+  String sensorDataJson = "{";
+  if (sourceKey == "smoke_heat" || sourceKey == "temp_only") {
+    int gasRaw2 = analogRead(PIN_MQ2_AO);
+    int gasRaw135 = analogRead(PIN_MQ135_AO);
+    float tC = dht.readTemperature();
+    
+    sensorDataJson += "\"mq2_value\":" + String(gasRaw2) + ",";
+    sensorDataJson += "\"mq135_value\":" + String(gasRaw135) + ",";
+    sensorDataJson += "\"temperature\":" + String(tC, 1) + ",";
+    sensorDataJson += "\"gas_threshold\":" + String(GAS_RAW_THRESHOLD) + ",";
+    sensorDataJson += "\"temp_threshold\":" + String(TEMP_HIGH_C, 1);
+  } else if (sourceKey.indexOf("motion") >= 0) {
+    sensorDataJson += "\"pir1_state\":" + String(digitalRead(PIN_PIR1)) + ",";
+    sensorDataJson += "\"pir2_state\":" + String(digitalRead(PIN_PIR2)) + ",";
+    sensorDataJson += "\"trip_phase\":\"" + currentTripPhase + "\"";
+  }
+  sensorDataJson += "}";
+
   String detailsJson = String("{\"source\":\"") + jsonEscape(sourceKey) +
-                       "\",\"message\":\"" + jsonEscape(humanMessage) + "\"}";
+                       "\",\"message\":\"" + jsonEscape(humanMessage) + 
+                       "\",\"original_sensor_type\":\"" + originalSensorType + "\"}";
 
   String body = String("{")
     + "\"driver_id\":" + DRIVER_ID + ","
     + "\"event_type\":\"SENSOR_ALERT\","
     + "\"triggered_by\":\"sensor\","
     + "\"sensor_type\":\"" + sensorType + "\","
+    + "\"sensor_data\":" + sensorDataJson + ","
     + "\"details\":" + detailsJson +
     "}";
 
   Serial.printf("[Supabase] POST %s\n", url.c_str());
+  Serial.printf("[Supabase] Body: %s\n", body.c_str());
+  
   int code = https.POST(body);
   String resp = https.getString();
   https.end();
@@ -225,12 +253,20 @@ bool postSensorAlertMessage(const String& sourceKey, const String& humanMessage)
   
   if (code >= 200 && code < 300) {
     consecutiveHttpErrors = 0;
+    
+    // บันทึกข้อมูลสำเร็จ - ไม่ส่งไลน์อัตโนมัติ ให้แอพดึงข้อมูลและแจ้งเตือนคนขับแทน
+    Serial.println("[Supabase] Emergency log saved successfully - App will handle driver notification");
+    
     return true;
   } else {
     consecutiveHttpErrors++;
     return false;
   }
 }
+
+/* ===== LINE Notification ฟังก์ชันถูกลบออก ===== */
+/* เซ็นเซอร์จะบันทึกข้อมูลใน emergency_logs เท่านั้น */
+/* แอพจะดึงข้อมูลและแจ้งเตือนคนขับเอง */
 
 /* ===== Supabase: live_driver_locations (upsert ทุก 5 วิ) ===== */
 bool postLiveLocation(double lat, double lon) {
@@ -502,7 +538,7 @@ void setup() {
   Serial.println("GPS serial started @9600");
 
   ensureWifi();
-  Serial.println("=== ESP32 Sensor Hub + GPS ready (FIXED VERSION) ===");
+  Serial.println("=== ESP32 Sensor Hub + GPS ready (CORRECTED VERSION) ===");
   
   // เริ่มต้นด้วยการตรวจสอบสถานะคนขับ
   checkDriverStatus();

@@ -86,20 +86,13 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
     setShowEmergencyModal(true);
     setUnreadCount(prev => prev + 1);
 
-    // ส่งการแจ้งเตือนไปยัง LINE (ยกเว้นกรณี triggered_by เป็น student)
-    if (emergency.triggered_by !== 'student') {
-      sendEmergencyLineNotification(emergency, 'NEW_EMERGENCY')
-        .then(result => {
-          if (!result.success) {
-            console.warn('Failed to send LINE notification:', result.error);
-          } else {
-            console.log('LINE notification sent successfully for new emergency');
-          }
-        })
-        .catch(error => {
-          console.error('Failed to send LINE notification:', error);
-        });
-    }
+    // *** ไม่ส่ง LINE notification สำหรับเซ็นเซอร์ ***
+    // เซ็นเซอร์จะแสดงใน app ให้คนขับตัดสินใจก่อน
+    // ส่ง LINE เฉพาะเมื่อคนขับกดปุ่ม EMERGENCY ในการตอบสนอง
+    console.log(`📱 Emergency event detected (${emergency.event_type}) - showing in driver app, waiting for driver response. No automatic LINE notification sent.`);
+    
+    // ไม่ส่ง LINE notification อัตโนมัติสำหรับเหตุการณ์ใหม่
+    // ให้คนขับตัดสินใจเองว่าจะกด EMERGENCY หรือไม่
 
     // แสดง Alert สำหรับการแจ้งเตือนในแอป
     Alert.alert(
@@ -160,21 +153,23 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
         return;
       }
 
-      // ส่งการแจ้งเตือนไปยัง LINE สำหรับทุกประเภทการตอบสนอง
+      // *** แก้ไขสำคัญ: ส่ง LINE เฉพาะเมื่อคนขับกด EMERGENCY เท่านั้น ***
       const emergency = emergencies.find(e => e.event_id === eventId);
-      if (emergency) {
+      if (emergency && responseType === 'EMERGENCY') {
         try {
-          const result = await sendEmergencyLineNotification(emergency, responseType);
+          const result = await sendEmergencyLineNotification(emergency, responseType, driverId);
           if (!result.success) {
             console.warn('LINE notification failed:', result.error);
             // ไม่แสดง error ให้ผู้ใช้เห็น เพราะการตอบสนองหลักสำเร็จแล้ว
           } else {
-            console.log('LINE notification sent successfully');
+            console.log('LINE notification sent successfully for EMERGENCY response');
           }
         } catch (error) {
           console.error('Error sending LINE notification:', error);
           // ไม่ให้ error ของการส่ง notification ทำให้การตอบสนองล้มเหลว
         }
+      } else if (emergency && (responseType === 'CHECKED' || responseType === 'CONFIRMED_NORMAL')) {
+        console.log(`📝 Driver response recorded (${responseType}) - no LINE notification sent as requested`);
       }
 
       // อัปเดต UI - สำหรับ EMERGENCY ไม่ปิด modal ทันที

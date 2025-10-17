@@ -12,8 +12,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { supabase } from '../../../src/services/supabaseClient';
-import { parseDetails } from '../../../src/services/emergencyService';
+import { 
+  getRecentEmergencyLogs, 
+  subscribeToEmergencyLogs,
+  parseDetails,
+  getEventTypeText,
+  getTriggeredByText,
+  formatDateTime,
+  getEventTypeIcon,
+  getEventTypeColor,
+  EmergencyLog
+} from '../../../src/services/emergencyService';
 import { safeGoBack } from '../../../src/utils/navigationUtils';
 
 const COLORS = {
@@ -28,14 +37,7 @@ const COLORS = {
   border: '#C6C6C8',
 };
 
-interface EmergencyLog {
-  event_id: number;
-  driver_id: number;
-  event_time: string;
-  event_type: 'PANIC_BUTTON' | 'SENSOR_ALERT' | 'DRIVER_INCAPACITATED';
-  triggered_by: 'sensor' | 'driver' | 'student';
-  details?: string; // เพิ่มฟิลด์ details สำหรับข้อมูลเซ็นเซอร์
-}
+// EmergencyLog interface imported from emergencyService
 
 interface EmergencyStats {
   totalEvents: number;
@@ -67,52 +69,51 @@ const EmergencyReports: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const calculateStats = (logs: EmergencyLog[]) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const todayEvents = logs.filter((log: EmergencyLog) => 
+      new Date(log.event_time) >= today
+    ).length;
+
+    const weekEvents = logs.filter((log: EmergencyLog) => 
+      new Date(log.event_time) >= weekAgo
+    ).length;
+
+    const panicButtons = logs.filter((log: EmergencyLog) => 
+      log.event_type === 'PANIC_BUTTON'
+    ).length;
+
+    const sensorAlerts = logs.filter((log: EmergencyLog) => 
+      log.event_type === 'SENSOR_ALERT'
+    ).length;
+
+    const driverIncapacitated = logs.filter((log: EmergencyLog) => 
+      log.event_type === 'DRIVER_INCAPACITATED'
+    ).length;
+
+    setStats({
+      totalEvents: logs.length,
+      panicButtons,
+      sensorAlerts,
+      driverIncapacitated,
+      todayEvents,
+      weekEvents,
+    });
+  };
+
   const fetchEmergencyData = async () => {
     try {
-      // ดึงข้อมูล emergency logs
-      const { data: logs, error: logsError } = await supabase
-        .from('emergency_logs')
-        .select('*')
-        .order('event_time', { ascending: false })
-        .limit(50);
+      // ใช้ฟังก์ชันจาก emergencyService แทนการเรียก Supabase โดยตรง
+      const { data: logs, error } = await getRecentEmergencyLogs(1, 50); // ใช้ driver_id = 1 สำหรับตัวอย่าง
 
-      if (logsError) throw logsError;
+      if (error) throw error;
 
-      setEmergencyLogs(logs || []);
-
-      // คำนวณสถิติ
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-      const todayEvents = logs?.filter((log: EmergencyLog) => 
-        new Date(log.event_time) >= today
-      ).length || 0;
-
-      const weekEvents = logs?.filter((log: EmergencyLog) => 
-        new Date(log.event_time) >= weekAgo
-      ).length || 0;
-
-      const panicButtons = logs?.filter((log: EmergencyLog) => 
-        log.event_type === 'PANIC_BUTTON'
-      ).length || 0;
-
-      const sensorAlerts = logs?.filter((log: EmergencyLog) => 
-        log.event_type === 'SENSOR_ALERT'
-      ).length || 0;
-
-      const driverIncapacitated = logs?.filter((log: EmergencyLog) => 
-        log.event_type === 'DRIVER_INCAPACITATED'
-      ).length || 0;
-
-      setStats({
-        totalEvents: logs?.length || 0,
-        panicButtons,
-        sensorAlerts,
-        driverIncapacitated,
-        todayEvents,
-        weekEvents,
-      });
+      const emergencyData = logs || [];
+      setEmergencyLogs(emergencyData);
+      calculateStats(emergencyData);
     } catch (error) {
       console.error('Error fetching emergency data:', error);
       Alert.alert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลเหตุการณ์ฉุกเฉินได้');
@@ -122,103 +123,40 @@ const EmergencyReports: React.FC = () => {
     }
   };
 
+  const handleNewEmergency = (emergency: EmergencyLog) => {
+    setEmergencyLogs(prev => {
+      const updated = [emergency, ...prev];
+      calculateStats(updated);
+      return updated;
+    });
+  };
+
+  const handleEmergencyUpdate = (emergency: EmergencyLog) => {
+    setEmergencyLogs(prev => {
+      const updated = prev.map(e => e.event_id === emergency.event_id ? emergency : e);
+      calculateStats(updated);
+      return updated;
+    });
+  };
+
   useEffect(() => {
     fetchEmergencyData();
 
-    // ตั้งค่า real-time subscription สำหรับการอัปเดตข้อมูล
-    const channel = supabase
-      .channel('emergency-reports-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'emergency_logs'
-        },
-        (payload) => {
-          console.log('Emergency reports: Real-time update detected:', payload);
-          // รีเฟรชข้อมูลเมื่อมีการเปลี่ยนแปลง
-          fetchEmergencyData();
-        }
-      )
-      .subscribe();
+    // เพิ่ม real-time subscription สำหรับ emergency logs
+    const channel = subscribeToEmergencyLogs(
+      1, // driver_id = 1 สำหรับตัวอย่าง
+      handleNewEmergency,
+      handleEmergencyUpdate
+    );
 
-    // Cleanup subscription เมื่อ component unmount
     return () => {
-      if (channel) {
-        channel.unsubscribe();
-      }
+      channel.unsubscribe();
     };
   }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchEmergencyData();
-  };
-
-  const getEventTypeIcon = (type: string) => {
-    switch (type) {
-      case 'PANIC_BUTTON':
-        return 'warning';
-      case 'SENSOR_ALERT':
-        return 'alert-circle';
-      case 'DRIVER_INCAPACITATED':
-        return 'medical';
-      default:
-        return 'alert';
-    }
-  };
-
-  const getEventTypeColor = (type: string) => {
-    switch (type) {
-      case 'PANIC_BUTTON':
-        return COLORS.danger;
-      case 'SENSOR_ALERT':
-        return COLORS.warning;
-      case 'DRIVER_INCAPACITATED':
-        return COLORS.danger;
-      default:
-        return COLORS.textSecondary;
-    }
-  };
-
-  const getEventTypeText = (type: string) => {
-    switch (type) {
-      case 'PANIC_BUTTON':
-        return 'ปุ่มฉุกเฉิน';
-      case 'SENSOR_ALERT':
-        return 'แจ้งเตือนเซ็นเซอร์';
-      case 'DRIVER_INCAPACITATED':
-        return 'คนขับไม่สามารถขับได้';
-      default:
-        return type;
-    }
-  };
-
-  const getTriggeredByText = (triggeredBy: string) => {
-    switch (triggeredBy) {
-      case 'sensor':
-        return 'เซ็นเซอร์';
-      case 'driver':
-        return 'คนขับ';
-      case 'student':
-        return 'นักเรียน';
-      default:
-        return triggeredBy;
-    }
-  };
-
-
-
-  const formatDateTime = (dateTime: string) => {
-    const date = new Date(dateTime);
-    return date.toLocaleString('th-TH', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
   };
 
   if (loading) {

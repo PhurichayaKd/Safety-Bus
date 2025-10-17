@@ -338,30 +338,46 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
     const checkForNewEmergencies = async () => {
       try {
         const currentDriverId = await getMyDriverId();
-        if (!currentDriverId) return;
+        if (!currentDriverId) {
+          console.log('❌ No driver ID found for emergency monitoring');
+          return;
+        }
+        
+        console.log('🔍 Checking for emergencies... Driver ID:', currentDriverId);
         
         const { data: unresolvedLogs, error } = await getUnresolvedEmergencyLogs(currentDriverId);
         
         if (error) {
-          console.error('Error fetching unresolved emergency logs:', error);
+          console.error('❌ Error fetching unresolved emergency logs:', error);
           return;
         }
 
+        console.log('📊 Emergency logs found:', unresolvedLogs?.length || 0);
+        
         if (unresolvedLogs && unresolvedLogs.length > 0) {
-          // หาเหตุการณ์ใหม่ที่ยังไม่ได้แสดง alert
-          const newEmergency = unresolvedLogs.find(log => {
-            if (!lastCheckedTimestamp) return true;
-            return new Date(log.event_time) > new Date(lastCheckedTimestamp);
-          });
-
-          if (newEmergency && !isEmergencyAlertVisible) {
-            setCurrentEmergencyAlert(newEmergency);
+          // หาเหตุการณ์ล่าสุดที่ยังไม่ได้แก้ไข
+          const latestEmergency = unresolvedLogs[0]; // เรียงตาม event_time desc แล้ว
+          
+          // ตรวจสอบว่าเป็นเหตุการณ์ใหม่หรือไม่
+          const isNewEmergency = !lastCheckedTimestamp || 
+            new Date(latestEmergency.event_time) > new Date(lastCheckedTimestamp);
+          
+          // แสดง modal ทันทีถ้าเป็นเหตุการณ์ใหม่และยังไม่มี modal แสดงอยู่
+          if (isNewEmergency && !isEmergencyAlertVisible) {
+            console.log('🚨 New emergency detected:', latestEmergency);
+            setCurrentEmergencyAlert(latestEmergency);
+            setIsEmergencyAlertVisible(true);
+            // อัปเดต timestamp เฉพาะเมื่อแสดง modal แล้ว
+            setLastCheckedTimestamp(latestEmergency.event_time);
+          }
+          
+          // ถ้ายังไม่มี modal แสดงและมี emergency ที่ยังไม่ได้แก้ไข ให้แสดงทันที
+          if (!isEmergencyAlertVisible && !currentEmergencyAlert) {
+            console.log('🚨 Showing unresolved emergency:', latestEmergency);
+            setCurrentEmergencyAlert(latestEmergency);
             setIsEmergencyAlertVisible(true);
           }
         }
-
-        // อัปเดต timestamp ล่าสุด
-        setLastCheckedTimestamp(new Date().toISOString());
       } catch (error) {
         console.error('Error in real-time emergency monitoring:', error);
       }
@@ -374,7 +390,7 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
     const interval = setInterval(checkForNewEmergencies, 1000);
 
     return () => clearInterval(interval);
-  }, [lastCheckedTimestamp, isEmergencyAlertVisible]);
+  }, [lastCheckedTimestamp, isEmergencyAlertVisible, currentEmergencyAlert]);
 
   const softResetSets = () => {
     setBoardedGoSet(new Set());
@@ -1701,8 +1717,9 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
   }
 
   const total = students.length;
-  const came = boardedGoSet.size;
-  const back = droppedGoSet.size + droppedReturnSet.size;
+  // แสดงสถิติตามเฟสปัจจุบัน
+  const came = phase === 'go' ? boardedGoSet.size : boardedReturnSet.size;
+  const back = phase === 'go' ? droppedGoSet.size : droppedReturnSet.size;
   // จำนวนเด็กที่ขาดนับเฉพาะที่มีข้อมูลแจ้งลาในตาราง leave_requests ของวันนั้นๆ
   const absent = absentSet.size;
 

@@ -270,11 +270,7 @@ const HomePage = () => {
 
 
   // เพิ่ม state สำหรับระบบตรวจสอบนักเรียนที่ไม่มาขึ้นรถ
-  const [missingStudentsModalVisible, setMissingStudentsModalVisible] = useState(false);
-  const [missingStudents, setMissingStudents] = useState<any[]>([]);
-  const [checkingStudents, setCheckingStudents] = useState(false);
   const [waitingReturnTimer, setWaitingReturnTimer] = useState<number | null>(null);
-  const [reminderTimer, setReminderTimer] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -349,130 +345,6 @@ const HomePage = () => {
     }
   };
 
-  // ฟังก์ชันสำหรับตรวจสอบนักเรียนที่ไม่มาขึ้นรถ (ปรับปรุงด้วย caching)
-  const checkMissingStudents = async (forceCheck = false) => {
-    try {
-      // ตรวจสอบว่าควรทำการตรวจสอบหรือไม่
-      const now = Date.now();
-      const lastCheckKey = 'lastMissingStudentsCheck';
-      const lastCheck = await AsyncStorage.getItem(lastCheckKey);
-      
-      // ถ้าไม่ใช่การบังคับตรวจสอบ และเพิ่งตรวจสอบไปแล้วไม่เกิน 30 วินาที ให้ข้าม
-      if (!forceCheck && lastCheck && (now - parseInt(lastCheck)) < 30000) {
-        return;
-      }
-
-      setCheckingStudents(true);
-      
-      const driverId = await getMyDriverId();
-      if (!driverId) {
-        console.error('ไม่พบ driver ID');
-        return;
-      }
-
-      // บันทึกเวลาที่ตรวจสอบ
-      await AsyncStorage.setItem(lastCheckKey, now.toString());
-
-      // ดึงข้อมูลนักเรียนทั้งหมดในระบบ (ไม่รวมที่ลา)
-      const today = new Date().toISOString().split('T')[0];
-      
-      // ดึงรายชื่อนักเรียนที่ลาวันนี้
-      const { data: leaveRequests } = await supabase
-        .from('leave_requests')
-        .select('student_id')
-        .eq('leave_date', today)
-        .eq('status', 'approved');
-      
-      const leaveStudentIds = new Set(leaveRequests?.map(req => req.student_id) || []);
-
-      // ดึงข้อมูลนักเรียนทั้งหมดที่ใช้รถคันนี้ผ่าน route_students และ driver_bus
-      const { data: driverBusData } = await supabase
-        .from('driver_bus')
-        .select('route_id')
-        .eq('driver_id', driverId)
-        .single();
-
-      if (!driverBusData?.route_id) {
-        console.error('ไม่พบเส้นทางสำหรับคนขับ');
-        return;
-      }
-
-      const { data: allStudents } = await supabase
-        .from('students')
-        .select(`
-          student_id, 
-          student_name, 
-          route_students!inner (
-            route_id
-          )
-        `)
-        .eq('route_students.route_id', driverBusData.route_id)
-        .eq('is_active', true);
-
-      if (!allStudents) {
-        console.error('ไม่สามารถดึงข้อมูลนักเรียนได้');
-        return;
-      }
-
-      // กรองนักเรียนที่ไม่ลา
-      const activeStudents = allStudents.filter(student => 
-        !leaveStudentIds.has(student.student_id)
-      );
-
-      // ดึงข้อมูลนักเรียนที่สแกนบัตรแล้วในขากลับ
-      const { data: scannedStudents } = await supabase
-        .from('pickup_dropoff')
-        .select('student_id')
-        .eq('driver_id', driverId)
-        .eq('trip_date', today)
-        .eq('location', 'return')
-        .eq('action', 'pickup');
-
-      const scannedStudentIds = new Set(scannedStudents?.map(scan => scan.student_id) || []);
-
-      // หานักเรียนที่ยังไม่สแกนบัตร
-      const missingStudentsList = activeStudents.filter(student => 
-        !scannedStudentIds.has(student.student_id)
-      );
-
-      if (missingStudentsList.length > 0) {
-        setMissingStudents(missingStudentsList);
-        setMissingStudentsModalVisible(true);
-        
-        // เริ่มระบบแจ้งเตือนซ้ำทุก 10 วินาที
-        startReminderTimer();
-      }
-
-    } catch (error) {
-      console.error('เกิดข้อผิดพลาดในการตรวจสอบนักเรียน:', error);
-    } finally {
-      setCheckingStudents(false);
-    }
-  };
-
-  // ฟังก์ชันเริ่มระบบแจ้งเตือนซ้ำ
-  const startReminderTimer = () => {
-    // ล้าง timer เก่าก่อน
-    if (reminderTimer) {
-      clearInterval(reminderTimer);
-    }
-
-    const timer = setInterval(async () => {
-      // ตรวจสอบอีกครั้งว่ายังมีนักเรียนที่ไม่สแกนบัตรหรือไม่ (ไม่บังคับ เพื่อใช้ cache)
-      await checkMissingStudents(false);
-    }, 60000); // เพิ่มเป็น 60 วินาที เพื่อลดการเรียก API
-
-    setReminderTimer(timer);
-  };
-
-  // ฟังก์ชันหยุดระบบแจ้งเตือน
-  const stopReminderTimer = () => {
-    if (reminderTimer) {
-      clearInterval(reminderTimer);
-      setReminderTimer(null);
-    }
-  };
-
   // ฟังก์ชันเริ่มระบบตรวจสอบหลังจากกดปุ่ม "รอรับกลับบ้าน"
   const startWaitingReturnCheck = () => {
     // ล้าง timer เก่าก่อน
@@ -482,7 +354,7 @@ const HomePage = () => {
 
     // ตั้ง timer 15 วินาที
     const timer = setTimeout(() => {
-      checkMissingStudents(true); // บังคับตรวจสอบเมื่อเริ่มรอรับกลับ
+      // ไม่ต้องตรวจสอบนักเรียนที่ไม่ขึ้นรถแล้ว
     }, 15000); // 15 วินาที
 
     setWaitingReturnTimer(timer);
@@ -494,11 +366,8 @@ const HomePage = () => {
       if (waitingReturnTimer) {
         clearTimeout(waitingReturnTimer);
       }
-      if (reminderTimer) {
-        clearInterval(reminderTimer);
-      }
     };
-  }, [waitingReturnTimer, reminderTimer]);
+  }, [waitingReturnTimer]);
 
   async function markNewDayReset() {
     const d = new Date();
@@ -802,7 +671,7 @@ const HomePage = () => {
                 const active = idx <= activeIndex;
                 const isLast = idx === steps.length - 1;
                 return (
-                  <View key={k} style={styles.stepItem}>
+                  <View key={`step-${idx}`} style={styles.stepItem}>
                     <View
                       style={[
                         styles.stepDot,
@@ -956,67 +825,7 @@ const HomePage = () => {
 
 
 
-      {/* MISSING STUDENTS MODAL */}
-      <Modal transparent visible={missingStudentsModalVisible} animationType="fade" onRequestClose={() => {}}>
-        <View style={styles.missingStudentsBackdrop}>
-          <View style={styles.missingStudentsModal}>
-            <View style={styles.missingStudentsHeader}>
-              <View style={styles.missingStudentsIcon}>
-                <Ionicons name="people" size={32} color={COLORS.warning} />
-              </View>
-              <Text style={styles.missingStudentsTitle}>นักเรียนยังไม่ขึ้นรถ</Text>
-              <Text style={styles.missingStudentsSubtitle}>
-                พบนักเรียนที่ยังไม่ได้สแกนบัตรขึ้นรถ
-              </Text>
-              <Text style={styles.missingStudentsCount}>
-                จำนวน: {missingStudents.length} คน
-              </Text>
-            </View>
 
-            <ScrollView style={styles.missingStudentsList} showsVerticalScrollIndicator={false}>
-              {missingStudents.map((student, index) => (
-                <View key={student.id} style={styles.missingStudentItem}>
-                  <View style={styles.missingStudentInfo}>
-                    <Text style={styles.missingStudentId}>ID: {student.id}</Text>
-                    <Text style={styles.missingStudentName}>{student.name}</Text>
-                  </View>
-                  <View style={styles.missingStudentStatus}>
-                    <Ionicons name="time" size={16} color={COLORS.warning} />
-                    <Text style={styles.missingStudentStatusText}>ยังไม่สแกน</Text>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-
-            <View style={styles.missingStudentsActions}>
-              <TouchableOpacity
-                style={[styles.missingStudentsButton, styles.missingStudentsButtonPrimary]}
-                onPress={() => setMissingStudentsModalVisible(false)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                <Text style={styles.missingStudentsButtonText}>รับทราบ</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.missingStudentsButton, styles.missingStudentsButtonSecondary]}
-                onPress={() => {
-                  setMissingStudentsModalVisible(false);
-                  stopReminderTimer();
-                }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="close-circle" size={20} color={COLORS.text} />
-                <Text style={styles.missingStudentsButtonTextSecondary}>หยุดแจ้งเตือน</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.missingStudentsNote}>
-              ระบบจะแจ้งเตือนซ้ำทุก 10 วินาที จนกว่านักเรียนจะสแกนบัตรครบ
-            </Text>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -1441,133 +1250,7 @@ const styles = StyleSheet.create({
   // Emergency Modal Styles
 
 
-  // Missing Students Modal Styles
-  missingStudentsBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  missingStudentsModal: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: '80%',
-    ...shadowElevated,
-  },
-  missingStudentsHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  missingStudentsIcon: {
-    width: 64,
-    height: 64,
-    backgroundColor: COLORS.warningSoft,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  missingStudentsTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  missingStudentsSubtitle: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  missingStudentsCount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.warning,
-    textAlign: 'center',
-  },
-  missingStudentsList: {
-    maxHeight: 300,
-    marginBottom: 20,
-  },
-  missingStudentItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: COLORS.bgSecondary,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  missingStudentInfo: {
-    flex: 1,
-  },
-  missingStudentId: {
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    fontWeight: '500',
-  },
-  missingStudentName: {
-    fontSize: 14,
-    color: COLORS.text,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  missingStudentStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  missingStudentStatusText: {
-    fontSize: 12,
-    color: COLORS.warning,
-    fontWeight: '500',
-  },
-  missingStudentsActions: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  missingStudentsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    gap: 8,
-  },
-  missingStudentsButtonPrimary: {
-    backgroundColor: COLORS.primary,
-  },
-  missingStudentsButtonSecondary: {
-    backgroundColor: COLORS.bgSecondary,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  missingStudentsButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  missingStudentsButtonTextSecondary: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  missingStudentsNote: {
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
+
 });
 
 // ฟังก์ชันสำหรับดึงจำนวนเด็กจริงจากฐานข้อมูล

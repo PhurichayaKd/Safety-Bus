@@ -7,6 +7,7 @@ export interface EmergencyLog {
   event_time: string;
   event_type: 'PANIC_BUTTON' | 'SENSOR_ALERT' | 'DRIVER_INCAPACITATED' | 'SMOKE_DETECTED' | 'HIGH_TEMPERATURE' | 'MOVEMENT_DETECTED';
   triggered_by: 'sensor' | 'driver' | 'student';
+  sensor_type?: 'PIR' | 'SMOKE_HEAT' | 'TEMPERATURE' | 'MOTION' | 'SMOKE' | string; // เพิ่ม sensor_type property
   description?: string;
   location?: string;
   notes?: string;
@@ -158,7 +159,7 @@ export const recordEmergencyResponse = async (
           .single();
 
         if (!emergencyError && emergencyData) {
-          await sendEmergencyLineNotification(emergencyData, responseType);
+          await sendEmergencyLineNotification(emergencyData, responseType, driverId);
         }
       } catch (notificationError) {
         console.error('Error sending LINE notification:', notificationError);

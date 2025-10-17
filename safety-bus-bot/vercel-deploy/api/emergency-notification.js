@@ -52,23 +52,23 @@ const EMERGENCY_MESSAGES = {
     title: 'ตรวจพบการเคลื่อนไหวหลังจอดรถ 🗣‼️',
     message: '🔻สถานะ : คนขับแจ้งเหตุฉุกเฉิน กำลังดำเนินการให้นักเรียนลงจากรถเพื่อความปลอดภัย\n\nรายละเอียด : เซ็นเซอร์ตรวจพบการเคลื่อนไหวหลังจากจอดรถแล้ว',
     priority: 'HIGH',
-    sendToLine: true,
+    sendToLine: false, // *** แก้ไข: ไม่ส่ง LINE ทันทีสำหรับเซ็นเซอร์ ***
     sensorType: 'motion_sensor'
   },
   HIGH_TEMPERATURE: {
     emoji: '🚨',
     title: 'ตรวจพบการอุณหภูมิสูง 🌡‼️',
-    message: '🔻สถานะ : คนขับแจ้งเหตุฉุกเฉิน กำลังดำเนินการให้นักเรียนลงจากรถเพื่อความปลอดภัย\n\nรายละเอียด : เซ็นเซอร์ตรวจพบอุณหภูมิสูง {temperature}°C',
+    message: '🔻สถานะ : คนขับแจ้งเหตุฉุกเฉิน กำลังดำเนินการให้นักเรียนลงจากรถเพื่อความปลอดภัย\n\nรายละเอียด : เซ็นเซอร์ตรวจพบอุณหภูมิสูง',
     priority: 'HIGH',
-    sendToLine: true,
+    sendToLine: false, // *** แก้ไข: ไม่ส่ง LINE ทันทีสำหรับเซ็นเซอร์ ***
     sensorType: 'temperature_sensor'
   },
   SMOKE_AND_HEAT: {
     emoji: '🚨',
     title: 'ตรวจพบการอุณหภูมิสูงและควันจำนวนมาก 🧯‼️',
-    message: '🔻 สถานะ : คนขับแจ้งเหตุฉุกเฉิน กำลังดำเนินการให้นักเรียนลงจากรถเพื่อความปลอดภัย\n\nรายละเอียด : เซ็นเซอร์ตรวจพบอุณหภูมิสูง {temperature}°C และควัน {smokeLevel}%',
+    message: '🔻 สถานะ : คนขับแจ้งเหตุฉุกเฉิน กำลังดำเนินการให้นักเรียนลงจากรถเพื่อความปลอดภัย\n\nรายละเอียด : เซ็นเซอร์ตรวจพบอุณหภูมิสูงและควันจำนวนมาก',
     priority: 'CRITICAL',
-    sendToLine: true,
+    sendToLine: false, // *** แก้ไข: ไม่ส่ง LINE ทันทีสำหรับเซ็นเซอร์ ***
     sensorType: 'smoke_heat_sensor'
   },
   STUDENT_SWITCH: {
@@ -111,15 +111,15 @@ const DRIVER_RESPONSE_MESSAGES = {
   },
   CONFIRMED_NORMAL: {
     emoji: '✅️',
-    title: 'สถานการ์กลับสู่ปกติแล้ว ✅️',
-    message: 'สถานะ : คนขับยืนยันสถานการณ์กลับสู่ปกติ\n               นักเรียนทุกคนเช็คว่าปลอดภัยแล้ว',
+    title: 'สถานการณ์กลับสู่ปกติ',
+    message: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าไม่มีเหตุฉุกเฉิน ทุกอย่างปลอดภัย',
     sendToLine: true,
     templates: {
-      motion_sensor: 'สถานะ : คนขับยืนยันสถานการณ์กลับสู่ปกติ\n               นักเรียนทุกคนเช็คว่าปลอดภัยแล้ว\n\n📍 เหตุการณ์: เซ็นเซอร์การเคลื่อนไหว',
-      temperature_sensor: 'สถานะ : คนขับยืนยันสถานการณ์กลับสู่ปกติ\n               นักเรียนทุกคนเช็คว่าปลอดภัยแล้ว\n\n📍 เหตุการณ์: เซ็นเซอร์อุณหภูมิสูง',
-      smoke_heat_sensor: 'สถานะ : คนขับยืนยันสถานการณ์กลับสู่ปกติ\n               นักเรียนทุกคนเช็คว่าปลอดภัยแล้ว\n\n📍 เหตุการณ์: เซ็นเซอร์ควันและความร้อน',
-      manual_driver_emergency: 'สถานะ : คนขับยืนยันสถานการณ์กลับสู่ปกติ\n               นักเรียนทุกคนเช็คว่าปลอดภัยแล้ว\n\n📍 เหตุการณ์: ปุ่มฉุกเฉินคนขับ',
-      student_switch: 'สถานะ : คนขับยืนยันสถานการณ์กลับสู่ปกติ\n               นักเรียนทุกคนเช็คว่าปลอดภัยแล้ว\n\n📍 เหตุการณ์: สวิตช์นักเรียน'
+      motion_sensor: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าไม่มีการเคลื่อนไหวผิดปกติ ทุกอย่างปลอดภัย',
+      temperature_sensor: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าอุณหภูมิกลับสู่ระดับปกติ ทุกอย่างปลอดภัย',
+      smoke_heat_sensor: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าไม่มีควันหรือความร้อนผิดปกติ ทุกอย่างปลอดภัย',
+      manual_driver_emergency: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าเหตุฉุกเฉินได้รับการแก้ไขแล้ว ทุกอย่างปลอดภัย',
+      student_switch: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าได้ตรวจสอบนักเรียนแล้ว ทุกอย่างปลอดภัย'
     }
   }
 };
@@ -281,10 +281,10 @@ export default async function handler(req, res) {
         if (sensorType === 'motion_detected_after_trip' || sensorType === 'motion_detected_at_school') {
           messageInfo = EMERGENCY_MESSAGES['MOVEMENT_DETECTED'];
           detectedSensorType = 'motion_sensor';
-        } else if (sensorType === 'smoke_heat' && temperature && smokeLevel) {
+        } else if (sensorType === 'smoke_heat') {
           messageInfo = EMERGENCY_MESSAGES['SMOKE_AND_HEAT'];
           detectedSensorType = 'smoke_heat_sensor';
-        } else if (sensorType === 'temp_only' && temperature) {
+        } else if (sensorType === 'temp_only') {
           messageInfo = EMERGENCY_MESSAGES['HIGH_TEMPERATURE'];
           detectedSensorType = 'temperature_sensor';
         } else if (sensorType === 'manual_driver_emergency' || eventType === 'DRIVER_PANIC') {
@@ -296,6 +296,33 @@ export default async function handler(req, res) {
         } else {
           messageInfo = EMERGENCY_MESSAGES[eventType];
           detectedSensorType = sensorType || 'unknown';
+        }
+      } else if (originalSensorType) {
+        // ใช้ originalSensorType ถ้าไม่มี sensorType
+        if (originalSensorType === 'PIR') {
+          messageInfo = EMERGENCY_MESSAGES['MOVEMENT_DETECTED'];
+          detectedSensorType = 'motion_sensor';
+        } else if (originalSensorType === 'SMOKE_HEAT') {
+          messageInfo = EMERGENCY_MESSAGES['SMOKE_AND_HEAT'];
+          detectedSensorType = 'smoke_heat_sensor';
+        } else if (originalSensorType === 'TEMPERATURE') {
+          messageInfo = EMERGENCY_MESSAGES['HIGH_TEMPERATURE'];
+          detectedSensorType = 'temperature_sensor';
+        } else if (originalSensorType === 'MOTION') {
+          messageInfo = EMERGENCY_MESSAGES['MOVEMENT_DETECTED'];
+          detectedSensorType = 'motion_sensor';
+        } else if (originalSensorType === 'DHT22' || originalSensorType === 'MQ2' || originalSensorType === 'MQ135') {
+          // แปลงจาก sensor hardware type เป็น logical type
+          if (originalSensorType === 'DHT22') {
+            messageInfo = EMERGENCY_MESSAGES['HIGH_TEMPERATURE'];
+            detectedSensorType = 'temperature_sensor';
+          } else if (originalSensorType === 'MQ2' || originalSensorType === 'MQ135') {
+            messageInfo = EMERGENCY_MESSAGES['SMOKE_AND_HEAT'];
+            detectedSensorType = 'smoke_heat_sensor';
+          }
+        } else {
+          messageInfo = EMERGENCY_MESSAGES[eventType];
+          detectedSensorType = originalSensorType || 'unknown';
         }
       } else {
         messageInfo = EMERGENCY_MESSAGES[eventType];
@@ -313,14 +340,22 @@ export default async function handler(req, res) {
         }
       }
       
-      // ไม่ส่งแจ้งเตือน LINE สำหรับ STUDENT_SWITCH
-      if (eventType === 'STUDENT_SWITCH') {
-        shouldSendToLine = false;
+      // *** แก้ไขสำคัญ: ไม่ส่งแจ้งเตือน LINE ทันทีเมื่อเซ็นเซอร์ตรวจพบ ***
+      // ให้ส่งเฉพาะเมื่อคนขับกดปุ่มฉุกเฉินด้วยตนเอง (DRIVER_PANIC)
+      if (eventType === 'STUDENT_SWITCH' || 
+          eventType === 'MOVEMENT_DETECTED' || 
+          eventType === 'HIGH_TEMPERATURE' || 
+          eventType === 'SMOKE_AND_HEAT') {
+        shouldSendToLine = false; // ไม่ส่ง LINE สำหรับเซ็นเซอร์ทั้งหมด
+        console.log(`🚫 Sensor event detected (${eventType}) - notification saved to database but NOT sent to LINE. Waiting for driver response.`);
+      } else if (eventType === 'DRIVER_PANIC') {
+        shouldSendToLine = true; // ส่ง LINE เฉพาะเมื่อคนขับกดปุ่มฉุกเฉินด้วยตนเอง
       }
     } else if (responseType) {
       // การตอบสนองของคนขับ
       if (responseType === 'EMERGENCY') {
         // เมื่อคนขับกดปุ่มฉุกเฉิน ให้ใช้ EMERGENCY_MESSAGES ตามประเภทเซ็นเซอร์
+        shouldSendToLine = true; // ส่ง LINE เมื่อคนขับยืนยันเหตุการณ์ฉุกเฉิน
         if (originalEventType) {
           messageInfo = EMERGENCY_MESSAGES[originalEventType];
           // กำหนด sensor type ตาม eventType
@@ -353,12 +388,8 @@ export default async function handler(req, res) {
         // การตอบสนองอื่นๆ (CHECKED, CONFIRMED_NORMAL) - ใช้ DRIVER_RESPONSE_MESSAGES
         messageInfo = DRIVER_RESPONSE_MESSAGES[responseType];
         
-        // ถ้ามี originalSensorType หรือ originalEventType ให้ใช้ข้อความที่เฉพาะเจาะจง
-        if (originalSensorType && messageInfo.templates && messageInfo.templates[originalSensorType]) {
-          messageInfo = {
-            ...messageInfo,
-            message: messageInfo.templates[originalSensorType]
-          };
+        // กำหนด detectedSensorType ก่อนการใช้ template
+        if (originalSensorType) {
           detectedSensorType = originalSensorType;
         } else if (originalEventType) {
           // แปลง originalEventType เป็น sensor type
@@ -369,14 +400,7 @@ export default async function handler(req, res) {
             'SMOKE_AND_HEAT': 'smoke_heat_sensor',
             'STUDENT_SWITCH': 'student_switch'
           };
-          const mappedSensorType = eventToSensorMap[originalEventType];
-          if (mappedSensorType && messageInfo.templates && messageInfo.templates[mappedSensorType]) {
-            messageInfo = {
-              ...messageInfo,
-              message: messageInfo.templates[mappedSensorType]
-            };
-            detectedSensorType = mappedSensorType;
-          }
+          detectedSensorType = eventToSensorMap[originalEventType];
         } else if (emergencyLogId) {
           // ถ้าไม่มี originalSensorType ให้ดึงจากฐานข้อมูล
           try {
@@ -386,47 +410,50 @@ export default async function handler(req, res) {
             .eq('event_id', emergencyLogId)
             .single();
 
-          if (!logError && emergencyLog) {
-            const dbSensorType = emergencyLog.sensor_type;
-            const dbEventType = emergencyLog.event_type;
-            
-            // แปลง database sensor type เป็น template key
-            let templateKey = null;
-            if (dbSensorType) {
-              if (dbSensorType.includes('motion')) {
-                templateKey = 'motion_sensor';
-              } else if (dbSensorType.includes('temp') && dbSensorType.includes('smoke')) {
-                templateKey = 'smoke_heat_sensor';
-              } else if (dbSensorType.includes('temp')) {
-                templateKey = 'temperature_sensor';
-              } else if (dbSensorType.includes('student')) {
-                templateKey = 'student_switch';
-              } else if (dbSensorType.includes('manual') || dbSensorType.includes('driver')) {
-                templateKey = 'manual_driver_emergency';
+            if (!logError && emergencyLog) {
+              const dbSensorType = emergencyLog.sensor_type;
+              const dbEventType = emergencyLog.event_type;
+              
+              // แปลง database sensor type เป็น template key ตาม constraint ของฐานข้อมูล
+               if (dbSensorType) {
+                 // ปรับปรุงการแปลง sensor type ให้ถูกต้องตาม constraint: 'PIR', 'DHT22', 'MQ2', 'MQ135', 'TEMPERATURE', 'SMOKE', 'MOTION', 'COMBINED'
+                 if (dbSensorType === 'PIR') {
+                   detectedSensorType = 'student_switch'; // PIR สำหรับนักเรียน
+                 } else if (dbSensorType === 'MOTION') {
+                   detectedSensorType = 'motion_sensor'; // Motion detection
+                 } else if (dbSensorType === 'DHT22' || dbSensorType === 'TEMPERATURE') {
+                   detectedSensorType = 'temperature_sensor'; // อุณหภูมิ
+                 } else if (dbSensorType === 'MQ2' || dbSensorType === 'MQ135' || dbSensorType === 'SMOKE') {
+                   detectedSensorType = 'smoke_heat_sensor'; // ควันและก๊าซ
+                 } else if (dbSensorType === 'COMBINED') {
+                   detectedSensorType = 'smoke_heat_sensor'; // รวมควันและอุณหภูมิ
+                 } else {
+                   detectedSensorType = 'motion_sensor'; // default fallback
+                 }
+              } else if (dbEventType) {
+                const eventToSensorMap = {
+                  'DRIVER_PANIC': 'manual_driver_emergency',
+                  'MOVEMENT_DETECTED': 'motion_sensor',
+                  'HIGH_TEMPERATURE': 'temperature_sensor',
+                  'SMOKE_AND_HEAT': 'smoke_heat_sensor',
+                  'STUDENT_SWITCH': 'student_switch'
+                };
+                detectedSensorType = eventToSensorMap[dbEventType] || 'motion_sensor';
               }
-            } else if (dbEventType) {
-              const eventToSensorMap = {
-                'DRIVER_PANIC': 'manual_driver_emergency',
-                'MOVEMENT_DETECTED': 'motion_sensor',
-                'HIGH_TEMPERATURE': 'temperature_sensor',
-                'SMOKE_AND_HEAT': 'smoke_heat_sensor',
-                'STUDENT_SWITCH': 'student_switch'
-              };
-              templateKey = eventToSensorMap[dbEventType];
             }
-
-            if (templateKey && messageInfo.templates && messageInfo.templates[templateKey]) {
-              messageInfo = {
-                ...messageInfo,
-                message: messageInfo.templates[templateKey]
-              };
-              detectedSensorType = templateKey;
-            }
+          } catch (error) {
+            console.error('Error fetching emergency log for sensor type:', error);
+            detectedSensorType = 'motion_sensor'; // fallback
           }
-        } catch (error) {
-          console.error('Error fetching emergency log for sensor type:', error);
         }
-      }
+        
+        // ใช้ template ที่เฉพาะเจาะจงตาม sensor type
+        if (detectedSensorType && messageInfo.templates && messageInfo.templates[detectedSensorType]) {
+          messageInfo = {
+            ...messageInfo,
+            message: messageInfo.templates[detectedSensorType]
+          };
+        }
       }
     }
 
@@ -437,7 +464,8 @@ export default async function handler(req, res) {
     }
 
     // อัปเดต shouldSendToLine ตาม messageInfo
-    if (messageInfo.sendToLine !== undefined) {
+    // ยกเว้นกรณี responseType === 'EMERGENCY' ที่ต้องส่ง LINE เสมอ
+    if (messageInfo.sendToLine !== undefined && responseType !== 'EMERGENCY') {
       shouldSendToLine = messageInfo.sendToLine;
     }
 
@@ -706,8 +734,9 @@ export default async function handler(req, res) {
         };
         
         // ข้อมูลที่จะ INSERT ลงใน emergency_logs ตามโครงสร้างตารางที่ถูกต้อง
+        const driverIdValue = driverId || busId || 1; // ใช้ driverId เป็นหลัก ถ้าไม่มีใช้ busId หรือ default เป็น 1
         const emergencyLogData = {
-          driver_id: parseInt(busId), // busId จริงๆ แล้วคือ driver_id
+          driver_id: parseInt(driverIdValue), // แปลงเป็น integer และมั่นใจว่าไม่เป็น NaN
           event_time: new Date(timestamp || Date.now()).toISOString(),
           event_type: 'SENSOR_ALERT', // ใช้ค่าที่อนุญาตในฐานข้อมูล
           triggered_by: 'sensor',
@@ -827,6 +856,49 @@ export default async function handler(req, res) {
         }
       } catch (error) {
         console.error('Database event operation error:', error);
+      }
+    }
+
+    // บันทึกผลการส่ง LINE notification ลงตาราง notification_logs
+    if (shouldSendToLine && notificationResults.length > 0) {
+      try {
+        const successCount = notificationResults.filter(result => result.status === 'success').length;
+        const failedCount = notificationResults.filter(result => result.status === 'failed').length;
+        
+        // กำหนดประเภทการแจ้งเตือน
+        let notificationType = 'Emergency';
+        if (responseType) {
+          notificationType = `Emergency ${responseType}`;
+        } else if (eventType) {
+          notificationType = `Emergency ${eventType}`;
+        }
+
+        // บันทึกลงตาราง notification_logs สำหรับแต่ละผู้รับ
+        const notificationLogs = notificationResults.map(result => ({
+          notification_type: notificationType,
+          recipient_id: result.lineUserId,
+          message: lineMessage?.text || 'Emergency notification',
+          status: result.status === 'success' ? 'SUCCESS' : 'FAILED',
+          error_details: result.error ? { error: result.error, type: result.type } : null,
+          student_id: result.studentId || null,
+          driver_id: parseInt(driverId || busId || 1),
+          channel_type: 'line',
+          fallback_used: false,
+          retry_count: 0
+        }));
+
+        const { data: logResult, error: logError } = await supabase
+           .from('notification_logs')
+           .insert(notificationLogs)
+           .select();
+
+        if (logError) {
+          console.error('❌ Error logging notification results:', logError);
+        } else {
+          console.log('✅ Notification results logged successfully:', logResult);
+        }
+      } catch (error) {
+        console.error('❌ Error in notification logging:', error);
       }
     }
 

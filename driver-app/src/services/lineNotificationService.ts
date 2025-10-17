@@ -17,6 +17,58 @@ const mapEventTypeToAPI = (eventType: string): string => {
   return eventTypeMap[eventType] || eventType;
 };
 
+// แปลง sensor type จาก emergency log เป็น format ที่ API ต้องการ
+const mapSensorTypeFromEmergency = (emergency: EmergencyLog): { sensorType?: string; originalSensorType?: string } => {
+  // ถ้ามี sensor_type ในฐานข้อมูล ให้ใช้เป็น originalSensorType
+  if (emergency.sensor_type) {
+    let sensorType = '';
+    let originalSensorType = emergency.sensor_type;
+    
+    // แปลง sensor_type เป็น format ที่ API ต้องการ
+    switch (emergency.sensor_type) {
+      case 'PIR':
+        sensorType = 'motion_detected_after_trip'; // หรือ motion_detected_at_school ขึ้นอยู่กับบริบท
+        break;
+      case 'SMOKE_HEAT':
+        sensorType = 'smoke_heat';
+        break;
+      case 'TEMPERATURE':
+        sensorType = 'temp_only';
+        break;
+      default:
+        sensorType = 'motion_detected_after_trip'; // default fallback
+        break;
+    }
+    
+    return { sensorType, originalSensorType };
+  }
+  
+  // ถ้าไม่มี sensor_type ให้ดูจาก details หรือ event_type
+  if (emergency.details) {
+    try {
+      const details = typeof emergency.details === 'string' ? JSON.parse(emergency.details) : emergency.details;
+      if (details.source) {
+        return { 
+          sensorType: details.source,
+          originalSensorType: emergency.sensor_type || 'UNKNOWN'
+        };
+      }
+    } catch (e) {
+      console.warn('Failed to parse emergency details:', e);
+    }
+  }
+  
+  // fallback ตาม event_type
+  if (emergency.event_type === 'SENSOR_ALERT') {
+    return { 
+      sensorType: 'motion_detected_after_trip',
+      originalSensorType: 'PIR'
+    };
+  }
+  
+  return {};
+};
+
 interface LineUser {
   line_user_id: string;
   user_name?: string;
@@ -43,6 +95,7 @@ export const getAllLineUsers = async (): Promise<LineUser[]> => {
 export const sendEmergencyLineNotification = async (
   emergency: EmergencyLog,
   responseType: 'NEW_EMERGENCY' | 'EMERGENCY' | 'CONFIRMED_NORMAL' | 'CHECKED',
+  driverId?: number,
   driverName?: string
 ): Promise<{ success: boolean; error?: any }> => {
   try {
@@ -55,6 +108,9 @@ export const sendEmergencyLineNotification = async (
       API_BASE_URL: API_BASE_URL
     });
 
+    // ดึงข้อมูล sensor type
+    const sensorInfo = mapSensorTypeFromEmergency(emergency);
+    
     // เรียก emergency-notification API endpoint
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -65,10 +121,14 @@ export const sendEmergencyLineNotification = async (
         eventType: mapEventTypeToAPI(emergency.event_type),
         responseType: responseType,
         eventId: emergency.event_id,
+        emergencyLogId: emergency.event_id, // เพิ่ม emergencyLogId
+        driverId: driverId || emergency.driver_id, // เพิ่ม driverId
         description: emergency.description,
         location: emergency.location,
         notes: emergency.notes,
-        timestamp: emergency.event_time
+        timestamp: emergency.event_time,
+        sensorType: sensorInfo.sensorType,
+        originalSensorType: sensorInfo.originalSensorType
       }),
     });
 
@@ -87,18 +147,7 @@ export const sendEmergencyLineNotification = async (
       return { success: false, error: result.error || 'API returned failure' };
     }
 
-    // บันทึก log การส่งการแจ้งเตือน
-    try {
-      await logNotificationResults(
-        emergency.event_id, 
-        responseType, 
-        result.notificationResults?.filter((r: any) => r.status === 'success').length || 0,
-        result.notificationResults?.filter((r: any) => r.status === 'failed').length || 0
-      );
-    } catch (logError) {
-      console.warn('Failed to log notification results:', logError);
-      // ไม่ให้ error ของการ log ทำให้การส่ง notification ล้มเหลว
-    }
+    // การบันทึก log ถูกจัดการโดย API แล้ว ไม่ต้องบันทึกซ้ำที่นี่
 
     return { 
       success: true,
@@ -111,31 +160,7 @@ export const sendEmergencyLineNotification = async (
   }
 };
 
-// ฟังก์ชันนี้ถูกแทนที่ด้วยการเรียก emergency-notification API โดยตรง
-
-// บันทึก log การส่งการแจ้งเตือน
-const logNotificationResults = async (
-  eventId: number,
-  responseType: string,
-  successCount: number,
-  failureCount: number
-): Promise<void> => {
-  try {
-    await supabase
-      .from('notification_logs')
-      .insert({
-        notification_type: 'EMERGENCY_LINE',
-        recipient_id: 'ALL_USERS',
-        message: `Emergency ${responseType}: ${successCount} sent, ${failureCount} failed`,
-        status: failureCount === 0 ? 'SUCCESS' : 'PARTIAL_FAILURE',
-        error_details: failureCount > 0 ? { failureCount, successCount } : null,
-      });
-  } catch (error) {
-    console.error('Error logging notification results:', error);
-  }
-};
-
-// Helper functions ถูกย้ายไปใช้ใน emergency-notification API แล้ว
+// การส่งการแจ้งเตือนและการบันทึก log ถูกจัดการโดย emergency-notification API แล้ว
 
 export default {
   sendEmergencyLineNotification,

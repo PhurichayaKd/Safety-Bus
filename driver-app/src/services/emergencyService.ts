@@ -180,7 +180,7 @@ export const sendLineNotification = async (
   responseType?: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL'
 ) => {
   try {
-    const baseUrl = process.env.EXPO_PUBLIC_LINE_NOTIFICATION_URL || 'http://localhost:3000';
+    const baseUrl = process.env.EXPO_PUBLIC_LINE_NOTIFICATION_URL || 'https://safety-bus-liff-v4-new.vercel.app';
     
     let message = '';
     

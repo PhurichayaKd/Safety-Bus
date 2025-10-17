@@ -9,7 +9,6 @@ import {
   getEventTypeText,
   formatDateTime
 } from '../services/emergencyService';
-import { sendEmergencyLineNotification } from '../services/lineNotificationService';
 
 interface EmergencyContextType {
   emergencies: EmergencyLog[];
@@ -153,21 +152,10 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
         return;
       }
 
-      // *** แก้ไขสำคัญ: ส่ง LINE เฉพาะเมื่อคนขับกด EMERGENCY เท่านั้น ***
+      // *** หมายเหตุ: การส่ง LINE notification จะถูกจัดการใน emergencyService.ts แล้ว ***
       const emergency = emergencies.find(e => e.event_id === eventId);
       if (emergency && responseType === 'EMERGENCY') {
-        try {
-          const result = await sendEmergencyLineNotification(emergency, responseType, driverId);
-          if (!result.success) {
-            console.warn('LINE notification failed:', result.error);
-            // ไม่แสดง error ให้ผู้ใช้เห็น เพราะการตอบสนองหลักสำเร็จแล้ว
-          } else {
-            console.log('LINE notification sent successfully for EMERGENCY response');
-          }
-        } catch (error) {
-          console.error('Error sending LINE notification:', error);
-          // ไม่ให้ error ของการส่ง notification ทำให้การตอบสนองล้มเหลว
-        }
+        console.log('📱 Emergency response recorded - LINE notification will be sent by emergencyService');
       } else if (emergency && (responseType === 'CHECKED' || responseType === 'CONFIRMED_NORMAL')) {
         console.log(`📝 Driver response recorded (${responseType}) - no LINE notification sent as requested`);
       }

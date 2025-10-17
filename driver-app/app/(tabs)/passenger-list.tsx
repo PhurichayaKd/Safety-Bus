@@ -20,11 +20,10 @@ import {
   getEventTypeColor as getEventTypeColorFromService,
   getTriggeredByText as getTriggeredByTextFromService,
   formatDateTime as formatDateTimeFromService,
-  subscribeToEmergencyLogs,
-  getUnresolvedEmergencyLogs,
-  recordEmergencyResponse,
-  EmergencyLog
+  EmergencyLog,
+  getRecentEmergencyLogs
 } from '../../src/services/emergencyService';
+import { useEmergency } from '../../src/contexts/EmergencyContext';
 import EmergencyAlertModal from '../../src/components/EmergencyAlertModal';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -138,6 +137,18 @@ const shadowElevated = Platform.select({
 });
 
 export default function PassengerMapPage() {
+  // Emergency Context (for real-time alerts only)
+  const { 
+    showEmergencyModal, 
+    currentEmergency, 
+    handleEmergencyResponse, 
+    dismissModal 
+  } = useEmergency();
+
+  // Emergency logs state (for bell icon and modal)
+  const [emergencyLogs, setEmergencyLogs] = useState<EmergencyLog[]>([]);
+  const [emergencyLogsLoading, setEmergencyLogsLoading] = useState(false);
+
   // Map states
   const webRef = useRef<WebView>(null);
   const [bus, setBus] = useState<Pt | null>(null);
@@ -172,12 +183,6 @@ export default function PassengerMapPage() {
   const [alertsVisible, setAlertsVisible] = useState(false);
   const [driverId, setDriverId] = useState<number | null>(null);
   const [driverReady, setDriverReady] = useState(false);
-  const [emergencyLogs, setEmergencyLogs] = useState<EmergencyLog[]>([]);
-  
-  // Real-time emergency monitoring states
-  const [currentEmergencyAlert, setCurrentEmergencyAlert] = useState<EmergencyLog | null>(null);
-  const [isEmergencyAlertVisible, setIsEmergencyAlertVisible] = useState(false);
-  const [lastCheckedTimestamp, setLastCheckedTimestamp] = useState<string | null>(null);
 
   // App state tracking and performance optimization
   const [isAppActive, setIsAppActive] = useState(true);
@@ -202,6 +207,31 @@ export default function PassengerMapPage() {
     driverIdRef.current = data?.driver_id ?? null;
     return driverIdRef.current;
   }, []);
+
+  // Emergency logs data fetching
+  const fetchEmergencyLogs = useCallback(async () => {
+    try {
+      setEmergencyLogsLoading(true);
+      const driverId = await getMyDriverId();
+      if (driverId) {
+        const { data, error } = await getRecentEmergencyLogs(driverId);
+        if (error) {
+          console.error('Error fetching emergency logs:', error);
+        } else {
+          setEmergencyLogs(data || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching emergency logs:', error);
+    } finally {
+      setEmergencyLogsLoading(false);
+    }
+  }, [getMyDriverId]);
+
+  // Calculate unread count from emergency logs
+  const unreadCount = useMemo(() => {
+    return emergencyLogs.length;
+  }, [emergencyLogs]);
 
   const calculateDistance = useCallback((a: Pt, b: Pt) => {
     const toRad = (d: number) => (d * Math.PI) / 180;
@@ -333,64 +363,7 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
     })();
   }, []);
 
-  // Real-time emergency monitoring - ตรวจสอบทุก 1 วินาที
-  useEffect(() => {
-    const checkForNewEmergencies = async () => {
-      try {
-        const currentDriverId = await getMyDriverId();
-        if (!currentDriverId) {
-          console.log('❌ No driver ID found for emergency monitoring');
-          return;
-        }
-        
-        console.log('🔍 Checking for emergencies... Driver ID:', currentDriverId);
-        
-        const { data: unresolvedLogs, error } = await getUnresolvedEmergencyLogs(currentDriverId);
-        
-        if (error) {
-          console.error('❌ Error fetching unresolved emergency logs:', error);
-          return;
-        }
 
-        console.log('📊 Emergency logs found:', unresolvedLogs?.length || 0);
-        
-        if (unresolvedLogs && unresolvedLogs.length > 0) {
-          // หาเหตุการณ์ล่าสุดที่ยังไม่ได้แก้ไข
-          const latestEmergency = unresolvedLogs[0]; // เรียงตาม event_time desc แล้ว
-          
-          // ตรวจสอบว่าเป็นเหตุการณ์ใหม่หรือไม่
-          const isNewEmergency = !lastCheckedTimestamp || 
-            new Date(latestEmergency.event_time) > new Date(lastCheckedTimestamp);
-          
-          // แสดง modal ทันทีถ้าเป็นเหตุการณ์ใหม่และยังไม่มี modal แสดงอยู่
-          if (isNewEmergency && !isEmergencyAlertVisible) {
-            console.log('🚨 New emergency detected:', latestEmergency);
-            setCurrentEmergencyAlert(latestEmergency);
-            setIsEmergencyAlertVisible(true);
-            // อัปเดต timestamp เฉพาะเมื่อแสดง modal แล้ว
-            setLastCheckedTimestamp(latestEmergency.event_time);
-          }
-          
-          // ถ้ายังไม่มี modal แสดงและมี emergency ที่ยังไม่ได้แก้ไข ให้แสดงทันที
-          if (!isEmergencyAlertVisible && !currentEmergencyAlert) {
-            console.log('🚨 Showing unresolved emergency:', latestEmergency);
-            setCurrentEmergencyAlert(latestEmergency);
-            setIsEmergencyAlertVisible(true);
-          }
-        }
-      } catch (error) {
-        console.error('Error in real-time emergency monitoring:', error);
-      }
-    };
-
-    // เรียกใช้ทันทีเมื่อ component mount
-    checkForNewEmergencies();
-
-    // ตั้ง interval ให้ตรวจสอบทุก 1 วินาที
-    const interval = setInterval(checkForNewEmergencies, 1000);
-
-    return () => clearInterval(interval);
-  }, [lastCheckedTimestamp, isEmergencyAlertVisible, currentEmergencyAlert]);
 
   const softResetSets = () => {
     setBoardedGoSet(new Set());
@@ -714,35 +687,7 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
     }
   }, [fetchTodayEvents]);
 
-  // ฟังก์ชันสำหรับจัดการการตอบสนองเหตุฉุกเฉิน
-  const handleEmergencyResponse = async (
-    eventId: number,
-    responseType: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL'
-  ) => {
-    if (!currentEmergencyAlert || !driverId) return;
 
-    try {
-      const result = await recordEmergencyResponse(
-        eventId,
-        responseType,
-        driverId
-      );
-
-      if (result.success) {
-        if (responseType === 'CHECKED' || responseType === 'CONFIRMED_NORMAL') {
-          // ปิด modal เมื่อตรวจสอบแล้วหรือยืนยันสถานการณ์กลับสู่ปกติ
-          setIsEmergencyAlertVisible(false);
-          setCurrentEmergencyAlert(null);
-        }
-        // สำหรับ EMERGENCY จะไม่ปิด modal ทันที จะรอให้กด CONFIRMED_NORMAL
-      } else {
-        Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกการตอบสนองได้');
-      }
-    } catch (error) {
-      console.error('Error handling emergency response:', error);
-      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกการตอบสนองได้');
-    }
-  };
 
   // Phase from AsyncStorage
   useFocusEffect(
@@ -763,8 +708,11 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
 
         // ตรวจสอบการรีเซ็ตสำหรับรอบเย็น
         await checkReturnPhaseReset();
+        
+        // Fetch emergency logs
+        await fetchEmergencyLogs();
       })();
-    }, [fetchStudents, fetchTodayEvents, checkReturnPhaseReset])
+    }, [fetchStudents, fetchTodayEvents, checkReturnPhaseReset, fetchEmergencyLogs])
   );
 
   // Driver ID setup
@@ -785,27 +733,7 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
     })();
   }, []);
 
-  // Load emergency logs
-  const fetchEmergencyLogs = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('emergency_logs')
-        .select('*')
-        .order('event_time', { ascending: false })
-        .limit(20); // Get latest 20 emergency logs
 
-      if (error) {
-        console.error('Error fetching emergency logs:', error);
-        setEmergencyLogs([]);
-        return;
-      }
-
-      setEmergencyLogs(data || []);
-    } catch (error) {
-      console.error('Error fetching emergency logs:', error);
-      setEmergencyLogs([]);
-    }
-  }, []);
 
   // App state listener for smart refresh
   useEffect(() => {
@@ -854,12 +782,7 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
     return () => clearInterval(interval);
   }, [fetchStudents, fetchTodayEvents, isAppActive]);
 
-  // Fetch emergency logs when alerts modal is opened
-  useEffect(() => {
-    if (alertsVisible) {
-      fetchEmergencyLogs();
-    }
-  }, [alertsVisible, fetchEmergencyLogs]);
+
 
   // Real-time subscription for leave requests
   useEffect(() => {
@@ -1745,6 +1668,13 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
             style={styles.bellButton}
           >
             <Ionicons name="notifications-outline" size={20} color={COLORS.textSecondary} />
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -1958,7 +1888,12 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
             </View>
             
             <View style={styles.alertsModalContent}>
-              {emergencyLogs.length === 0 ? (
+              {emergencyLogsLoading ? (
+                <View style={styles.alertsEmptyContainer}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={styles.alertsEmptyText}>กำลังโหลดข้อมูล...</Text>
+                </View>
+              ) : emergencyLogs.length === 0 ? (
                 <View style={styles.alertsEmptyContainer}>
                   <Ionicons name="checkmark-circle" size={48} color={COLORS.success} />
                   <Text style={styles.alertsEmptyText}>ไม่มีเหตุการณ์ฉุกเฉิน</Text>
@@ -2069,14 +2004,11 @@ if(typeof window !== 'undefined') window.addEventListener('message',e=>handle(e.
 
       {/* Real-time Emergency Alert Modal */}
       <EmergencyAlertModal
-        visible={isEmergencyAlertVisible}
-        emergency={currentEmergencyAlert}
+        visible={showEmergencyModal}
+        emergency={currentEmergency}
         driverId={driverId || 0}
         onResponse={handleEmergencyResponse}
-        onClose={() => {
-          setIsEmergencyAlertVisible(false);
-          setCurrentEmergencyAlert(null);
-        }}
+        onClose={dismissModal}
       />
 
     </SafeAreaView>
@@ -2205,6 +2137,26 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bgSecondary,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: COLORS.danger,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.card,
+  },
+  notificationBadgeText: {
+    color: COLORS.card,
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   viewToggleContainer: {
     flexDirection: 'row',

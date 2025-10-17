@@ -140,7 +140,8 @@ void sirenUpdate() {
 }
 
 /* ===== Supabase: emergency_logs (details → JSON ที่อ่านง่าย) ===== */
-bool postSensorAlertMessage(const String& sourceKey, const String& humanMessage) {
+bool postSensorAlertMessage(const String& sourceKey, const String& humanMessage, 
+                           const String& sensorType = "", const String& sensorData = "") {
   ensureWifi();
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("[Supabase] No WiFi, skip send.");
@@ -170,8 +171,17 @@ bool postSensorAlertMessage(const String& sourceKey, const String& humanMessage)
     + "\"driver_id\":" + DRIVER_ID + ","
     + "\"event_type\":\"SENSOR_ALERT\","
     + "\"triggered_by\":\"sensor\","
-    + "\"details\":" + detailsJson +
-    "}";
+    + "\"details\":" + detailsJson;
+    
+  // เพิ่ม sensor_type และ sensor_data ถ้ามีข้อมูล
+  if (sensorType.length() > 0) {
+    body += ",\"sensor_type\":\"" + jsonEscape(sensorType) + "\"";
+  }
+  if (sensorData.length() > 0) {
+    body += ",\"sensor_data\":" + sensorData;
+  }
+  
+  body += "}";
 
   Serial.printf("[Supabase] POST %s\nBody: %s\n", url.c_str(), body.c_str());
   int code = https.POST(body);
@@ -317,9 +327,17 @@ void checkMotion() {
       
       // แยกข้อความแจ้งเตือนตามสถานะ trip_phase
       if (currentTripPhase == "completed") {
-        postSensorAlertMessage("motion_detected_after_trip", "ตรวจพบการเคลื่อนไหวผิดปกติหลังจบการเดินทาง ตรวจสอบทันที");
+        String motionData = String("{\"pir1\":") + (digitalRead(PIN_PIR1) == HIGH ? "true" : "false") +
+                           ",\"pir2\":" + (digitalRead(PIN_PIR2) == HIGH ? "true" : "false") +
+                           ",\"duration_ms\":" + String(now - pirHighSince) +
+                           ",\"trip_phase\":\"" + currentTripPhase + "\"}";
+        postSensorAlertMessage("motion_detected_after_trip", "ตรวจพบการเคลื่อนไหวผิดปกติหลังจบการเดินทาง ตรวจสอบทันที", "MOTION", motionData);
       } else if (currentTripPhase == "at_school") {
-        postSensorAlertMessage("motion_detected_at_school", "ตรวจพบการเคลื่อนไหวผิดปกติขณะจอดที่โรงเรียน ตรวจสอบทันที");
+        String motionData = String("{\"pir1\":") + (digitalRead(PIN_PIR1) == HIGH ? "true" : "false") +
+                           ",\"pir2\":" + (digitalRead(PIN_PIR2) == HIGH ? "true" : "false") +
+                           ",\"duration_ms\":" + String(now - pirHighSince) +
+                           ",\"trip_phase\":\"" + currentTripPhase + "\"}";
+        postSensorAlertMessage("motion_detected_at_school", "ตรวจพบการเคลื่อนไหวผิดปกติขณะจอดที่โรงเรียน ตรวจสอบทันที", "MOTION", motionData);
       }
     }
   } else {
@@ -352,7 +370,13 @@ void checkSmokeAndHeat() {
       sirenStart();
       String msg = "เซ็นเซอร์ควันและอุณหภูมิสูง: MQ-2=" + String(gasRaw2) +
                    ", MQ-135=" + String(gasRaw135) + ", อุณหภูมิ=" + String(tC, 1) + "°C";
-      postSensorAlertMessage("smoke_heat", msg);
+      String smokeHeatData = String("{\"mq2_raw\":") + String(gasRaw2) +
+                            ",\"mq135_raw\":" + String(gasRaw135) +
+                            ",\"gas_raw_max\":" + String(gasRaw) +
+                            ",\"temperature_c\":" + String(tC, 1) +
+                            ",\"gas_threshold\":" + String(GAS_RAW_THRESHOLD) +
+                            ",\"temp_threshold\":" + String(TEMP_HIGH_C, 1) + "}";
+      postSensorAlertMessage("smoke_heat", msg, "COMBINED", smokeHeatData);
     }
   }
 
@@ -360,7 +384,13 @@ void checkSmokeAndHeat() {
     Serial.println("[TEMP ONLY] high temperature without smoke → ALARM");
     sirenStart();
     String msg = "เซ็นเซอร์วัดอุณหภูมิพบอุณหภูมิสูง " + String(tC, 1) + "°C (ยังไม่พบควัน)";
-    postSensorAlertMessage("temp_only", msg);
+    float h = dht.readHumidity();
+    float hic = dht.computeHeatIndex(tC, h, false);
+    String tempData = String("{\"temperature_c\":") + String(tC, 1) +
+                     ",\"humidity\":" + String(h, 1) +
+                     ",\"temp_threshold\":" + String(TEMP_HIGH_C, 1) +
+                     ",\"heat_index\":" + String(hic, 1) + "}";
+    postSensorAlertMessage("temp_only", msg, "TEMPERATURE", tempData);
     tempOnlyLatched = true;
   }
 }

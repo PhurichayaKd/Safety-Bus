@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 class LineNotificationService {
   constructor() {
-    this.baseUrl = 'http://localhost:3000'; // URL ของ safety-bus-bot
+    this.baseUrl = 'https://safety-bus-liff-v4-new.vercel.app'; // URL ของ safety-bus-bot
     this.isEnabled = true;
   }
 

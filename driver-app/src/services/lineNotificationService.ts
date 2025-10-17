@@ -2,6 +2,8 @@ import { supabase } from './supabaseClient';
 import { EmergencyLog } from './emergencyService';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_LINE_NOTIFICATION_URL || 'http://localhost:3000';
+console.log('Environment variable EXPO_PUBLIC_LINE_NOTIFICATION_URL:', process.env.EXPO_PUBLIC_LINE_NOTIFICATION_URL);
+console.log('Using API_BASE_URL:', API_BASE_URL);
 
 // แปลง event type จากระบบเป็น API format
 const mapEventTypeToAPI = (eventType: string): string => {

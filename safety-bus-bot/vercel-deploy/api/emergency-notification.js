@@ -112,14 +112,14 @@ const DRIVER_RESPONSE_MESSAGES = {
   CONFIRMED_NORMAL: {
     emoji: '✅️',
     title: 'สถานการณ์กลับสู่ปกติ',
-    message: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าไม่มีเหตุฉุกเฉิน ทุกอย่างปลอดภัย',
+    message: '✅ สถานการณ์กลับสู่ปกติ',
     sendToLine: true,
     templates: {
-      motion_sensor: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าไม่มีการเคลื่อนไหวผิดปกติ ทุกอย่างปลอดภัย',
-      temperature_sensor: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าอุณหภูมิกลับสู่ระดับปกติ ทุกอย่างปลอดภัย',
-      smoke_heat_sensor: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าไม่มีควันหรือความร้อนผิดปกติ ทุกอย่างปลอดภัย',
-      manual_driver_emergency: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าเหตุฉุกเฉินได้รับการแก้ไขแล้ว ทุกอย่างปลอดภัย',
-      student_switch: '✅ สถานการณ์กลับสู่ปกติแล้ว\n\nคนขับยืนยันว่าได้ตรวจสอบนักเรียนแล้ว ทุกอย่างปลอดภัย'
+      motion_sensor: '✅ สถานการณ์กลับสู่ปกติ',
+      temperature_sensor: '✅ สถานการณ์กลับสู่ปกติ',
+      smoke_heat_sensor: '✅ สถานการณ์กลับสู่ปกติ',
+      manual_driver_emergency: '✅ สถานการณ์กลับสู่ปกติ',
+      student_switch: '✅ สถานการณ์กลับสู่ปกติ'
     }
   }
 };
@@ -576,11 +576,12 @@ export default async function handler(req, res) {
         detectedSensorType,
         sensorType,
         eventType,
-        shouldCheckCooldown: detectedSensorType && detectedSensorType !== 'manual_driver_emergency'
+        responseType,
+        shouldCheckCooldown: detectedSensorType && detectedSensorType !== 'manual_driver_emergency' && !responseType
       });
       
-      // ตรวจสอบ cooldown สำหรับเซ็นเซอร์ก่อนส่งแจ้งเตือน
-      if (detectedSensorType && detectedSensorType !== 'manual_driver_emergency') {
+      // ตรวจสอบ cooldown สำหรับเซ็นเซอร์ก่อนส่งแจ้งเตือน (เฉพาะ eventType ไม่ใช่ responseType)
+      if (detectedSensorType && detectedSensorType !== 'manual_driver_emergency' && !responseType) {
         // แปลง sensor type ให้ตรงกับ constraint ของฐานข้อมูลสำหรับ cooldown check
         const sensorTypeMapping = {
           'motion_sensor': 'MOTION',
@@ -780,11 +781,14 @@ export default async function handler(req, res) {
     // บันทึกข้อมูลลงฐานข้อมูล (เฉพาะ driver response)
     if (responseType && emergencyLogId) {
       try {
+        // แก้ไขปัญหา driver_id เป็น null โดยใช้ค่า default เหมือนกับ emergency_logs
+        const driverIdValue = driverId || busId || 1;
+        
         const { data: responseData, error: responseError } = await supabase
           .from('emergency_responses')
           .insert({
             event_id: emergencyLogId,
-            driver_id: driverId,
+            driver_id: parseInt(driverIdValue), // แปลงเป็น integer และมั่นใจว่าไม่เป็น NaN
             response_type: responseType,
             sensor_type: detectedSensorType || originalSensorType,
             original_event_type: originalEventType,

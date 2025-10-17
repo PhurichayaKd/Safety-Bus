@@ -18,14 +18,17 @@ async function createTestEmergency() {
           event_type: 'SENSOR_ALERT',
           triggered_by: 'sensor',
           details: {
-            description: 'ทดสอบเซ็นเซอร์ตรวจจับเหตุการณ์ฉุกเฉิน - ' + new Date().toLocaleString('th-TH'),
-            location: 'ตำแหน่งทดสอบ',
-            severity: 'high'
+            source: 'temp_only',
+            message: 'อุณหภูมิสูงผิดปกติ',
+            original_sensor_type: 'HIGH_TEMPERATURE'
           },
-          sensor_type: 'MOTION',
+          sensor_type: 'TEMPERATURE',
           sensor_data: {
-            motion_detected: true,
-            timestamp: new Date().toISOString()
+            mq2_value: 150,
+            mq135_value: 200,
+            temperature: 45.5,
+            gas_threshold: 100,
+            temp_threshold: 40.0
           },
           driver_response_type: null, // ยังไม่ได้รับการตอบสนอง
           status: 'pending'
@@ -41,19 +44,34 @@ async function createTestEmergency() {
     console.log('Test emergency created successfully:', data);
     console.log('Emergency ID:', data[0]?.id);
     
-    // ตรวจสอบว่ามีเหตุการณ์ที่ยังไม่ได้รับการแก้ไข
-    const { data: unresolvedData, error: unresolvedError } = await supabase
+    // ทดสอบการดึงข้อมูล emergency logs ที่ยังไม่ได้แก้ไข
+    console.log('\nFetching unresolved emergencies...');
+    const { data: unresolvedEmergencies, error: fetchError } = await supabase
       .from('emergency_logs')
       .select('*')
       .eq('driver_id', 1)
-      .is('driver_response_type', null)
-      .order('created_at', { ascending: false });
+      .eq('resolved', false)
+      .order('event_time', { ascending: false });
 
-    if (unresolvedError) {
-      console.error('Error fetching unresolved emergencies:', unresolvedError);
+    if (fetchError) {
+      console.error('Error fetching unresolved emergencies:', fetchError);
     } else {
-      console.log('Unresolved emergencies for driver 1:', unresolvedData.length);
-      console.log('Latest unresolved:', unresolvedData[0]);
+      console.log('Unresolved emergencies:', unresolvedEmergencies);
+      console.log(`Found ${unresolvedEmergencies.length} unresolved emergencies`);
+    }
+
+    // ดึงข้อมูล emergency logs ทั้งหมดล่าสุด
+    console.log('\nFetching recent emergency logs...');
+    const { data: recentLogs, error: recentError } = await supabase
+      .from('emergency_logs')
+      .select('*')
+      .order('event_time', { ascending: false })
+      .limit(5);
+
+    if (recentError) {
+      console.error('Error fetching recent logs:', recentError);
+    } else {
+      console.log('Recent emergency logs:', recentLogs);
     }
 
   } catch (err) {

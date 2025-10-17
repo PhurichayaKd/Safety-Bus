@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { useAuth } from './AuthContext';
 import {
   EmergencyLog,
+  Emergency,
   subscribeToEmergencyLogs,
   getUnresolvedEmergencyLogs,
   recordEmergencyResponse,
@@ -79,53 +80,63 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
   };
 
   // จัดการเหตุการณ์ฉุกเฉินใหม่
-  const handleNewEmergency = (emergency: EmergencyLog) => {
-    setEmergencies(prev => [emergency, ...prev]);
+  const handleNewEmergency = useCallback((emergency: Emergency) => {
+    console.log('🚨 [EmergencyContext] handleNewEmergency called with:', emergency);
+    
+    setEmergencies(prev => {
+      const exists = prev.some(e => e.event_id === emergency.event_id);
+      if (exists) {
+        console.log('🔄 [EmergencyContext] Emergency already exists, skipping');
+        return prev;
+      }
+      console.log('✅ [EmergencyContext] Adding new emergency to state');
+      return [emergency, ...prev];
+    });
+
+    setUnreadCount(prev => prev + 1);
     setCurrentEmergency(emergency);
     setShowEmergencyModal(true);
-    setUnreadCount(prev => prev + 1);
-
-    // *** ไม่ส่ง LINE notification สำหรับเซ็นเซอร์ ***
-    // เซ็นเซอร์จะแสดงใน app ให้คนขับตัดสินใจก่อน
-    // ส่ง LINE เฉพาะเมื่อคนขับกดปุ่ม EMERGENCY ในการตอบสนอง
-    console.log(`📱 Emergency event detected (${emergency.event_type}) - showing in driver app, waiting for driver response. No automatic LINE notification sent.`);
     
-    // ไม่ส่ง LINE notification อัตโนมัติสำหรับเหตุการณ์ใหม่
-    // ให้คนขับตัดสินใจเองว่าจะกด EMERGENCY หรือไม่
+    console.log('📱 [EmergencyContext] Modal should be shown now - showEmergencyModal: true');
+    console.log('📋 [EmergencyContext] Current emergency set to:', emergency.event_id);
 
-    // แสดง Alert สำหรับการแจ้งเตือนในแอป
+    // แสดง Alert ในแอป
     Alert.alert(
-      '🚨 เหตุการณ์ฉุกเฉิน!',
-      `${getEventTypeText(emergency.event_type)}\nเวลา: ${formatDateTime(emergency.event_time)}`,
-      [
-        {
-          text: 'ดูรายละเอียด',
-          onPress: () => {
-            setCurrentEmergency(emergency);
-            setShowEmergencyModal(true);
-          }
-        }
-      ]
+      'เหตุการณ์ฉุกเฉิน!',
+      `${getEventTypeText(emergency.event_type)} - ${formatDateTime(emergency.event_time)}`,
+      [{ text: 'ตกลง' }]
     );
-  };
+  }, []);
 
-  // จัดการการอัปเดตเหตุการณ์ฉุกเฉิน
-  const handleEmergencyUpdate = (emergency: EmergencyLog) => {
+  // จัดการการอัปเดต์ฉุกเฉิน
+  const handleEmergencyUpdate = useCallback((updatedEmergency: Emergency) => {
+    console.log('🔄 [EmergencyContext] handleEmergencyUpdate called with:', updatedEmergency);
+    
     setEmergencies(prev => 
-      prev.map(e => e.event_id === emergency.event_id ? emergency : e)
+      prev.map(emergency => 
+        emergency.event_id === updatedEmergency.event_id 
+          ? updatedEmergency 
+          : emergency
+      )
     );
+
+    // อัปเดต currentEmergency ถ้าเป็นเหตุการณ์เดียวกัน
+    if (currentEmergency?.event_id === updatedEmergency.event_id) {
+      console.log('📋 [EmergencyContext] Updating current emergency');
+      setCurrentEmergency(updatedEmergency);
+    }
 
     // ถ้าเหตุการณ์ถูกแก้ไขแล้ว หรือคนขับตอบสนองแล้ว ให้ลบออกจากรายการ
-    if (emergency.resolved || emergency.driver_response_type) {
-      setEmergencies(prev => prev.filter(e => e.event_id !== emergency.event_id));
+    if (updatedEmergency.resolved || updatedEmergency.driver_response_type) {
+      setEmergencies(prev => prev.filter(e => e.event_id !== updatedEmergency.event_id));
       setUnreadCount(prev => Math.max(0, prev - 1));
       
-      if (currentEmergency?.event_id === emergency.event_id) {
+      if (currentEmergency?.event_id === updatedEmergency.event_id) {
         setShowEmergencyModal(false);
         setCurrentEmergency(null);
       }
     }
-  };
+  }, [currentEmergency]);
 
   // ทำเครื่องหมายว่าอ่านแล้ว
   const markAsRead = (eventId: number) => {
@@ -226,24 +237,32 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
 
   // ตั้งค่า Real-time subscription
   useEffect(() => {
-    if (!driverId) return;
+    console.log('🔧 [EmergencyContext] useEffect triggered - driverId:', driverId);
+    
+    if (!driverId) {
+      console.log('❌ [EmergencyContext] No driverId, skipping subscription');
+      return;
+    }
 
-    // โหลดข้อมูลเริ่มต้น
-    refreshEmergencies();
-
-    // ตั้งค่า subscription
-    const channel = subscribeToEmergencyLogs(
+    console.log('🔌 [EmergencyContext] Setting up subscription for driver:', driverId);
+    
+    // ตั้งค่า subscription สำหรับ emergency logs
+    const unsubscribe = subscribeToEmergencyLogs(
       driverId,
       handleNewEmergency,
       handleEmergencyUpdate
     );
 
+    console.log('✅ [EmergencyContext] Subscription setup complete');
+
+    // โหลดข้อมูลเหตุการณ์ฉุกเฉินที่ยังไม่ได้รับการแก้ไข
+    refreshEmergencies();
+
     return () => {
-      if (channel) {
-        channel.unsubscribe();
-      }
+      console.log('🔌 [EmergencyContext] Cleaning up subscription');
+      unsubscribe();
     };
-  }, [driverId]);
+  }, [driverId, handleNewEmergency, handleEmergencyUpdate]);
 
   const value: EmergencyContextType = {
     emergencies,
@@ -264,3 +283,5 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
     </EmergencyContext.Provider>
   );
 };
+
+export default EmergencyProvider;

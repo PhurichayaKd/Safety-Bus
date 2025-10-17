@@ -21,6 +21,9 @@ export interface EmergencyLog {
   driver_response_notes?: string;
 }
 
+// Type alias for Emergency (same as EmergencyLog)
+export type Emergency = EmergencyLog;
+
 export interface EmergencyResponse {
   response_id?: number;
   event_id: number;
@@ -34,40 +37,52 @@ export interface EmergencyResponse {
 // ดึงข้อมูล emergency logs แบบเรียลไทม์
 export const subscribeToEmergencyLogs = (
   driverId: number,
-  onNewEmergency: (emergency: EmergencyLog) => void,
-  onEmergencyUpdate: (emergency: EmergencyLog) => void
+  onNewEmergency: (emergency: Emergency) => void,
+  onEmergencyUpdate: (emergency: Emergency) => void
 ) => {
+  console.log('🔌 [EmergencyService] Setting up subscription for driver:', driverId);
+  
   const channel = supabase
     .channel('emergency-logs-realtime')
     .on(
       'postgres_changes',
       {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'emergency_logs',
-        filter: `driver_id=eq.${driverId}`
+        filter: `driver_id=eq.${driverId}`,
       },
       (payload) => {
-        console.log('New emergency event:', payload.new);
-        onNewEmergency(payload.new as EmergencyLog);
+        console.log('📡 [EmergencyService] Received realtime event:', payload);
+        console.log('📡 [EmergencyService] Event type:', payload.eventType);
+        console.log('📡 [EmergencyService] Payload data:', payload.new);
+        
+        if (payload.eventType === 'INSERT' && payload.new) {
+          console.log('➕ [EmergencyService] New emergency detected, calling onNewEmergency');
+          onNewEmergency(payload.new as Emergency);
+        } else if (payload.eventType === 'UPDATE' && payload.new) {
+          console.log('🔄 [EmergencyService] Emergency update detected, calling onEmergencyUpdate');
+          onEmergencyUpdate(payload.new as Emergency);
+        }
       }
     )
-    .on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'emergency_logs',
-        filter: `driver_id=eq.${driverId}`
-      },
-      (payload) => {
-        console.log('Emergency event updated:', payload.new);
-        onEmergencyUpdate(payload.new as EmergencyLog);
+    .subscribe((status) => {
+      console.log('📡 [EmergencyService] Subscription status:', status);
+      if (status === 'SUBSCRIBED') {
+        console.log('✅ [EmergencyService] Successfully subscribed to emergency logs');
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('❌ [EmergencyService] Subscription error');
+      } else if (status === 'TIMED_OUT') {
+        console.error('⏰ [EmergencyService] Subscription timed out');
+      } else if (status === 'CLOSED') {
+        console.log('🔒 [EmergencyService] Subscription closed');
       }
-    )
-    .subscribe();
+    });
 
-  return channel;
+  return () => {
+    console.log('🔌 [EmergencyService] Unsubscribing from emergency logs');
+    channel.unsubscribe();
+  };
 };
 
 // ดึงข้อมูล emergency logs ล่าสุด

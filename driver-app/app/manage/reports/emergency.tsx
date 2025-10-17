@@ -143,14 +143,14 @@ const EmergencyReports: React.FC = () => {
     fetchEmergencyData();
 
     // เพิ่ม real-time subscription สำหรับ emergency logs
-    const channel = subscribeToEmergencyLogs(
+    const unsubscribe = subscribeToEmergencyLogs(
       1, // driver_id = 1 สำหรับตัวอย่าง
       handleNewEmergency,
       handleEmergencyUpdate
     );
 
     return () => {
-      channel.unsubscribe();
+      unsubscribe();
     };
   }, []);
 

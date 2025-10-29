@@ -1,9 +1,11 @@
 # Project-IoT: Safety Bus System
 
-โปรเจคนี้เป็นระบบ **ความปลอดภัยรถรับ-ส่งนักเรียน (Safety Bus System)** ที่ออกแบบมาเพื่อเพิ่มความปลอดภัยและความสะดวกในการจัดการรถรับ-ส่งนักเรียน  
-แบ่งออกเป็น 2 ส่วนหลัก คือ **แอพฝั่งคนขับ (Driver App)** และ **บอทไลน์ (Safety Bus Bot)**
+ระบบความปลอดภัยรถรับ-ส่งนักเรียน (Safety Bus System) ประกอบด้วย 2 ส่วนหลักที่เชื่อมต่อกับฐานข้อมูล Supabase (PostgreSQL) และ LINE Messaging API เพื่อให้ผู้ขับรถและผู้ปกครองใช้งานได้สะดวกและปลอดภัย
 
-## 🏗️ System Architecture
+- ส่วนที่ 1: Driver App (React Native + Expo)
+- ส่วนที่ 2: Safety Bus Bot (LINE Bot บน Vercel Serverless)
+
+## 🏗️ สถาปัตยกรรมระบบ
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -22,268 +24,149 @@
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
----
+## 📂 โครงสร้างโปรเจกต์
 
-## 📱 Driver App (React Native + Expo)
-
-### 📂 โครงสร้างโฟลเดอร์
 ```
-driver-app/
-├── app/                    # App Router (Expo Router)
-│   ├── (tabs)/             # Tab Navigation
-│   │   ├── home.tsx        # หน้าแรก - ภาพรวมระบบ
-│   │   ├── map-live.tsx    # แผนที่แบบ Real-time
-│   │   └── passenger-list.tsx # รายชื่อผู้โดยสาร
-│   ├── auth/               # Authentication
-│   │   ├── login.tsx       # หน้าเข้าสู่ระบบ
-│   │   └── link-account.tsx # เชื่อมโยงบัญชี
-│   ├── driver-info/        # ข้อมูลคนขับ
-│   │   └── bus-form.tsx    # ฟอร์มข้อมูลรถ
-│   ├── manage/             # จัดการข้อมูล
-│   │   ├── students/       # จัดการนักเรียน
-│   │   ├── reports/        # รายงาน
-│   │   └── cards/          # บัตรนักเรียน
-│   └── user-info/          # ข้อมูลผู้ใช้
-├── src/
-│   ├── components/         # React Components
-│   ├── contexts/           # React Context (AuthContext)
-│   ├── services/           # API Services (Supabase)
-│   └── navigation/         # Navigation Logic
-├── assets/                 # รูปภาพและ Fonts
-└── hooks/                  # Custom React Hooks
+Project-IoT/
+├── driver-app/                  # แอปคนขับ (Expo)
+│   ├── app/                     # Expo Router pages
+│   ├── src/                     # Components, contexts, services
+│   ├── services/                # EmergencyService, LineNotificationService
+│   ├── assets/                  # รูปภาพและฟอนต์
+│   ├── vercel.json              # การตั้งค่า (สำหรับ web preview เท่านั้น)
+│   └── .env.example             # ตัวอย่างตัวแปรสภาพแวดล้อม
+├── safety-bus-bot/
+│   └── vercel-deploy/           # LINE Bot (Vercel Serverless)
+│       ├── api/                 # Serverless functions (webhook, student, leave)
+│       ├── lib/                 # โค้ดแกน เช่น line.js, handlers.js, db.js
+│       ├── assets/              # รูป Rich Menu และไฟล์หน้าเว็บ
+│       └── vercel.json          # การตั้งค่า Vercel
+├── supabase/                    # สคริปต์จัดการสถานะข้อมูล
+├── System-Testing-Guide.md      # คู่มือการทดสอบระบบ
+├── Troubleshooting-Guide.md     # คู่มือแก้ปัญหา
+├── LINE-Bot-Migration-Guide.md  # คู่มือการย้ายระบบ LINE Bot
+├── LINE-Bot-UI-UX-Guide.md      # แนวทางออกแบบประสบการณ์ผู้ใช้ของบอท
+├── Production-Deployment-Guide.md # คู่มือ Deploy ระบบจริง
+├── Driver-App-Migration-Guide.md  # คู่มือย้ายระบบฝั่งคนขับ
+└── README.md                    # เอกสารหลักของโปรเจกต์
 ```
 
-### 🔧 เทคโนโลยีและ Dependencies
-- **Framework**: React Native (Expo SDK 52)
-- **Language**: TypeScript
-- **Navigation**: Expo Router
-- **Database**: Supabase (PostgreSQL + Realtime)
-- **Authentication**: Supabase Auth
-- **Maps**: React Native Maps
-- **State Management**: React Context + Hooks
+## 🔧 เทคโนโลยีที่ใช้
 
-### 🚀 การติดตั้งและรัน
-```bash
-cd driver-app
-npm install
-npx expo start
+- Frontend (Mobile): React Native (Expo), TypeScript, Expo Router
+- Backend (Bot): Node.js 18+, Vercel Serverless Functions, LINE Messaging API SDK
+- Database & Services: Supabase (PostgreSQL, Realtime, Auth, RLS)
+- Dev Tools: Git, npm, ESLint, Prettier
 
-# สำหรับ iOS
-npx expo start --ios
+## 🔑 ตัวแปรสภาพแวดล้อม
 
-# สำหรับ Android
-npx expo start --android
-```
+ตั้งค่าตัวแปรในไฟล์ `.env.local` ตามส่วนประกอบต่อไปนี้
 
-### 🔑 Environment Variables (.env.local)
-```bash
-EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+- Driver App (`driver-app/.env.local`)
+  - `EXPO_PUBLIC_SUPABASE_URL=your_supabase_url`
+  - `EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key`
 
-### 📋 ฟีเจอร์หลัก
-1. **Authentication System**
-   - เข้าสู่ระบบด้วย Email/Password
-   - เชื่อมโยงบัญชีกับข้อมูลคนขับ
-   - Session Management
+- Safety Bus Bot (`safety-bus-bot/vercel-deploy/.env.local`)
+  - `LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token`
+  - `LINE_CHANNEL_SECRET=your_line_channel_secret`
+  - `SUPABASE_URL=your_supabase_url`
+  - `SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key`
+  - `WEBHOOK_URL=your_vercel_webhook_url`
 
-2. **Student Management**
-   - เช็คชื่อนักเรียนขึ้น-ลงรถ
-   - ดูรายชื่อผู้โดยสารแบบ Real-time
-   - จัดการข้อมูลนักเรียน
+## 🚀 การติดตั้งและการรัน (Development)
 
-3. **Real-time Tracking**
-   - แผนที่แสดงตำแหน่งรถแบบ Real-time
-   - อัปเดตสถานะการเดินทาง
-   - แจ้งเตือนผู้ปกครอง
+ข้อกำหนดเบื้องต้น: ติดตั้ง Node.js 18+, npm, Expo CLI, และ Vercel CLI
 
-4. **Reports & Analytics**
-   - รายงานการขึ้น-ลงรถ
-   - สถิติการใช้งาน
-   - ประวัติการเดินทาง
+- ติดตั้งและรัน Driver App
+  ```bash
+  cd driver-app
+  npm install
+  npx expo start
+  ```
 
----
+- ติดตั้งและรัน Safety Bus Bot (Local dev)
+  ```bash
+  cd safety-bus-bot/vercel-deploy
+  npm install
+  # รัน local server (ถ้ามี server.js)
+  node server.js
+  ```
 
-## 🤖 Safety Bus Bot (LINE Bot)
+## 🌐 การ Deploy ไปยัง Production
 
-### 📂 โครงสร้างโฟลเดอร์
-```
-safety-bus-bot/vercel-deploy/
-├── api/                    # API Endpoints (Vercel Functions)
-│   ├── webhook.mjs         # LINE Webhook Handler
-│   ├── get-student.js      # ดึงข้อมูลนักเรียน
-│   ├── submit-leave.js     # ส่งคำขอลา
-│   ├── cancel-leave.js     # ยกเลิกการลา
-│   └── get-leave-requests.js # ดึงรายการลา
-├── lib/                    # Core Libraries
-│   ├── line.js             # LINE API Functions
-│   ├── menu.js             # Rich Menu & Quick Reply
-│   ├── handlers.js         # Event Handlers
-│   ├── db.js               # Database Connection
-│   └── student-data.js     # Student Data Management
-├── assets/                 # Rich Menu Images
-│   ├── richmenu-image.jpg
-│   └── richmenu-image.svg
-├── css/                    # Stylesheets
-├── js/                     # Frontend JavaScript
-├── server.js               # Local Development Server
-├── setup-richmenu.js       # Rich Menu Setup Script
-└── vercel.json             # Vercel Configuration
-```
+- Deploy LINE Bot ไป Vercel
+  ```bash
+  cd safety-bus-bot/vercel-deploy
+  vercel deploy
+  ```
 
-### 🔧 เทคโนโลยีและ Dependencies
-- **Runtime**: Node.js 18+
-- **Framework**: Express.js (สำหรับ local dev)
-- **Deployment**: Vercel (Serverless Functions)
-- **LINE SDK**: @line/bot-sdk
-- **Database**: Supabase (PostgreSQL)
-- **Environment**: dotenv
+- สร้างแอป Driver App สำหรับการปล่อยใช้งาน (ตาม workflow ของ Expo/Expo Application Services)
+  - iOS: `eas build --platform ios`
+  - Android: `eas build --platform android`
 
-### 🚀 การติดตั้งและรัน
-```bash
-cd safety-bus-bot/vercel-deploy
-npm install
+รายละเอียดขั้นตอนและคำแนะนำเพิ่มเติมดูที่ `Production-Deployment-Guide.md`
 
-# รันเซิร์ฟเวอร์ local
-node server.js
+## 🌐 API Endpoints (Safety Bus Bot)
 
-# ตั้งค่า Rich Menu
-node setup-richmenu.js
+- `POST /api/webhook` — LINE Webhook Handler
+- `GET /api/get-student` — ดึงข้อมูลนักเรียน
+- `POST /api/submit-leave` — ส่งคำขอลา
+- `DELETE /api/cancel-leave` — ยกเลิกการลา
+- `GET /api/get-leave-requests` — ดึงรายการลา
 
-# Deploy ไป Vercel
-vercel deploy
-```
+## 🗄️ โครงสร้างฐานข้อมูล (Supabase)
 
-### 🔑 Environment Variables (.env.local)
-```bash
-LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
-LINE_CHANNEL_SECRET=your_line_channel_secret
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-WEBHOOK_URL=your_webhook_url
-```
+ตารางหลัก:
+- `students` — ข้อมูลนักเรียน
+- `drivers` — ข้อมูลคนขับ
+- `buses` — ข้อมูลรถ
+- `attendance` — บันทึกการขึ้น-ลงรถ
+- `leave_requests` — คำขอลา
+- `bus_locations` — ตำแหน่งรถแบบ Real-time
 
-### 📋 ฟีเจอร์หลัก
-1. **Rich Menu System**
-   - เมนูหลัก 4 ปุ่ม: ประวัติ, ฟอร์มลา, ตำแหน่งรถ, ติดต่อ
-   - Quick Reply สำหรับการโต้ตอบ
-   - ข้อความธรรมดา (ไม่ใช่ Flex Message)
+ฟีเจอร์ฐานข้อมูล:
+- Realtime Subscriptions, Row Level Security (RLS), Triggers
 
-2. **Student Information**
-   - ค้นหาข้อมูลนักเรียนด้วย LINE User ID
-   - แสดงประวัติการขึ้น-ลงรถ
-   - สถานะการลาปัจจุบัน
+## 📋 ฟีเจอร์หลัก
 
-3. **Leave Request System**
-   - ฟอร์มแจ้งลาออนไลน์ (LIFF)
-   - ประเภทการลา: ป่วย, ลากิจ, ขาดเรียน
-   - ยกเลิกการลาได้
+Driver App:
+- เข้าสู่ระบบ, เชื่อมบัญชีคนขับ, ดูรายชื่อ/สถานะนักเรียนแบบเรียลไทม์
+- แผนที่ติดตามตำแหน่งรถ, รายงานการใช้งาน, แจ้งเตือน
 
-4. **Real-time Notifications**
-   - แจ้งเตือนเมื่อนักเรียนขึ้น-ลงรถ
-   - อัปเดตตำแหน่งรถแบบ Real-time
-   - แจ้งเตือนการอนุมัติ/ปฏิเสธการลา
+Safety Bus Bot:
+- Rich Menu 4 ปุ่ม (ข้อความธรรมดา, ไม่มี Flex Message)
+- ตรวจสอบข้อมูลนักเรียน, ยื่นคำขอลา/ยกเลิก
+- การแจ้งเตือนขึ้น-ลงรถและตำแหน่งแบบ Real-time
 
-### 🌐 API Endpoints
-- `POST /api/webhook` - LINE Webhook
-- `GET /api/get-student` - ดึงข้อมูลนักเรียน
-- `POST /api/submit-leave` - ส่งคำขอลา
-- `DELETE /api/cancel-leave` - ยกเลิกการลา
-- `GET /api/get-leave-requests` - ดึงรายการลา
+## 🧪 การทดสอบ
+
+ดูขั้นตอนและกรณีทดสอบใน `System-Testing-Guide.md` และไฟล์ทดสอบที่เกี่ยวข้องในรากโปรเจกต์ เช่น:
+- `test-emergency-api.js`, `test-emergency-notification.js`, `test-line-linking.js`
+
+## 🆘 การแก้ไขปัญหา
+
+แนวทางแก้ไขปัญหาพบบ่อย (การเชื่อมต่อ, Encoding, Performance, การตั้งค่าตัวแปรแวดล้อม) ดูใน `Troubleshooting-Guide.md`
+
+## 📖 เอกสารและคู่มือที่เกี่ยวข้อง
+
+- `Complete-Project-Guide.md` — ภาพรวมโปรเจกต์แบบครบถ้วน
+- `Driver-App-Migration-Guide.md` — ย้ายระบบฝั่ง Driver App
+- `LINE-Bot-Migration-Guide.md` — ย้ายระบบ LINE Bot
+- `LINE-Bot-UI-UX-Guide.md` — แนวทาง UI/UX สำหรับ LINE Bot
+- `Production-Deployment-Guide.md` — Deploy ระบบจริง
+- `System-Testing-Guide.md` — ทดสอบระบบ
+- `Troubleshooting-Guide.md` — แก้ไขปัญหา
+- `line-bot-setup.md` — ตั้งค่า LINE Bot เบื้องต้น
+- `proximity_notification_guide.md` — ระบบแจ้งเตือนตามระยะทาง
+
+## 🤝 การมีส่วนร่วม (Contributing)
+
+ยินดีรับคำแนะนำและ Pull Request เพื่อปรับปรุงระบบ โปรดทำตามมาตรฐานโค้ดและแนวทางในเอกสารประกอบ
+
+## 📜 License
+
+โครงการนี้เป็นส่วนหนึ่งของงานวิจัย/การพัฒนาระบบภายใน โปรดติดต่อทีมพัฒนาเพื่อขอข้อมูลสิทธิ์และการใช้งานเพิ่มเติม
 
 ---
 
-## 🗄️ Database Schema (Supabase)
-
-### Tables
-1. **students** - ข้อมูลนักเรียน
-2. **drivers** - ข้อมูลคนขับ
-3. **buses** - ข้อมูลรถ
-4. **attendance** - บันทึกการขึ้น-ลงรถ
-5. **leave_requests** - คำขอลา
-6. **bus_locations** - ตำแหน่งรถแบบ Real-time
-
-### Real-time Features
-- **Subscriptions**: อัปเดตข้อมูลแบบ Real-time
-- **Row Level Security**: ความปลอดภัยระดับแถว
-- **Triggers**: อัตโนมัติสำหรับการแจ้งเตือน
-
----
-
-## 🔄 สถานะปัจจุบันของโปรเจค
-
-### ✅ สิ่งที่เสร็จแล้ว
-1. **Driver App**
-   - โครงสร้างแอพพื้นฐาน (Expo Router)
-   - Authentication System
-   - Supabase Integration
-   - UI Components หลัก
-
-2. **LINE Bot**
-   - Webhook Handler สมบูรณ์
-   - Rich Menu System (ไม่มี Flex Message)
-   - Leave Request System (LIFF)
-   - Database Integration
-   - Vercel Deployment Ready
-
-3. **Database**
-   - Schema Design
-   - Real-time Subscriptions
-   - Security Policies
-
-### 🚧 กำลังพัฒนา
-1. **Driver App**
-   - Real-time Map Integration
-   - Student Check-in/out Features
-   - Push Notifications
-   - Report Generation
-
-2. **LINE Bot**
-   - Advanced Analytics
-   - Multi-language Support
-   - Admin Dashboard
-
-### 📋 ขั้นตอนต่อไป
-1. เชื่อมต่อ Driver App กับ Real-time Database
-2. พัฒนาระบบ GPS Tracking
-3. เพิ่มระบบ Push Notifications
-4. สร้าง Admin Dashboard
-5. Testing และ Deployment
-
----
-
-## 🛠️ เทคโนโลยีที่ใช้
-
-### Frontend (Mobile)
-- **React Native (Expo)** - Cross-platform mobile development
-- **TypeScript** - Type-safe JavaScript
-- **Expo Router** - File-based navigation
-- **React Native Maps** - Map integration
-
-### Backend (Bot)
-- **Node.js** - JavaScript runtime
-- **Express.js** - Web framework
-- **LINE Messaging API SDK** - LINE Bot integration
-- **Vercel** - Serverless deployment
-
-### Database & Services
-- **Supabase** - Backend-as-a-Service
-  - PostgreSQL Database
-  - Real-time Subscriptions
-  - Authentication
-  - Row Level Security
-  - Storage
-
-### Development Tools
-- **Git** - Version control
-- **npm** - Package management
-- **ESLint** - Code linting
-- **Prettier** - Code formatting
-
----
-
-## 📞 การติดต่อและสนับสนุน
-
-สำหรับคำถามหรือปัญหาในการใช้งาน กรุณาติดต่อทีมพัฒนา
-
-**สถานะล่าสุด**: ระบบ LINE Bot ทำงานปกติ, Rich Menu อัปเดตแล้ว (ไม่มี Flex Message), Driver App อยู่ในขั้นตอนการพัฒนาต่อ
+สถานะล่าสุด: ระบบ LINE Bot พร้อม Deploy บน Vercel, Driver App อยู่ระหว่างการพัฒนาฟีเจอร์ Real-time และการแจ้งเตือน เพิ่มเติมดูรายละเอียดในเอกสารประกอบด้านบน

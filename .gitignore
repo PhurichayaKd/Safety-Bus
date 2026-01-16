@@ -39,7 +39,7 @@ coverage/
 # Env & secrets
 .env
 .env.*
-!.env.example        # อนุญาตเฉพาะไฟล์ตัวอย่าง
+!.env.example
 .npmrc
 npmrc
 

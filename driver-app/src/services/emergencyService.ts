@@ -7,7 +7,6 @@ export interface EmergencyLog {
   event_time: string;
   event_type: 'PANIC_BUTTON' | 'SENSOR_ALERT' | 'DRIVER_INCAPACITATED' | 'SMOKE_DETECTED' | 'HIGH_TEMPERATURE' | 'MOVEMENT_DETECTED';
   triggered_by: 'sensor' | 'driver' | 'student';
-  sensor_type?: 'PIR' | 'SMOKE_HEAT' | 'TEMPERATURE' | 'MOTION' | 'SMOKE' | string; // เพิ่ม sensor_type property
   description?: string;
   location?: string;
   notes?: string;
@@ -20,9 +19,6 @@ export interface EmergencyLog {
   driver_response_time?: string;
   driver_response_notes?: string;
 }
-
-// Type alias for Emergency (same as EmergencyLog)
-export type Emergency = EmergencyLog;
 
 export interface EmergencyResponse {
   response_id?: number;
@@ -37,52 +33,40 @@ export interface EmergencyResponse {
 // ดึงข้อมูล emergency logs แบบเรียลไทม์
 export const subscribeToEmergencyLogs = (
   driverId: number,
-  onNewEmergency: (emergency: Emergency) => void,
-  onEmergencyUpdate: (emergency: Emergency) => void
+  onNewEmergency: (emergency: EmergencyLog) => void,
+  onEmergencyUpdate: (emergency: EmergencyLog) => void
 ) => {
-  console.log('🔌 [EmergencyService] Setting up subscription for driver:', driverId);
-  
   const channel = supabase
     .channel('emergency-logs-realtime')
     .on(
       'postgres_changes',
       {
-        event: '*',
+        event: 'INSERT',
         schema: 'public',
         table: 'emergency_logs',
-        filter: `driver_id=eq.${driverId}`,
+        filter: `driver_id=eq.${driverId}`
       },
       (payload) => {
-        console.log('📡 [EmergencyService] Received realtime event:', payload);
-        console.log('📡 [EmergencyService] Event type:', payload.eventType);
-        console.log('📡 [EmergencyService] Payload data:', payload.new);
-        
-        if (payload.eventType === 'INSERT' && payload.new) {
-          console.log('➕ [EmergencyService] New emergency detected, calling onNewEmergency');
-          onNewEmergency(payload.new as Emergency);
-        } else if (payload.eventType === 'UPDATE' && payload.new) {
-          console.log('🔄 [EmergencyService] Emergency update detected, calling onEmergencyUpdate');
-          onEmergencyUpdate(payload.new as Emergency);
-        }
+        console.log('New emergency event:', payload.new);
+        onNewEmergency(payload.new as EmergencyLog);
       }
     )
-    .subscribe((status) => {
-      console.log('📡 [EmergencyService] Subscription status:', status);
-      if (status === 'SUBSCRIBED') {
-        console.log('✅ [EmergencyService] Successfully subscribed to emergency logs');
-      } else if (status === 'CHANNEL_ERROR') {
-        console.error('❌ [EmergencyService] Subscription error');
-      } else if (status === 'TIMED_OUT') {
-        console.error('⏰ [EmergencyService] Subscription timed out');
-      } else if (status === 'CLOSED') {
-        console.log('🔒 [EmergencyService] Subscription closed');
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'emergency_logs',
+        filter: `driver_id=eq.${driverId}`
+      },
+      (payload) => {
+        console.log('Emergency event updated:', payload.new);
+        onEmergencyUpdate(payload.new as EmergencyLog);
       }
-    });
+    )
+    .subscribe();
 
-  return () => {
-    console.log('🔌 [EmergencyService] Unsubscribing from emergency logs');
-    channel.unsubscribe();
-  };
+  return channel;
 };
 
 // ดึงข้อมูล emergency logs ล่าสุด
@@ -174,7 +158,7 @@ export const recordEmergencyResponse = async (
           .single();
 
         if (!emergencyError && emergencyData) {
-          await sendEmergencyLineNotification(emergencyData, responseType, driverId);
+          await sendEmergencyLineNotification(emergencyData, responseType);
         }
       } catch (notificationError) {
         console.error('Error sending LINE notification:', notificationError);
@@ -195,7 +179,7 @@ export const sendLineNotification = async (
   responseType?: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL'
 ) => {
   try {
-    const baseUrl = process.env.EXPO_PUBLIC_LINE_NOTIFICATION_URL || 'https://safety-bus-liff-v4-new.vercel.app';
+    const baseUrl = process.env.EXPO_PUBLIC_LINE_NOTIFICATION_URL || 'http://localhost:3000';
     
     let message = '';
     

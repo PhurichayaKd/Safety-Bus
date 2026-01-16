@@ -14,7 +14,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f8f9fa;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -22,92 +22,53 @@
         .container {
             max-width: 500px;
             margin: 0 auto;
-            background: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             overflow: hidden;
-            border: 1px solid #e9ecef;
         }
 
         .header {
-            background: #ffffff;
-            color: #333;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
             padding: 30px 20px;
             text-align: center;
-            border-bottom: 1px solid #e9ecef;
         }
 
         .header h1 {
             font-size: 24px;
             margin-bottom: 10px;
-            color: #2c3e50;
         }
 
         .header p {
-            color: #6c757d;
+            opacity: 0.9;
             font-size: 14px;
         }
 
         .content {
             padding: 30px 20px;
-            background: #ffffff;
-        }
-
-        .message {
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            font-weight: 500;
-            text-align: center;
-            display: none;
-            animation: slideIn 0.3s ease-out;
-        }
-
-        .message.success {
-            background: linear-gradient(135deg, #4CAF50, #45a049);
-            color: white;
-            border: 1px solid #4CAF50;
-        }
-
-        .message.error {
-            background: linear-gradient(135deg, #f44336, #d32f2f);
-            color: white;
-            border: 1px solid #f44336;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
         }
 
         .student-info {
-            background: #ffffff;
-            border-radius: 12px;
+            background: #f8f9fa;
+            border-radius: 15px;
             padding: 20px;
             margin-bottom: 25px;
-            border: 1px solid #e9ecef;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            border-left: 4px solid #4facfe;
         }
 
         .student-info h3 {
-            color: #2c3e50;
+            color: #333;
             margin-bottom: 15px;
             font-size: 18px;
-            font-weight: 600;
         }
 
         .info-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             padding: 8px 0;
-            border-bottom: 1px solid #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
         }
 
         .info-row:last-child {
@@ -116,32 +77,23 @@
         }
 
         .info-label {
-            font-weight: 500;
-            color: #495057;
+            font-weight: 600;
+            color: #666;
         }
 
         .info-value {
-            color: #2c3e50;
+            color: #333;
             font-weight: 500;
         }
 
         .form-section {
             margin-bottom: 25px;
-            background: #ffffff;
-            border-radius: 12px;
-            padding: 20px;
-            border: 1px solid #e9ecef;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
         }
 
         .form-section h3 {
-            color: #2c3e50;
+            color: #333;
             margin-bottom: 15px;
             font-size: 18px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
         .date-container {
@@ -170,7 +122,7 @@
         }
 
         .date-input-group input[type="date"] {
-            width: calc(100% - 50px);
+            width: calc(100% - 60px);
             padding: 12px;
             border: 1px solid #ddd;
             border-radius: 8px;
@@ -202,28 +154,21 @@
         }
 
         .add-date-btn {
-            background: #007bff;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
             color: white;
             border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
             cursor: pointer;
-            font-size: 18px;
-            font-weight: 500;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 40px;
-            height: 40px;
-            box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
-            margin-left: 10px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-bottom: 20px;
         }
 
         .add-date-btn:hover {
-            background: #0056b3;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 172, 254, 0.3);
         }
 
         .add-date-btn:disabled {
@@ -233,596 +178,22 @@
             box-shadow: none;
         }
 
-        .single-date-picker {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .date-input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 16px;
-            background: #ffffff;
-            transition: all 0.3s;
-            min-width: 200px;
-        }
-
-        .date-input:focus {
-            border-color: #007bff;
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
-        }
-
-            .selected-dates {
-                margin-top: 15px;
-            }
-
-            .selected-date-item {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                background: #ffffff;
-                border: 1px solid #e9ecef;
-                border-radius: 8px;
-                padding: 12px 15px;
-                margin-bottom: 8px;
-                font-size: 16px;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-                transition: all 0.3s;
-            }
-
-            .selected-date-item:hover {
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-            }
-
-            .selected-date-text {
-                color: #2c3e50;
-                font-weight: 500;
-            }
-
-            .remove-date-btn {
-                background: #dc3545;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 12px;
-                font-weight: 500;
-                transition: all 0.3s;
-            }
-
-            .remove-date-btn:hover {
-                background: #c82333;
-                transform: translateY(-1px);
-            }
-
         .submit-btn {
             width: 100%;
-            background: #28a745;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 16px;
-            border-radius: 12px;
-            font-size: 18px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 16px rgba(40, 167, 69, 0.2);
-        }
-
-        .submit-btn:hover {
-            background: #218838;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
-        }
-
-        .submit-btn:active {
-            transform: translateY(0);
-        }
-
-        /* Success Modal Styles */
-        .success-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .success-modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 16px;
-            max-width: 400px;
-            width: 90%;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            animation: modalSlideIn 0.3s ease-out;
-        }
-
-        @keyframes modalSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .success-modal h3 {
-            color: #28a745;
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-
-        .success-modal .details {
-            background: #f8f9fa;
             padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: left;
-        }
-
-        .success-modal .countdown {
-            font-size: 18px;
-            color: #007bff;
-            font-weight: bold;
-            margin-top: 20px;
-        }
-
-            .selected-dates {
-                margin-top: 15px;
-            }
-
-            .selected-date-item {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                background: #ffffff;
-                border: 1px solid #e9ecef;
-                border-radius: 8px;
-                padding: 12px 15px;
-                margin-bottom: 8px;
-                font-size: 16px;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-                transition: all 0.3s;
-            }
-
-            .selected-date-item:hover {
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-            }
-
-            .selected-date-text {
-                color: #2c3e50;
-                font-weight: 500;
-            }
-
-            .remove-date-btn {
-                background: #dc3545;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 12px;
-                font-weight: 500;
-                transition: all 0.3s;
-            }
-
-            .remove-date-btn:hover {
-                background: #c82333;
-                transform: translateY(-1px);
-            }
-
-        .submit-btn {
-            width: 100%;
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 16px;
-            border-radius: 12px;
+            border-radius: 15px;
             font-size: 18px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 16px rgba(40, 167, 69, 0.2);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .submit-btn:hover {
-            background: #218838;
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
-        }
-
-        .submit-btn:active {
-            transform: translateY(0);
-        }
-
-        /* Success Modal Styles */
-        .success-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .success-modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 16px;
-            max-width: 400px;
-            width: 90%;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            animation: modalSlideIn 0.3s ease-out;
-        }
-
-        @keyframes modalSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .success-modal h3 {
-            color: #28a745;
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-
-        .success-modal .details {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: left;
-        }
-
-        .success-modal .countdown {
-            font-size: 18px;
-            color: #007bff;
-            font-weight: bold;
-            margin-top: 20px;
-        }
-
-            .selected-dates {
-                margin-top: 15px;
-            }
-
-            .selected-date-item {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                background: #ffffff;
-                border: 1px solid #e9ecef;
-                border-radius: 8px;
-                padding: 12px 15px;
-                margin-bottom: 8px;
-                font-size: 16px;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-                transition: all 0.3s;
-            }
-
-            .selected-date-item:hover {
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-            }
-
-            .selected-date-text {
-                color: #2c3e50;
-                font-weight: 500;
-            }
-
-            .remove-date-btn {
-                background: #dc3545;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 12px;
-                font-weight: 500;
-                transition: all 0.3s;
-            }
-
-            .remove-date-btn:hover {
-                background: #c82333;
-                transform: translateY(-1px);
-            }
-
-        .submit-btn {
-            width: 100%;
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 16px;
-            border-radius: 12px;
-            font-size: 18px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 16px rgba(40, 167, 69, 0.2);
-        }
-
-        .submit-btn:hover {
-            background: #218838;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
-        }
-
-        .submit-btn:active {
-            transform: translateY(0);
-        }
-
-        /* Success Modal Styles */
-        .success-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .success-modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 16px;
-            max-width: 400px;
-            width: 90%;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            animation: modalSlideIn 0.3s ease-out;
-        }
-
-        @keyframes modalSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .success-modal h3 {
-            color: #28a745;
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-
-        .success-modal .details {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: left;
-        }
-
-        .success-modal .countdown {
-            font-size: 18px;
-            color: #007bff;
-            font-weight: bold;
-            margin-top: 20px;
-        }
-
-            .selected-dates {
-                margin-top: 15px;
-            }
-
-            .selected-date-item {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                background: #ffffff;
-                border: 1px solid #e9ecef;
-                border-radius: 8px;
-                padding: 12px 15px;
-                margin-bottom: 8px;
-                font-size: 16px;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-                transition: all 0.3s;
-            }
-
-            .selected-date-item:hover {
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-            }
-
-            .selected-date-text {
-                color: #2c3e50;
-                font-weight: 500;
-            }
-
-            .remove-date-btn {
-                background: #dc3545;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 12px;
-                font-weight: 500;
-                transition: all 0.3s;
-            }
-
-            .remove-date-btn:hover {
-                background: #c82333;
-                transform: translateY(-1px);
-            }
-
-        .submit-btn {
-            width: 100%;
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 16px;
-            border-radius: 12px;
-            font-size: 18px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 16px rgba(40, 167, 69, 0.2);
-        }
-
-        .submit-btn:hover {
-            background: #218838;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
-        }
-
-        .submit-btn:active {
-            transform: translateY(0);
-        }
-
-        /* Success Modal Styles */
-        .success-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .success-modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 16px;
-            max-width: 400px;
-            width: 90%;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            animation: modalSlideIn 0.3s ease-out;
-        }
-
-        @keyframes modalSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .success-modal h3 {
-            color: #28a745;
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-
-        .success-modal .details {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: left;
-        }
-
-        .success-modal .countdown {
-            font-size: 18px;
-            color: #007bff;
-            font-weight: bold;
-            margin-top: 20px;
-        }
-
-            .selected-dates {
-                margin-top: 15px;
-            }
-
-            .selected-date-item {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                background: #ffffff;
-                border: 1px solid #e9ecef;
-                border-radius: 8px;
-                padding: 12px 15px;
-                margin-bottom: 8px;
-                font-size: 16px;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-                transition: all 0.3s;
-            }
-
-            .selected-date-item:hover {
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-            }
-
-            .selected-date-text {
-                color: #2c3e50;
-                font-weight: 500;
-            }
-
-            .remove-date-btn {
-                background: #dc3545;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 12px;
-                font-weight: 500;
-                transition: all 0.3s;
-            }
-
-            .remove-date-btn:hover {
-                background: #c82333;
-                transform: translateY(-1px);
-            }
-
-        .submit-btn {
-            width: 100%;
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 16px;
-            border-radius: 12px;
-            font-size: 18px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 16px rgba(40, 167, 69, 0.2);
-        }
-
-        .submit-btn:hover {
-            background: #218838;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
-        }
-
-        .submit-btn:active {
-            transform: translateY(0);
+            box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
         }
 
         .loading {
@@ -849,27 +220,23 @@
         }
 
         .message {
-            padding: 16px 20px;
-            margin: 20px 0;
-            border-radius: 12px;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
             font-weight: 500;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
             display: none;
         }
 
         .message.success {
-            background: #ffffff;
+            background: #d4edda;
             color: #155724;
-            border: 2px solid #28a745;
-            box-shadow: 0 2px 8px rgba(40, 167, 69, 0.1);
+            border: 1px solid #c3e6cb;
         }
 
         .message.error {
-            background: #ffffff;
+            background: #f8d7da;
             color: #721c24;
-            border: 2px solid #dc3545;
-            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.1);
+            border: 1px solid #f5c6cb;
         }
 
         @media (max-width: 480px) {
@@ -934,45 +301,25 @@
                 </div>
 
                 <div id="dateSection" class="form-section" style="display: none;">
-                    <h3>📅 เลือกวันที่ลา</h3>
-                    <div class="single-date-picker">
-                        <input type="date" id="singleDateInput" class="date-input" />
-                        <button type="button" id="addSelectedDate" class="add-date-btn">
-                             +
-                         </button>
+                    <h3>เลือกวันที่ลา (สูงสุด 3 วัน)</h3>
+                    <div id="dateContainer" class="date-container">
+                        <!-- Date inputs will be added here dynamically -->
                     </div>
-                    <div id="selectedDatesDisplay" class="selected-dates">
-                        <!-- Selected dates will be displayed here -->
-                    </div>
+                    <button type="button" id="addDateBtn" class="add-date-btn" onclick="addDate()">
+                        ➕ เพิ่มวันที่
+                    </button>
                 </div>
 
                 <div id="submitSection" class="form-section" style="display: none;">
                     <button type="button" class="submit-btn" onclick="submitLeaveRequest()">
-                         ยืนยันส่งคำขอลา
-                     </button>
+                        ✅ ยืนยันส่งคำขอลา
+                    </button>
                 </div>
             </div>
         </div>
-     </div>
+    </div>
 
-     <!-- Success Modal -->
-     <div id="successModal" class="success-modal">
-         <div class="success-modal-content">
-             <h3>✅ ส่งข้อมูลสำเร็จ!</h3>
-             <div class="details">
-                 <div><strong>ชื่อ-นามสกุล:</strong> <span id="modalStudentName"></span></div>
-                 <div><strong>รหัสนักเรียน:</strong> <span id="modalStudentId"></span></div>
-                 <div><strong>ชั้นเรียน:</strong> <span id="modalStudentClass"></span></div>
-                 <div><strong>วันที่ลา:</strong></div>
-                 <div id="modalLeaveDates"></div>
-             </div>
-             <div class="countdown">
-                 จะปิดหน้าต่างในอีก <span id="countdownTimer">5</span> วินาที
-             </div>
-         </div>
-     </div>
-
-     <!-- JavaScript -->
+    <!-- JavaScript -->
     <script>
         // Leave Form JavaScript Functions
         console.log('🚀 Leave Form JS loaded');
@@ -991,28 +338,21 @@
                 
                 // Check if user is logged in
                 if (!liff.isLoggedIn()) {
-                    console.log('⚠️ User not logged in, but continuing with fallback mode...');
-                    // Don't force login, just continue with URL parameters
-                    loadStudentDataFromUrl();
+                    console.log('🔐 User not logged in, redirecting to login...');
+                    liff.login();
                     return;
                 }
                 
-                // Get user profile if logged in
-                try {
-                    const profile = await liff.getProfile();
-                    console.log('👤 User profile:', profile);
-                } catch (profileError) {
-                    console.warn('⚠️ Could not get user profile, continuing anyway:', profileError);
-                }
+                // Get user profile
+                const profile = await liff.getProfile();
+                console.log('👤 User profile:', profile);
                 
                 // Load student data from URL parameters
                 loadStudentDataFromUrl();
                 
             } catch (error) {
-                console.error('❌ LIFF initialization failed, using fallback mode:', error);
-                // Don't show error, just use fallback mode
-                liffInitialized = false;
-                loadStudentDataFromUrl();
+                console.error('❌ LIFF initialization failed:', error);
+                showErrorMessage('ไม่สามารถเชื่อมต่อกับ LINE ได้');
             }
         }
 
@@ -1022,7 +362,7 @@
             return {
                 studentId: urlParams.get('studentId'),
                 studentName: urlParams.get('studentName'),
-                studentClass: urlParams.get('class') || urlParams.get('grade') // Support both 'class' and 'grade' parameters
+                studentClass: urlParams.get('class')
             };
         }
 
@@ -1056,9 +396,12 @@
         // Update student information in UI
         function updateStudentInfo() {
             const elements = {
-                'studentName': studentData.studentName,
-                'studentId': studentData.studentId,
-                'studentClass': studentData.studentClass
+                'student-name': studentData.studentName,
+                'student-id': studentData.studentId,
+                'student-class': studentData.studentClass,
+                'confirm-student-name': studentData.studentName,
+                'confirm-student-id': studentData.studentId,
+                'confirm-student-class': studentData.studentClass
             };
             
             Object.entries(elements).forEach(([id, value]) => {
@@ -1067,8 +410,6 @@
                     element.textContent = value || '-';
                 }
             });
-            
-            console.log('✅ Student info updated in UI');
         }
 
         // Show main form
@@ -1088,212 +429,66 @@
                 mainForm.style.display = 'block';
                 console.log('✅ Main form displayed');
             }
-            
-            // Show date selection section
-            const dateSection = document.getElementById('dateSection');
-            if (dateSection) {
-                dateSection.style.display = 'block';
-                console.log('✅ Date section displayed');
-            }
-            
-            // Submit section should remain hidden until dates are selected
-            console.log('✅ Submit section will be shown when dates are selected');
         }
 
         // Show error message
         function showErrorMessage(message) {
-            const messageElement = document.getElementById('message');
-            if (messageElement) {
-                messageElement.textContent = message;
-                messageElement.className = 'message error';
-                messageElement.style.display = 'block';
-                
-                // Auto hide after 5 seconds
-                setTimeout(() => {
-                    messageElement.style.display = 'none';
-                }, 5000);
+            const errorSection = document.getElementById('error-section');
+            const errorMessage = document.getElementById('error-message');
+            
+            if (errorSection && errorMessage) {
+                errorMessage.textContent = message;
+                errorSection.style.display = 'block';
             } else {
                 alert(message);
             }
         }
 
         // Show success message
-         function showSuccessMessage(message) {
-             const messageElement = document.getElementById('message');
-             if (messageElement) {
-                 messageElement.textContent = message;
-                 messageElement.className = 'message success';
-                 messageElement.style.display = 'block';
-                 
-                 // Auto close after 3 seconds
-                 setTimeout(() => {
-                     messageElement.style.display = 'none';
-                     if (liffInitialized) {
-                         liff.closeWindow();
-                     }
-                 }, 3000);
-             } else {
-                 alert(message);
-             }
-         }
-
-         // Show success modal with details and countdown
-         function showSuccessModal(selectedDates) {
-             // Populate modal with student data
-             document.getElementById('modalStudentName').textContent = studentData.studentName;
-             document.getElementById('modalStudentId').textContent = studentData.studentId;
-             document.getElementById('modalStudentClass').textContent = studentData.studentClass;
-             
-             // Populate leave dates
-             const modalLeaveDates = document.getElementById('modalLeaveDates');
-             const datesHtml = selectedDates.map(date => {
-                 const dateObj = new Date(date);
-                 const formattedDate = dateObj.toLocaleDateString('th-TH', {
-                     year: 'numeric',
-                     month: 'long',
-                     day: 'numeric'
-                 });
-                 return `<div style="margin: 5px 0; padding: 5px; background: #e9ecef; border-radius: 4px;">${formattedDate}</div>`;
-             }).join('');
-             modalLeaveDates.innerHTML = datesHtml;
-             
-             // Show modal
-             const modal = document.getElementById('successModal');
-             modal.style.display = 'flex';
-             
-             // Start countdown
-             let countdown = 5;
-             const countdownElement = document.getElementById('countdownTimer');
-             
-             const countdownInterval = setInterval(() => {
-                 countdown--;
-                 countdownElement.textContent = countdown;
-                 
-                 if (countdown <= 0) {
-                     clearInterval(countdownInterval);
-                     modal.style.display = 'none';
-                     
-                     // Reset form after successful submission
-                     resetFormAfterSubmission();
-                     
-                     // Close LIFF window or redirect
-                     if (liffInitialized) {
-                         liff.closeWindow();
-                     } else {
-                         // Fallback: redirect to LINE
-                         window.location.href = 'https://line.me/';
-                     }
-                 }
-             }, 1000);
-         }
-
-        // Clear form function
-        function clearForm() {
-            // Clear date container
-            const dateContainer = document.getElementById('dateContainer');
-            if (dateContainer) {
-                dateContainer.innerHTML = '';
+        function showSuccessMessage(message) {
+            const successSection = document.getElementById('success-section');
+            if (successSection) {
+                successSection.style.display = 'block';
+                
+                // Auto close after 3 seconds
+                let countdown = 3;
+                const countdownElement = document.getElementById('countdown');
+                
+                const timer = setInterval(() => {
+                    countdown--;
+                    if (countdownElement) {
+                        countdownElement.textContent = countdown;
+                    }
+                    
+                    if (countdown <= 0) {
+                        clearInterval(timer);
+                        if (liffInitialized) {
+                            liff.closeWindow();
+                        }
+                    }
+                }, 1000);
             }
-            
-            // Reset selected dates
-            if (window.selectedDates) {
-                window.selectedDates = [];
-            }
-            
-            // Reset date input count
-            if (window.dateInputCount !== undefined) {
-                window.dateInputCount = 0;
-            }
-            
-            // Show add date button
-            const addDateBtn = document.getElementById('addDateBtn');
-            if (addDateBtn) {
-                addDateBtn.style.display = 'block';
-            }
-            
-            // Hide submit section
-            const submitSection = document.getElementById('submitSection');
-            if (submitSection) {
-                submitSection.style.display = 'none';
-            }
-        }
-
-        // Reset form after successful submission
-        function resetFormAfterSubmission() {
-            // Clear date container
-            const dateContainer = document.getElementById('dateContainer');
-            if (dateContainer) {
-                dateContainer.innerHTML = '';
-            }
-            
-            // Clear all selected dates
-            if (window.selectedDates) {
-                window.selectedDates = [];
-            }
-            
-            // Clear single date input
-            const singleDateInput = document.getElementById('singleDateInput');
-            if (singleDateInput) {
-                singleDateInput.value = '';
-            }
-            
-            // Clear selected dates display
-            const selectedDatesDisplay = document.getElementById('selectedDatesDisplay');
-            if (selectedDatesDisplay) {
-                selectedDatesDisplay.innerHTML = '';
-            }
-            
-            // Show add date button
-            const addDateBtn = document.getElementById('addDateBtn');
-            if (addDateBtn) {
-                addDateBtn.style.display = 'block';
-            }
-            
-            // Hide submit section
-            const submitSection = document.getElementById('submitSection');
-            if (submitSection) {
-                submitSection.style.display = 'none';
-            }
-            
-            // Clear confirmation display
-            const confirmationDisplay = document.getElementById('confirmationDisplay');
-            if (confirmationDisplay) {
-                confirmationDisplay.innerHTML = '';
-            }
-            
-            // Reset any form state variables
-            if (window.dateInputCount !== undefined) {
-                window.dateInputCount = 0;
-            }
-            
-            // Reinitialize date picker after reset
-            setupDatePicker();
-            
-            console.log('✅ Form reset after successful submission');
         }
 
         // Date picker functions
         function setupDatePicker() {
-            const singleDateInput = document.getElementById('singleDateInput');
-            const addSelectedDateBtn = document.getElementById('addSelectedDate');
-            const selectedDatesDisplay = document.getElementById('selectedDatesDisplay');
+            const leaveDateInput = document.getElementById('leave-date');
+            const addDateBtn = document.getElementById('add-date-btn');
+            const datesContainer = document.getElementById('dates-container');
+            const confirmBtn = document.getElementById('confirm-btn');
             
-            // Use global selectedDates for proper reset functionality
-            window.selectedDates = window.selectedDates || [];
-            const selectedDates = window.selectedDates;
+            let selectedDates = [];
             
-            console.log('🗓️ Setting up single date picker...');
-            
-            // Set minimum date to today (allow current date)
+            // Set minimum date to today
             const today = new Date().toISOString().split('T')[0];
-            if (singleDateInput) {
-                singleDateInput.min = today;
+            if (leaveDateInput) {
+                leaveDateInput.min = today;
             }
             
             // Add date button click handler
-            if (addSelectedDateBtn) {
-                addSelectedDateBtn.addEventListener('click', function() {
-                    const selectedDate = singleDateInput.value;
+            if (addDateBtn) {
+                addDateBtn.addEventListener('click', function() {
+                    const selectedDate = leaveDateInput.value;
                     
                     if (!selectedDate) {
                         alert('กรุณาเลือกวันที่');
@@ -1305,80 +500,61 @@
                         return;
                     }
                     
-                    if (selectedDates.length >= 3) {
-                        alert('สามารถเลือกได้สูงสุด 3 วัน');
-                        return;
-                    }
-                    
                     selectedDates.push(selectedDate);
-                    updateSelectedDatesDisplay();
-                    singleDateInput.value = ''; // Clear input after adding
-                    
-                    console.log('📅 Date added:', selectedDate);
-                    console.log('📅 All selected dates:', selectedDates);
+                    updateDatesDisplay();
+                    leaveDateInput.value = '';
+                    updateConfirmButton();
                 });
             }
             
-            function updateSelectedDatesDisplay() {
-                if (!selectedDatesDisplay) return;
+            // Update dates display
+            function updateDatesDisplay() {
+                if (!datesContainer) return;
                 
-                const currentSelectedDates = window.selectedDates || [];
-                selectedDatesDisplay.innerHTML = '';
-                
-                // Control submitSection visibility based on selected dates
-                const submitSection = document.getElementById('submitSection');
-                
-                if (currentSelectedDates.length === 0) {
-                    selectedDatesDisplay.innerHTML = '<p style="color: #666; font-style: italic;">ยังไม่ได้เลือกวันที่</p>';
-                    // Hide submit section when no dates selected
-                    if (submitSection) {
-                        submitSection.style.display = 'none';
-                    }
-                    return;
-                }
-                
-                // Show submit section when dates are selected
-                if (submitSection) {
-                    submitSection.style.display = 'block';
-                }
-                
-                currentSelectedDates.forEach((date, index) => {
-                    const dateItem = document.createElement('div');
-                    dateItem.className = 'selected-date-item';
+                if (selectedDates.length === 0) {
+                    datesContainer.innerHTML = '<p class="no-dates">ยังไม่ได้เลือกวันที่</p>';
+                } else {
+                    const datesHtml = selectedDates.map(date => {
+                        const dateObj = new Date(date);
+                        const formattedDate = dateObj.toLocaleDateString('th-TH', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                        });
+                        
+                        return `
+                            <div class="selected-date">
+                                <span>${formattedDate}</span>
+                                <button type="button" class="remove-date" data-date="${date}">✕</button>
+                            </div>
+                        `;
+                    }).join('');
                     
-                    const dateText = new Date(date).toLocaleDateString('th-TH', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
+                    datesContainer.innerHTML = datesHtml;
+                    
+                    // Add remove date handlers
+                    datesContainer.querySelectorAll('.remove-date').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            const dateToRemove = this.getAttribute('data-date');
+                            selectedDates = selectedDates.filter(date => date !== dateToRemove);
+                            updateDatesDisplay();
+                            updateConfirmButton();
+                        });
                     });
-                    
-                    dateItem.innerHTML = `
-                        <span class="selected-date-text">${dateText}</span>
-                        <button type="button" class="remove-date-btn" onclick="removeSelectedDate(${index})">
-                            ลบ
-                        </button>
-                    `;
-                    
-                    selectedDatesDisplay.appendChild(dateItem);
-                });
+                }
             }
             
-            // Global function for removing dates
-            window.removeSelectedDate = function(index) {
-                if (window.selectedDates) {
-                    window.selectedDates.splice(index, 1);
-                    updateSelectedDatesDisplay();
-                    console.log('📅 Date removed, remaining dates:', window.selectedDates);
+            // Update confirm button state
+            function updateConfirmButton() {
+                if (confirmBtn) {
+                    confirmBtn.disabled = selectedDates.length === 0;
                 }
-            };
+            }
             
             // Return selected dates for form submission
             window.getSelectedDates = function() {
-                return window.selectedDates || [];
+                return selectedDates;
             };
-            
-            // Initialize display
-            updateSelectedDatesDisplay();
         }
 
         // Form submission
@@ -1456,16 +632,6 @@
             try {
                 console.log('📤 Submitting leave request...');
                 
-                // Get selected dates if not provided
-                if (!selectedDates) {
-                    selectedDates = window.getSelectedDates();
-                }
-                
-                if (!selectedDates || selectedDates.length === 0) {
-                    alert('กรุณาเลือกวันที่แจ้งลา');
-                    return;
-                }
-                
                 // Get LINE user ID if available
                 let lineUserId = null;
                 if (liffInitialized && liff.isLoggedIn()) {
@@ -1479,8 +645,11 @@
                 
                 const requestData = {
                     student_id: studentData.studentId,
+                    studentName: studentData.studentName,
+                    studentClass: studentData.studentClass,
                     leave_dates: selectedDates,
-                    line_user_id: lineUserId
+                    line_user_id: lineUserId,
+                    submittedAt: new Date().toISOString()
                 };
                 
                 console.log('📋 Request data:', requestData);
@@ -1497,17 +666,22 @@
                 console.log('📨 Response:', result);
                 
                 if (result.success) {
-                     // Show success modal with details
-                     showSuccessModal(selectedDates);
-                     
-                     // Clear form and reset
-                     clearForm();
-                 } else {
+                    // Hide confirmation section
+                    document.getElementById('confirmation-section').style.display = 'none';
+                    
+                    // Show success message
+                    showSuccessMessage('ส่งข้อมูลการลาเรียบร้อยแล้ว');
+                } else {
                     throw new Error(result.error || 'เกิดข้อผิดพลาดในการส่งข้อมูล');
                 }
                 
             } catch (error) {
                 console.error('❌ Error submitting leave request:', error);
+                
+                // Hide confirmation section
+                document.getElementById('confirmation-section').style.display = 'none';
+                
+                // Show error message
                 showErrorMessage('เกิดข้อผิดพลาด: ' + error.message);
             }
         }
@@ -1536,7 +710,6 @@
         window.loadStudentDataFromUrl = loadStudentDataFromUrl;
         window.showErrorMessage = showErrorMessage;
         window.showSuccessMessage = showSuccessMessage;
-        window.clearForm = clearForm;
     </script>
 </body>
 </html>

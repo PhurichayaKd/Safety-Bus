@@ -22,19 +22,19 @@ try {
 // ข้อความสำหรับสถานะต่างๆ ของนักเรียน
 const STUDENT_STATUS_MESSAGES = {
   onboard: {
-    emoji: '🚌🚌',
+    emoji: '🚌',
     title: 'นักเรียนขึ้นรถแล้ว',
-    message: 'ขึ้นรถแล้ว'
+    message: 'ได้ขึ้นรถโดยสารเรียบร้อยแล้ว'
   },
   offboard: {
-    emoji: '✅✅',
+    emoji: '🏠',
     title: 'นักเรียนลงรถแล้ว',
-    message: 'ลงรถแล้ว'
+    message: 'ได้ลงจากรถโดยสารเรียบร้อยแล้ว'
   },
   absent: {
-    emoji: '📝',
-    title: 'นักเรียนทำการแจ้งลา',
-    message: 'ทำการแจ้งลาไม่ประสงค์ขึ้นรถรับส่ง คนขับยืนยันแล้ว'
+    emoji: '❌',
+    title: 'นักเรียนขาดเรียน',
+    message: 'ไม่ได้ขึ้นรถโดยสาร (ขาดเรียน)'
   },
   stop: {
     emoji: '⏸️',
@@ -44,10 +44,6 @@ const STUDENT_STATUS_MESSAGES = {
 };
 
 export default async function handler(req, res) {
-  console.log('🔥 Student Status Notification API called!');
-  console.log('📨 Request method:', req.method);
-  console.log('📋 Request body:', req.body);
-  
   // ตั้งค่า CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -87,24 +83,20 @@ export default async function handler(req, res) {
     }
 
     // ดึงข้อมูลนักเรียน
-    console.log('🔍 Querying student with ID:', student_id);
     const { data: studentData, error: studentError } = await supabase
       .from('students')
       .select(`
         student_id,
         student_name,
-        grade,
-        parent_id,
-        home_latitude,
-        home_longitude
+        student_code,
+        class,
+        pickup_location,
+        dropoff_location
       `)
       .eq('student_id', student_id)
       .single();
 
-    console.log('📊 Student query result:', { studentData, studentError });
-
     if (studentError || !studentData) {
-      console.log('❌ Student not found or error occurred');
       return res.status(404).json({ 
         error: 'Student not found' 
       });
@@ -118,7 +110,7 @@ export default async function handler(req, res) {
         .select(`
           driver_id,
           driver_name,
-          license_plate,
+          bus_number,
           phone_number
         `)
         .eq('driver_id', driver_id)
@@ -139,32 +131,40 @@ export default async function handler(req, res) {
     // สร้างข้อความ
     const currentTime = new Date().toLocaleString('th-TH', {
       timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      second: '2-digit'
     });
 
-    // สร้างข้อความตามรูปแบบใหม่
-    let messageText = '';
+    let messageText = `${messageInfo.emoji} ${messageInfo.title}\n\n`;
+    messageText += `👨‍🎓 นักเรียน: ${studentData.student_name}`;
+    messageText += `\n🆔 รหัส: ${studentData.student_code}`;
+    messageText += `\n🏫 ชั้น: ${studentData.class}`;
+    messageText += `\n\n${messageInfo.message}`;
     
-    if (status === 'onboard') {
-      messageText = `🟢ขึ้นรถแล้ว🟢\n${studentData.student_name}\n\nสถานะ : เช็คขึ้นรถ โดยคนขับ`;
-      if (driverData) {
-        messageText += `\nคนขับ: ${driverData.driver_name}`;
-      }
-      messageText += `\n⏰ เวลา: ${currentTime} น.`;
-    } else if (status === 'offboard') {
-      messageText = `🟠ลงรถแล้ว🟠\n${studentData.student_name}\n\nสถานะ : เช็คลงรถ โดยคนขับ`;
-      if (driverData) {
-        messageText += `\nคนขับ: ${driverData.driver_name}`;
-      }
-      messageText += `\n⏰ เวลา: ${currentTime} น.`;
+    if (driverData) {
+      messageText += `\n\n👨‍✈️ คนขับ: ${driverData.driver_name}`;
+      messageText += `\n🚌 รถเมล์: ${driverData.bus_number}`;
+    }
+    
+    if (location) {
+      messageText += `\n📍 ตำแหน่ง: ${location}`;
     } else {
-      // สำหรับสถานะอื่นๆ ใช้รูปแบบเดิม
-      messageText = `${messageInfo.emoji} ${studentData.student_name} ${messageInfo.message} เวลา ${currentTime} น.`;
-      if (driverData) {
-        messageText += ` คนขับ: ${driverData.driver_name}`;
+      // ใช้ตำแหน่งจากข้อมูลนักเรียน
+      const studentLocation = phase === 'pickup' ? studentData.pickup_location : studentData.dropoff_location;
+      if (studentLocation) {
+        messageText += `\n📍 ตำแหน่ง: ${studentLocation}`;
       }
     }
+    
+    if (notes) {
+      messageText += `\n📝 หมายเหตุ: ${notes}`;
+    }
+    
+    messageText += `\n\n⏰ เวลา: ${currentTime}`;
 
     const lineMessage = {
       type: 'text',
@@ -177,9 +177,8 @@ export default async function handler(req, res) {
     try {
       const { data: studentLink, error: studentLinkError } = await supabase
         .from('student_line_links')
-        .select('line_user_id, line_display_id')
+        .select('line_user_id, student_name')
         .eq('student_id', student_id)
-        .eq('active', true)
         .not('line_user_id', 'is', null)
         .neq('line_user_id', '')
         .single();
@@ -189,16 +188,16 @@ export default async function handler(req, res) {
           await lineClient.pushMessage(studentLink.line_user_id, lineMessage);
           notificationResults.push({
             lineUserId: studentLink.line_user_id,
-            studentName: studentData.student_name,
+            studentName: studentLink.student_name,
             type: 'student',
             status: 'success'
           });
-          console.log(`✅ Student status notification sent to student ${studentData.student_name} (${studentLink.line_user_id})`);
+          console.log(`✅ Student status notification sent to student ${studentLink.student_name} (${studentLink.line_user_id})`);
         } catch (error) {
-          console.error(`❌ Failed to send to student ${studentData.student_name}:`, error);
+          console.error(`❌ Failed to send to student ${studentLink.student_name}:`, error);
           notificationResults.push({
             lineUserId: studentLink.line_user_id,
-            studentName: studentData.student_name,
+            studentName: studentLink.student_name,
             type: 'student',
             status: 'failed',
             error: error.message
@@ -215,33 +214,29 @@ export default async function handler(req, res) {
     try {
       const { data: parentLinks, error: parentLinkError } = await supabase
         .from('parent_line_links')
-        .select(`
-          line_user_id,
-          parents!inner(parent_name)
-        `)
-        .eq('parent_id', studentData.parent_id)
-        .eq('active', true)
+        .select('line_user_id, parent_name, student_name')
+        .eq('student_id', student_id)
         .not('line_user_id', 'is', null)
         .neq('line_user_id', '');
 
       if (!parentLinkError && parentLinks && parentLinks.length > 0) {
-        for (const parentLink of parentLinks) {
+        for (const parent of parentLinks) {
           try {
-            await lineClient.pushMessage(parentLink.line_user_id, lineMessage);
+            await lineClient.pushMessage(parent.line_user_id, lineMessage);
             notificationResults.push({
-              lineUserId: parentLink.line_user_id,
-              parentName: parentLink.parents.parent_name,
-              studentName: studentData.student_name,
+              lineUserId: parent.line_user_id,
+              parentName: parent.parent_name,
+              studentName: parent.student_name,
               type: 'parent',
               status: 'success'
             });
-            console.log(`✅ Student status notification sent to parent ${parentLink.parents.parent_name} (${parentLink.line_user_id})`);
+            console.log(`✅ Student status notification sent to parent ${parent.parent_name} (${parent.line_user_id})`);
           } catch (error) {
-            console.error(`❌ Failed to send to parent ${parentLink.parents.parent_name}:`, error);
+            console.error(`❌ Failed to send to parent ${parent.parent_name}:`, error);
             notificationResults.push({
-              lineUserId: parentLink.line_user_id,
-              parentName: parentLink.parents.parent_name,
-              studentName: studentData.student_name,
+              lineUserId: parent.line_user_id,
+              parentName: parent.parent_name,
+              studentName: parent.student_name,
               type: 'parent',
               status: 'failed',
               error: error.message
@@ -255,7 +250,27 @@ export default async function handler(req, res) {
       console.error('Error fetching parent LINE links:', error);
     }
 
-
+    // ส่งไปยัง Admin Group (ถ้ามี)
+    const adminGroupId = process.env.LINE_ADMIN_GROUP_ID;
+    if (adminGroupId) {
+      try {
+        await lineClient.pushMessage(adminGroupId, lineMessage);
+        notificationResults.push({
+          lineUserId: adminGroupId,
+          type: 'admin_group',
+          status: 'success'
+        });
+        console.log('✅ Student status notification sent to admin group');
+      } catch (error) {
+        console.error('❌ Failed to send to admin group:', error);
+        notificationResults.push({
+          lineUserId: adminGroupId,
+          type: 'admin_group',
+          status: 'failed',
+          error: error.message
+        });
+      }
+    }
 
     // บันทึก log การส่งข้อความ
     try {
@@ -298,15 +313,15 @@ export default async function handler(req, res) {
       student: {
         id: student_id,
         name: studentData.student_name,
-        code: studentData.student_id,
-        class: studentData.grade
+        code: studentData.student_code,
+        class: studentData.class
       },
       status: status,
       phase: phase,
       driver: driverData ? {
         id: driver_id,
         name: driverData.driver_name,
-        license_plate: driverData.license_plate
+        bus_number: driverData.bus_number
       } : null,
       notification_results: notificationResults,
       summary: {

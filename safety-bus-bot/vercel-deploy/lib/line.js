@@ -2,19 +2,14 @@
 
 import { Client } from '@line/bot-sdk';
 
-// Function to get LINE client (lazy initialization)
-function getLineClient() {
-  const config = {
-    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-    channelSecret: process.env.LINE_CHANNEL_SECRET,
-  };
-  
-  if (!config.channelAccessToken) {
-    throw new Error('LINE_CHANNEL_ACCESS_TOKEN is not set');
-  }
-  
-  return new Client(config);
-}
+// LINE Bot configuration
+const config = {
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET,
+};
+
+// Create LINE client
+const lineClient = new Client(config);
 
 /**
  * ส่งข้อความผ่าน LINE Bot
@@ -34,7 +29,6 @@ export async function sendLineMessage(to, message) {
     const messages = Array.isArray(message) ? message : [message];
     
     // ใช้ LINE Bot SDK แทน fetch
-    const lineClient = getLineClient();
     const result = await lineClient.pushMessage(to, messages);
     
     console.log(`✅ LINE message sent successfully to: ${to}`);
@@ -180,34 +174,4 @@ export async function setDefaultRichMenu(richMenuId) {
   }
 }
 
-/**
- * ดึงข้อมูลโปรไฟล์ของผู้ใช้จาก LINE API
- * @param {string} userId - LINE User ID
- * @returns {Object} ข้อมูลโปรไฟล์ผู้ใช้
- */
-export async function getUserProfile(userId) {
-  try {
-    console.log(`🔄 Getting user profile for: ${userId}`);
-    
-    const lineClient = getLineClient();
-    const profile = await lineClient.getProfile(userId);
-    
-    console.log(`✅ User profile retrieved:`, {
-      userId: profile.userId,
-      displayName: profile.displayName,
-      pictureUrl: profile.pictureUrl,
-      statusMessage: profile.statusMessage
-    });
-    
-    return profile;
-  } catch (error) {
-    console.error(`❌ Error getting user profile for ${userId}:`, error);
-    
-    // Log error details สำหรับ debugging
-    if (error.response) {
-      console.error('LINE API Response:', error.response.status, error.response.data);
-    }
-    
-    throw error;
-  }
-}
+export { lineClient };

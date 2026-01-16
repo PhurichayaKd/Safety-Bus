@@ -40,8 +40,7 @@ export async function getStudentByLineId(lineUserId) {
           student_id: studentLink.students.student_id,
           student_name: studentLink.students.student_name,
           name: studentLink.students.student_name,
-          class: studentLink.students.grade,
-          grade: studentLink.students.grade
+          class: studentLink.students.grade
         },
         parent_id: studentLink.students.parent_id
       };
@@ -78,8 +77,7 @@ export async function getStudentByLineId(lineUserId) {
             student_id: student.student_id,
             student_name: student.student_name,
             name: student.student_name,
-            class: student.grade,
-            grade: student.grade
+            class: student.grade
           },
           parent_id: parentLink.parent_id
         };
@@ -123,7 +121,6 @@ export async function getStudentById(studentId) {
       student_name: student.student_name,
       name: student.student_name,
       class: student.grade,
-      grade: student.grade,
       parent_id: student.parent_id
     };
   } catch (error) {

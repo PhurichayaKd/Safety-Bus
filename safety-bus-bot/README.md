@@ -51,15 +51,9 @@ npm run dev
 - `LIFF_CANCEL_ID`
 
 ## ฟีเจอร์
-- 📱 LINE Bot สำหรับแจ้งลา
-- 📅 LIFF Date Picker
-- ❌ LIFF Cancel Leave
-- 🔗 Account Linking
-- 📊 Leave Management
-- 🚌 Bus Tracking Integration
-
-## สถานะ
-✅ พร้อม deploy บน Vercel
-✅ ทดสอบ development server แล้ว
-✅ LIFF SDK integration
-✅ Database connection
+- LINE Bot สำหรับแจ้งลา
+- LIFF Date Picker
+- LIFF Cancel Leave
+- Account Linking
+- Leave Management
+- Bus Tracking Integration

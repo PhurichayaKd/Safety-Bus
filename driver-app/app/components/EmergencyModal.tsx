@@ -46,10 +46,6 @@ const EmergencyModal: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [waitingForNormalConfirmation, setWaitingForNormalConfirmation] = useState(false);
 
-  // Debug logs for modal state
-  console.log('🎭 [EmergencyModal] Render - showEmergencyModal:', showEmergencyModal);
-  console.log('🎭 [EmergencyModal] Render - currentEmergency:', currentEmergency?.event_id || 'null');
-
   const handleResponse = async (responseType: 'CHECKED' | 'EMERGENCY' | 'CONFIRMED_NORMAL') => {
     if (!currentEmergency) return;
 
@@ -114,13 +110,7 @@ const EmergencyModal: React.FC = () => {
     );
   };
 
-  if (!currentEmergency) {
-    console.log('❌ [EmergencyModal] No currentEmergency, not rendering modal');
-    return null;
-  }
-
-  console.log('✅ [EmergencyModal] Rendering modal for emergency:', currentEmergency.event_id);
-  console.log('🎭 [EmergencyModal] Modal visible state:', showEmergencyModal);
+  if (!currentEmergency) return null;
 
   const eventTypeColor = getEventTypeColor(currentEmergency.event_type);
   const eventTypeIcon = getEventTypeIcon(currentEmergency.event_type);

@@ -1,15 +1,15 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { useAuth } from './AuthContext';
 import {
   EmergencyLog,
-  Emergency,
   subscribeToEmergencyLogs,
   getUnresolvedEmergencyLogs,
   recordEmergencyResponse,
   getEventTypeText,
   formatDateTime
 } from '../services/emergencyService';
+import { sendEmergencyLineNotification } from '../services/lineNotificationService';
 
 interface EmergencyContextType {
   emergencies: EmergencyLog[];
@@ -80,68 +80,65 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
   };
 
   // จัดการเหตุการณ์ฉุกเฉินใหม่
-  const handleNewEmergency = useCallback((emergency: Emergency) => {
-    console.log('🚨 [EmergencyContext] handleNewEmergency called with:', emergency);
-    
-    setEmergencies(prev => {
-      const exists = prev.some(e => e.event_id === emergency.event_id);
-      if (exists) {
-        console.log('🔄 [EmergencyContext] Emergency already exists, skipping');
-        return prev;
-      }
-      console.log('✅ [EmergencyContext] Adding new emergency to state');
-      return [emergency, ...prev];
-    });
-
-    setUnreadCount(prev => prev + 1);
+  const handleNewEmergency = (emergency: EmergencyLog) => {
+    setEmergencies(prev => [emergency, ...prev]);
     setCurrentEmergency(emergency);
     setShowEmergencyModal(true);
-    
-    console.log('📱 [EmergencyContext] Modal should be shown now - showEmergencyModal: true');
-    console.log('📋 [EmergencyContext] Current emergency set to:', emergency.event_id);
+    setUnreadCount(prev => prev + 1);
 
-    // แสดง Alert ในแอป
-    Alert.alert(
-      'เหตุการณ์ฉุกเฉิน!',
-      `${getEventTypeText(emergency.event_type)} - ${formatDateTime(emergency.event_time)}`,
-      [{ text: 'ตกลง' }]
-    );
-  }, []);
-
-  // จัดการการอัปเดต์ฉุกเฉิน
-  const handleEmergencyUpdate = useCallback((updatedEmergency: Emergency) => {
-    console.log('🔄 [EmergencyContext] handleEmergencyUpdate called with:', updatedEmergency);
-    
-    setEmergencies(prev => 
-      prev.map(emergency => 
-        emergency.event_id === updatedEmergency.event_id 
-          ? updatedEmergency 
-          : emergency
-      )
-    );
-
-    // อัปเดต currentEmergency ถ้าเป็นเหตุการณ์เดียวกัน
-    if (currentEmergency?.event_id === updatedEmergency.event_id) {
-      console.log('📋 [EmergencyContext] Updating current emergency');
-      setCurrentEmergency(updatedEmergency);
+    // ส่งการแจ้งเตือนไปยัง LINE (ยกเว้นกรณี triggered_by เป็น student)
+    if (emergency.triggered_by !== 'student') {
+      sendEmergencyLineNotification(emergency, 'NEW_EMERGENCY')
+        .then(result => {
+          if (!result.success) {
+            console.warn('Failed to send LINE notification:', result.error);
+          } else {
+            console.log('LINE notification sent successfully for new emergency');
+          }
+        })
+        .catch(error => {
+          console.error('Failed to send LINE notification:', error);
+        });
     }
 
+    // แสดง Alert สำหรับการแจ้งเตือนในแอป
+    Alert.alert(
+      '🚨 เหตุการณ์ฉุกเฉิน!',
+      `${getEventTypeText(emergency.event_type)}\nเวลา: ${formatDateTime(emergency.event_time)}`,
+      [
+        {
+          text: 'ดูรายละเอียด',
+          onPress: () => {
+            setCurrentEmergency(emergency);
+            setShowEmergencyModal(true);
+          }
+        }
+      ]
+    );
+  };
+
+  // จัดการการอัปเดตเหตุการณ์ฉุกเฉิน
+  const handleEmergencyUpdate = (emergency: EmergencyLog) => {
+    setEmergencies(prev => 
+      prev.map(e => e.event_id === emergency.event_id ? emergency : e)
+    );
+
     // ถ้าเหตุการณ์ถูกแก้ไขแล้ว หรือคนขับตอบสนองแล้ว ให้ลบออกจากรายการ
-    if (updatedEmergency.resolved || updatedEmergency.driver_response_type) {
-      setEmergencies(prev => prev.filter(e => e.event_id !== updatedEmergency.event_id));
+    if (emergency.resolved || emergency.driver_response_type) {
+      setEmergencies(prev => prev.filter(e => e.event_id !== emergency.event_id));
       setUnreadCount(prev => Math.max(0, prev - 1));
       
-      if (currentEmergency?.event_id === updatedEmergency.event_id) {
+      if (currentEmergency?.event_id === emergency.event_id) {
         setShowEmergencyModal(false);
         setCurrentEmergency(null);
       }
     }
-  }, [currentEmergency]);
+  };
 
   // ทำเครื่องหมายว่าอ่านแล้ว
   const markAsRead = (eventId: number) => {
     if (!readEmergencies.has(eventId)) {
-      setReadEmergencies(prev => new Set([...Array.from(prev), eventId]));
+      setReadEmergencies(prev => new Set([...prev, eventId]));
       setUnreadCount(prev => Math.max(0, prev - 1));
     }
   };
@@ -163,12 +160,21 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
         return;
       }
 
-      // *** หมายเหตุ: การส่ง LINE notification จะถูกจัดการใน emergencyService.ts แล้ว ***
+      // ส่งการแจ้งเตือนไปยัง LINE สำหรับทุกประเภทการตอบสนอง
       const emergency = emergencies.find(e => e.event_id === eventId);
-      if (emergency && responseType === 'EMERGENCY') {
-        console.log('📱 Emergency response recorded - LINE notification will be sent by emergencyService');
-      } else if (emergency && (responseType === 'CHECKED' || responseType === 'CONFIRMED_NORMAL')) {
-        console.log(`📝 Driver response recorded (${responseType}) - no LINE notification sent as requested`);
+      if (emergency) {
+        try {
+          const result = await sendEmergencyLineNotification(emergency, responseType);
+          if (!result.success) {
+            console.warn('LINE notification failed:', result.error);
+            // ไม่แสดง error ให้ผู้ใช้เห็น เพราะการตอบสนองหลักสำเร็จแล้ว
+          } else {
+            console.log('LINE notification sent successfully');
+          }
+        } catch (error) {
+          console.error('Error sending LINE notification:', error);
+          // ไม่ให้ error ของการส่ง notification ทำให้การตอบสนองล้มเหลว
+        }
       }
 
       // อัปเดต UI - สำหรับ EMERGENCY ไม่ปิด modal ทันที
@@ -202,7 +208,7 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
   const createEmergency = async (eventData: any) => {
     try {
       // ใช้ EmergencyService เดิมถ้ามี หรือสร้างใหม่
-      const { EmergencyService } = await import('../../services/EmergencyService');
+      const { EmergencyService } = await import('../../services/EmergencyService.js');
       await EmergencyService.createEmergencyEvent(eventData);
       
       // รีเฟรชข้อมูล
@@ -237,32 +243,24 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
 
   // ตั้งค่า Real-time subscription
   useEffect(() => {
-    console.log('🔧 [EmergencyContext] useEffect triggered - driverId:', driverId);
-    
-    if (!driverId) {
-      console.log('❌ [EmergencyContext] No driverId, skipping subscription');
-      return;
-    }
+    if (!driverId) return;
 
-    console.log('🔌 [EmergencyContext] Setting up subscription for driver:', driverId);
-    
-    // ตั้งค่า subscription สำหรับ emergency logs
-    const unsubscribe = subscribeToEmergencyLogs(
+    // โหลดข้อมูลเริ่มต้น
+    refreshEmergencies();
+
+    // ตั้งค่า subscription
+    const channel = subscribeToEmergencyLogs(
       driverId,
       handleNewEmergency,
       handleEmergencyUpdate
     );
 
-    console.log('✅ [EmergencyContext] Subscription setup complete');
-
-    // โหลดข้อมูลเหตุการณ์ฉุกเฉินที่ยังไม่ได้รับการแก้ไข
-    refreshEmergencies();
-
     return () => {
-      console.log('🔌 [EmergencyContext] Cleaning up subscription');
-      unsubscribe();
+      if (channel) {
+        channel.unsubscribe();
+      }
     };
-  }, [driverId, handleNewEmergency, handleEmergencyUpdate]);
+  }, [driverId]);
 
   const value: EmergencyContextType = {
     emergencies,
@@ -283,5 +281,3 @@ export const EmergencyProvider: React.FC<EmergencyProviderProps> = ({ children }
     </EmergencyContext.Provider>
   );
 };
-
-export default EmergencyProvider;

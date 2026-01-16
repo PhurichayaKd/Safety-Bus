@@ -19,90 +19,77 @@ try {
   console.error('Failed to initialize LINE client:', error);
 }
 
-// กำหนดข้อความสำหรับแต่ละสถานะ
+// ข้อความสำหรับสถานะต่างๆ ของคนขับ (แบบสั้นและกระชับ)
 const DRIVER_STATUS_MESSAGES = {
   // เริ่มออกเดินทาง
   start_journey: {
-    emoji: '🚍',
-    title: 'คนขับเริ่มออกเดินทาง',
-    message: '▫️คนขับได้เริ่มออกเดินทางแล้ว\n     กรุณาเตรียมตัวให้พร้อม❕️',
-    location: null
+    emoji: '🚌',
+    title: 'เริ่มออกเดินทาง',
+    message: 'กรุณาเตรียมตัวให้พร้อม'
   },
   go: {
-    emoji: '🚍',
-    title: 'คนขับเริ่มออกเดินทาง',
-    message: '▫️คนขับได้เริ่มออกเดินทางแล้ว\n     กรุณาเตรียมตัวให้พร้อม❕️',
-    location: null
+    emoji: '🚌',
+    title: 'เริ่มออกเดินทาง',
+    message: 'กรุณาเตรียมตัวให้พร้อม'
   },
   enroute: {
-    emoji: '🚍',
-    title: 'คนขับเริ่มออกเดินทาง',
-    message: '▫️คนขับได้เริ่มออกเดินทางแล้ว\n     กรุณาเตรียมตัวให้พร้อม❕️',
-    location: null
+    emoji: '🚌',
+    title: 'เริ่มออกเดินทาง',
+    message: 'กรุณาเตรียมตัวให้พร้อม'
   },
   // ถึงโรงเรียน
   arrived_school: {
     emoji: '🏫',
-    title: 'คนขับถึงโรงเรียนแล้ว',
-    message: '▫️คนขับได้มาถึงโรงเรียนเรียบร้อยแล้ว\n     นักเรียนลงจากรถครบแล้ว',
-    location: 'โรงเรียนวิทยาการ'
+    title: 'ถึงโรงเรียนแล้ว',
+    message: 'นักเรียนสามารถลงรถได้'
   },
   arrive_school: {
     emoji: '🏫',
-    title: 'คนขับถึงโรงเรียนแล้ว',
-    message: '▫️คนขับได้มาถึงโรงเรียนเรียบร้อยแล้ว\n     นักเรียนลงจากรถครบแล้ว',
-    location: 'โรงเรียนวิทยาการ'
+    title: 'ถึงโรงเรียนแล้ว',
+    message: 'นักเรียนสามารถลงรถได้'
   },
   // รอรับกลับบ้าน
   waiting_return: {
-    emoji: '🕟',
-    title: 'คนขับรอรับกลับบ้าน',
-    message: '▫️คนขับกำลังรอรับนักเรียนกลับบ้าน\n     กรุณาเตรียมตัวให้พร้อม❕️',
-    location: 'โรงเรียนวิทยาการ'
+    emoji: '⏰',
+    title: 'รอรับกลับบ้าน',
+    message: 'กรุณาเตรียมตัวให้พร้อม'
   },
   wait_pickup: {
-    emoji: '🕟',
-    title: 'คนขับรอรับกลับบ้าน',
-    message: '▫️คนขับกำลังรอรับนักเรียนกลับบ้าน\n     กรุณาเตรียมตัวให้พร้อม❕️',
-    location: 'โรงเรียนวิทยาการ'
+    emoji: '⏰',
+    title: 'รอรับกลับบ้าน',
+    message: 'กรุณาเตรียมตัวให้พร้อม'
   },
   // จบการเดินทาง
   finished: {
-    emoji: '🛑',
-    title: 'คนขับจบการเดินทาง',
-    message: '▫️คนขับได้เสร็จสิ้นการเดินทางแล้ว\n     นักเรียนทุกคนได้กลับถึงบ้านเรียบร้อย',
-    location: 'บ้านโป่ง (บ้านคนขับ)'
+    emoji: '✅',
+    title: 'จบการเดินทาง',
+    message: 'นักเรียนทุกคนกลับถึงบ้านเรียบร้อย'
   },
   finish_journey: {
-    emoji: '🛑',
-    title: 'คนขับจบการเดินทาง',
-    message: '▫️คนขับได้เสร็จสิ้นการเดินทางแล้ว\n     นักเรียนทุกคนได้กลับถึงบ้านเรียบร้อย',
-    location: 'บ้านโป่ง (บ้านคนขับ)'
+    emoji: '✅',
+    title: 'จบการเดินทาง',
+    message: 'นักเรียนทุกคนกลับถึงบ้านเรียบร้อย'
   },
   // สถานะเพิ่มเติม
   return: {
     emoji: '🏠',
     title: 'เส้นทางกลับบ้าน',
-    message: 'เริ่มส่งนักเรียนกลับบ้าน',
-    location: null
+    message: 'เริ่มส่งนักเรียนกลับบ้าน'
   },
   pickup: {
     emoji: '📍',
     title: 'กำลังรับนักเรียน',
-    message: 'อยู่ในช่วงรับนักเรียนขึ้นรถ',
-    location: null
+    message: 'อยู่ในช่วงรับนักเรียนขึ้นรถ'
   },
   dropoff: {
     emoji: '🏫',
     title: 'กำลังส่งนักเรียน',
-    message: 'อยู่ในช่วงส่งนักเรียนลงรถ',
-    location: null
+    message: 'อยู่ในช่วงส่งนักเรียนลงรถ'
   },
   driving: {
     emoji: '🛣️',
     title: 'กำลังเดินทาง',
-    message: 'เดินทางไปยังจุดหมายปลายทาง',
-    location: null
+    message: 'เดินทางไปยังจุดหมายปลายทาง'
   }
 };
 
@@ -169,27 +156,25 @@ export default async function handler(req, res) {
       messageInfo = {
         emoji: '📢',
         title: 'คนขับอัพเดตสถานะ',
-        message: `คนขับได้อัพเดตสถานะเป็น ${current_status || trip_phase}`,
-        location: null
+        message: `คนขับได้อัพเดตสถานะเป็น ${current_status || trip_phase}`
       };
     }
 
-    // สร้างข้อความตามรูปแบบที่กำหนด
-    let messageText = `${messageInfo.emoji} ${messageInfo.title}\n\n`;
+    // สร้างข้อความแบบสั้นและกระชับ
+    const currentTime = new Date().toLocaleString('th-TH', {
+      timeZone: 'Asia/Bangkok',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    // ข้อความสั้นและกระชับ
+    let messageText = `${messageInfo.emoji} ${messageInfo.title}`;
+    messageText += `\n🚌 ${driverData.license_plate} | ⏰ ${currentTime}`;
     
-    // เพิ่มสถานที่ถ้ามี
-    if (messageInfo.location) {
-      messageText += `📍 สถานที่ : ${messageInfo.location}\n\n`;
-    }
-    
-    // เพิ่มข้อความหลัก
+    // เพิ่มข้อความหลักแบบสั้น
     if (messageInfo.message) {
-      messageText += `${messageInfo.message}\n\n`;
+      messageText += `\n${messageInfo.message}`;
     }
-    
-    // เพิ่มข้อมูลคนขับและป้ายทะเบียน
-    messageText += `คนขับ : ${driverData.driver_name}\n`;
-    messageText += `ป้ายทะเบียน : ${driverData.license_plate}`;
 
     const lineMessage = {
       type: 'text',

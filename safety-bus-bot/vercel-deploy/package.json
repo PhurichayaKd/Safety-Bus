@@ -4,10 +4,8 @@
   "description": "Safety Bus LIFF Application for Leave Requests",
   "type": "module",
   "scripts": {
-    "start": "node index.mjs",
-    "dev": "node server-with-webhook.js",
-    "build": "echo 'Static files ready for deployment'",
-    "vercel-build": "echo 'Vercel build completed'"
+    "start": "node -e \"console.log('Vercel serverless functions ready')\"",
+    "build": "echo 'No build process required'"
   },
   "dependencies": {
     "@line/bot-sdk": "^8.0.0",
@@ -15,8 +13,7 @@
     "axios": "^1.12.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0",
-    "node-fetch": "^3.3.2"
+    "express": "^5.1.0"
   },
   "keywords": [
     "liff",
